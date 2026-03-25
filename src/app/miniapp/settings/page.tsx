@@ -1,0 +1,208 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useApi } from '@/hooks/useApi';
+import { useGroup } from '@/hooks/useGroup';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import Link from 'next/link';
+
+interface BreadType {
+  id: number;
+  name: string;
+  price: string;
+  isActive: boolean;
+}
+
+interface Member {
+  id: number;
+  userId: number;
+  name: string;
+  role: string;
+}
+
+interface Invite {
+  id: number;
+  inviteCode: string;
+  role: string;
+  status: string;
+}
+
+export default function SettingsPage() {
+  const { apiFetch } = useApi();
+  const { activeGroupId } = useGroup();
+  const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // New bread type form
+  const [newBreadName, setNewBreadName] = useState('');
+  const [newBreadPrice, setNewBreadPrice] = useState('');
+
+  // Invite form
+  const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeGroupId) return;
+    Promise.all([
+      apiFetch<{ breadTypes: BreadType[] }>(
+        `/groups/${activeGroupId}/bread-types`
+      ),
+      apiFetch<{ members: Member[] }>(
+        `/groups/${activeGroupId}/members`
+      ),
+      apiFetch<{ invites: Invite[] }>(
+        `/groups/${activeGroupId}/invites`
+      ),
+    ])
+      .then(([b, m, i]) => {
+        setBreadTypes(b.breadTypes);
+        setMembers(m.members);
+        setInvites(i.invites);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [activeGroupId]);
+
+  async function addBreadType() {
+    if (!newBreadName || !newBreadPrice || !activeGroupId) return;
+    const { breadType } = await apiFetch<{ breadType: BreadType }>(
+      `/groups/${activeGroupId}/bread-types`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newBreadName,
+          price: newBreadPrice,
+        }),
+      }
+    );
+    setBreadTypes((prev) => [...prev, breadType]);
+    setNewBreadName('');
+    setNewBreadPrice('');
+  }
+
+  async function createInvite() {
+    if (!activeGroupId) return;
+    const result = await apiFetch<{
+      invite: Invite;
+      inviteLink: string | null;
+    }>(`/groups/${activeGroupId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({ role: inviteRole }),
+    });
+    setInvites((prev) => [...prev, result.invite]);
+    setInviteLink(result.inviteLink);
+  }
+
+  if (loading) {
+    return <div className="p-4 text-center opacity-50">Loading...</div>;
+  }
+
+  return (
+    <div className="p-4 space-y-6">
+      <h1 className="text-xl font-bold">Settings</h1>
+
+      {/* Members */}
+      <section>
+        <h2 className="font-bold mb-2">Members</h2>
+        <Card>
+          <div className="space-y-2">
+            {members.map((m) => (
+              <div key={m.id} className="flex justify-between items-center">
+                <span>{m.name}</span>
+                <span className="text-sm opacity-50 capitalize">{m.role}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
+
+      {/* Invite */}
+      <section>
+        <h2 className="font-bold mb-2">Invite Member</h2>
+        <Card>
+          <div className="flex gap-2 mb-3">
+            <button
+              className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                inviteRole === 'baker'
+                  ? 'bg-[var(--tg-theme-button-color,#3b82f6)] text-white'
+                  : 'bg-black/5'
+              }`}
+              onClick={() => setInviteRole('baker')}
+            >
+              Baker
+            </button>
+            <button
+              className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                inviteRole === 'manager'
+                  ? 'bg-[var(--tg-theme-button-color,#3b82f6)] text-white'
+                  : 'bg-black/5'
+              }`}
+              onClick={() => setInviteRole('manager')}
+            >
+              Manager
+            </button>
+          </div>
+          <Button size="sm" onClick={createInvite}>
+            Create Invite Link
+          </Button>
+          {inviteLink && (
+            <div className="mt-2 p-2 bg-black/5 rounded text-sm break-all">
+              {inviteLink}
+            </div>
+          )}
+        </Card>
+      </section>
+
+      {/* Bread Types */}
+      <section>
+        <h2 className="font-bold mb-2">Bread Types</h2>
+        <div className="space-y-2">
+          {breadTypes.map((bt) => (
+            <Card key={bt.id} className="flex justify-between items-center">
+              <div>
+                <span className="font-medium">{bt.name}</span>
+                {!bt.isActive && (
+                  <span className="text-xs text-red-500 ml-2">inactive</span>
+                )}
+              </div>
+              <span className="opacity-60">{bt.price}</span>
+            </Card>
+          ))}
+        </div>
+        <Card className="mt-2">
+          <h3 className="text-sm font-medium mb-2">Add Bread Type</h3>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Name"
+              value={newBreadName}
+              onChange={(e) => setNewBreadName(e.target.value)}
+              className="flex-1"
+            />
+            <Input
+              placeholder="Price"
+              type="number"
+              value={newBreadPrice}
+              onChange={(e) => setNewBreadPrice(e.target.value)}
+              className="w-20"
+            />
+            <Button size="sm" onClick={addBreadType}>
+              Add
+            </Button>
+          </div>
+        </Card>
+      </section>
+
+      <div className="text-center pt-4">
+        <Link href="/miniapp">
+          <Button variant="ghost" size="sm">
+            Back to Dashboard
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
