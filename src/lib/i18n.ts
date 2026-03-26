@@ -82,6 +82,11 @@ const translations: Record<string, Record<Lang, string>> = {
   'customers.phone': { en: 'Phone', he: 'טלפון' },
   'customers.order_history': { en: 'Orders', he: 'הזמנות' },
   'customers.payment_history': { en: 'Payments', he: 'תשלומים' },
+  'customers.address': { en: 'Address', he: 'כתובת' },
+  'customers.city': { en: 'City', he: 'עיר' },
+  'customers.edit': { en: 'Edit', he: 'עריכה' },
+  'customers.saved': { en: 'Customer saved!', he: '!הלקוח נשמר' },
+  'customers.save_failed': { en: 'Failed to save', he: 'השמירה נכשלה' },
   'customers.not_found': { en: 'Customer not found', he: 'לקוח לא נמצא' },
 
   // Payments

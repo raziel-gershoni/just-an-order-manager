@@ -24,6 +24,8 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 const updateCustomerSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   phone: z.string().max(50).optional(),
+  address: z.string().max(500).optional(),
+  city: z.string().max(255).optional(),
   telegramChatId: z.string().max(50).optional(),
   notes: z.string().max(1000).optional(),
   isActive: z.boolean().optional(),

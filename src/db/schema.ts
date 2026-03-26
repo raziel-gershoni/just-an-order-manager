@@ -123,6 +123,8 @@ export const customers = pgTable('customers', {
     .references(() => groups.id),
   name: varchar('name', { length: 255 }).notNull(),
   phone: varchar('phone', { length: 50 }),
+  address: varchar('address', { length: 500 }),
+  city: varchar('city', { length: 255 }),
   telegramChatId: varchar('telegram_chat_id', { length: 50 }),
   notes: text('notes'),
   isActive: boolean('is_active').notNull().default(true),
