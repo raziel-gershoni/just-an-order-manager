@@ -36,9 +36,13 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { apiFetch } = useApi();
-  const { activeGroupId } = useGroup();
+  const { activeGroupId, setActiveGroupId } = useGroup();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Onboarding state
+  const [groupName, setGroupName] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!activeGroupId) return;
@@ -49,13 +53,40 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, [activeGroupId]);
 
+  async function handleCreateGroup() {
+    if (!groupName.trim()) return;
+    setCreating(true);
+    try {
+      const { group } = await apiFetch<{ group: { id: number } }>('/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name: groupName.trim() }),
+      });
+      setActiveGroupId(group.id);
+    } catch {
+      alert('Failed to create group');
+    } finally {
+      setCreating(false);
+    }
+  }
+
   if (!activeGroupId) {
     return (
-      <div className="p-4 text-center">
-        <h1 className="text-xl font-bold mb-4">Welcome!</h1>
-        <p className="mb-4 opacity-70">
-          Create a group or join one via an invite link from the bot.
-        </p>
+      <div className="p-4 space-y-4">
+        <h1 className="text-xl font-bold text-center">Welcome!</h1>
+        <Card>
+          <h3 className="font-medium mb-3">Create your bakery group</h3>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-lg border border-black/10 bg-[var(--tg-theme-bg-color,#ffffff)] px-3 py-2 text-base outline-none"
+              placeholder="Group name..."
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+            />
+            <Button disabled={!groupName.trim() || creating} onClick={handleCreateGroup}>
+              {creating ? '...' : 'Create'}
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
