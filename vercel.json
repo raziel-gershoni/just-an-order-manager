@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/weekly-summary",
-      "schedule": "0 20 * * 4"
+      "schedule": "0 18 * * 6"
     }
   ]
 }
