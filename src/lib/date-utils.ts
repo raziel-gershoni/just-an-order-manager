@@ -32,18 +32,37 @@ export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
   const diffDays = Math.round(
     (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
   );
+  const isFriday = date.getDay() === 5;
 
   if (diffDays === 0) return lang === 'he' ? 'היום' : 'Today';
   if (diffDays === 1) return lang === 'he' ? 'מחר' : 'Tomorrow';
   if (diffDays === -1) return lang === 'he' ? 'אתמול' : 'Yesterday';
 
-  // Day name for this week
-  if (diffDays > 0 && diffDays <= 6) {
-    const dayNames =
-      lang === 'he'
-        ? ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
-        : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return dayNames[date.getDay()];
+  // This Shabbat (Friday within the next 6 days)
+  if (isFriday && diffDays > 0 && diffDays <= 6) {
+    return lang === 'he' ? 'שבת הקרובה' : 'This Shabbat';
+  }
+
+  // Next Shabbat (Friday 7-13 days out)
+  if (isFriday && diffDays > 6 && diffDays <= 13) {
+    return lang === 'he' ? 'שבת הבאה' : 'Next Shabbat';
+  }
+
+  // Future: "In X days"
+  if (diffDays >= 2 && diffDays <= 14) {
+    return lang === 'he' ? `בעוד ${diffDays} ימים` : `In ${diffDays} days`;
+  }
+
+  // Past: "X days ago"
+  if (diffDays <= -2 && diffDays >= -14) {
+    const abs = Math.abs(diffDays);
+    return lang === 'he' ? `לפני ${abs} ימים` : `${abs} days ago`;
+  }
+
+  // Further out: relative + short date
+  if (diffDays > 14) {
+    const rel = lang === 'he' ? `בעוד ${diffDays} ימים` : `In ${diffDays} days`;
+    return `${rel} (${format(date, 'dd/MM')})`;
   }
 
   return format(date, 'dd/MM');
