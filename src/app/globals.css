@@ -12,15 +12,57 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Animations */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes expand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 200px;
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.25s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-expand {
+  animation: expand 0.2s ease-out;
+  overflow: hidden;
+}
+
+/* Status border colors */
+.border-status-pending { border-left: 3px solid #eab308; }
+.border-status-confirmed { border-left: 3px solid #3b82f6; }
+.border-status-baking { border-left: 3px solid #f97316; }
+.border-status-ready { border-left: 3px solid #22c55e; }
+.border-status-delivered { border-left: 3px solid #9ca3af; }
+.border-status-cancelled { border-left: 3px solid #ef4444; }

@@ -26,9 +26,27 @@ export function resolveDeliveryDate(
   }
 }
 
-export function formatDate(dateStr: string, lang: 'en' | 'he'): string {
-  const date = new Date(dateStr);
-  return format(date, 'dd/MM/yyyy');
+export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
+  const date = startOfDay(new Date(dateStr + 'T00:00:00'));
+  const today = startOfDay(new Date());
+  const diffDays = Math.round(
+    (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays === 0) return lang === 'he' ? 'היום' : 'Today';
+  if (diffDays === 1) return lang === 'he' ? 'מחר' : 'Tomorrow';
+  if (diffDays === -1) return lang === 'he' ? 'אתמול' : 'Yesterday';
+
+  // Day name for this week
+  if (diffDays > 0 && diffDays <= 6) {
+    const dayNames =
+      lang === 'he'
+        ? ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+        : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return dayNames[date.getDay()];
+  }
+
+  return format(date, 'dd/MM');
 }
 
 export function getTodayRange() {

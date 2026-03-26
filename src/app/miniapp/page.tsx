@@ -3,9 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
+import { useT } from '@/hooks/useLang';
+import { useLang } from '@/hooks/useLang';
+import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { formatDateRelative } from '@/lib/date-utils';
+import { t as translate } from '@/lib/i18n';
 import Link from 'next/link';
 
 interface DashboardData {
@@ -37,15 +42,21 @@ interface DashboardData {
 export default function Dashboard() {
   const { apiFetch } = useApi();
   const { activeGroupId, setActiveGroupId } = useGroup();
+  const t = useT();
+  const lang = useLang();
+  const toast = useToast();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Onboarding state
+  // Onboarding
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    if (!activeGroupId) return;
+    if (!activeGroupId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     apiFetch<DashboardData>('/dashboard')
       .then(setData)
@@ -62,8 +73,9 @@ export default function Dashboard() {
         body: JSON.stringify({ name: groupName.trim() }),
       });
       setActiveGroupId(group.id);
+      toast.success(t('orders.created'));
     } catch {
-      alert('Failed to create group');
+      toast.error(t('orders.create_failed'));
     } finally {
       setCreating(false);
     }
@@ -71,19 +83,19 @@ export default function Dashboard() {
 
   if (!activeGroupId) {
     return (
-      <div className="p-4 space-y-4">
-        <h1 className="text-xl font-bold text-center">Welcome!</h1>
+      <div className="p-4 space-y-4 animate-fade-in">
+        <h1 className="text-xl font-bold text-center">{t('dash.welcome')}</h1>
         <Card>
-          <h3 className="font-medium mb-3">Create your bakery group</h3>
+          <h3 className="font-medium mb-3">{t('dash.create_group')}</h3>
           <div className="flex gap-2">
             <input
               className="flex-1 rounded-lg border border-black/10 bg-[var(--tg-theme-bg-color,#ffffff)] px-3 py-2 text-base outline-none"
-              placeholder="Group name..."
+              placeholder={t('dash.group_name')}
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
             />
             <Button disabled={!groupName.trim() || creating} onClick={handleCreateGroup}>
-              {creating ? '...' : 'Create'}
+              {creating ? '...' : t('dash.create')}
             </Button>
           </div>
         </Card>
@@ -92,23 +104,21 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return (
-      <div className="p-4 text-center opacity-50">Loading...</div>
-    );
+    return <div className="p-4 text-center opacity-50">{t('general.loading')}</div>;
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 animate-fade-in">
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
         <Link href="/miniapp/orders/new">
           <Button className="w-full" size="lg">
-            + New Order
+            + {t('dash.new_order')}
           </Button>
         </Link>
         <Link href="/miniapp/payments">
           <Button variant="secondary" className="w-full" size="lg">
-            Record Payment
+            {t('dash.record_payment')}
           </Button>
         </Link>
       </div>
@@ -116,28 +126,35 @@ export default function Dashboard() {
       {/* Today's Orders */}
       <Card>
         <div className="flex justify-between items-center mb-3">
-          <h2 className="font-bold text-lg">Today</h2>
+          <h2 className="font-bold text-lg">{t('dash.today')}</h2>
           <span className="text-sm opacity-60">
-            {data?.totalPendingLoaves ?? 0} loaves
+            {data?.totalPendingLoaves ?? 0} {t('dash.loaves')}
           </span>
         </div>
         {data?.todayOrders.length === 0 ? (
-          <p className="text-sm opacity-50">No orders for today</p>
+          <div className="text-center py-4">
+            <p className="text-3xl mb-2">🍞</p>
+            <p className="text-sm opacity-50">{t('dash.no_orders_today')}</p>
+            <Link href="/miniapp/orders/new">
+              <Button variant="ghost" size="sm" className="mt-2">
+                + {t('dash.new_order')}
+              </Button>
+            </Link>
+          </div>
         ) : (
           <div className="space-y-2">
             {data?.todayOrders.map((o) => (
               <Link
                 key={o.id}
                 href={`/miniapp/orders/${o.id}`}
-                className="flex items-center justify-between py-1"
+                className={`flex items-center justify-between py-2 px-3 rounded-lg border-status-${o.status}`}
               >
                 <div>
                   <span className="font-medium">{o.customerName}</span>
-                  <span className="text-sm opacity-60 ml-2">
-                    {o.quantity} {o.breadTypeName}
-                  </span>
+                  <span className="text-xs opacity-50 mx-1.5">×{o.quantity}</span>
+                  <span className="text-sm opacity-60">{o.breadTypeName}</span>
                 </div>
-                <Badge status={o.status} label={o.status} />
+                <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
               </Link>
             ))}
           </div>
@@ -147,7 +164,7 @@ export default function Dashboard() {
       {/* Upcoming */}
       {data?.upcomingOrders && data.upcomingOrders.length > 0 && (
         <Card>
-          <h2 className="font-bold text-lg mb-3">Upcoming</h2>
+          <h2 className="font-bold text-lg mb-3">{t('dash.upcoming')}</h2>
           <div className="space-y-2">
             {data.upcomingOrders.map((o) => (
               <Link
@@ -157,11 +174,12 @@ export default function Dashboard() {
               >
                 <div>
                   <span className="font-medium">{o.customerName}</span>
-                  <span className="text-sm opacity-60 ml-2">
-                    {o.quantity} {o.breadTypeName}
-                  </span>
+                  <span className="text-xs opacity-50 mx-1.5">×{o.quantity}</span>
+                  <span className="text-sm opacity-60">{o.breadTypeName}</span>
                 </div>
-                <span className="text-xs opacity-50">{o.deliveryDate}</span>
+                <span className="text-xs opacity-50">
+                  {o.deliveryDate ? formatDateRelative(o.deliveryDate, lang) : ''}
+                </span>
               </Link>
             ))}
           </div>
@@ -171,9 +189,7 @@ export default function Dashboard() {
       {/* Debt alerts */}
       {data?.customersWithDebt && data.customersWithDebt.length > 0 && (
         <Card className="border border-red-200">
-          <h2 className="font-bold text-lg mb-3 text-red-600">
-            Outstanding Balances
-          </h2>
+          <h2 className="font-bold text-lg mb-3 text-red-600">{t('dash.outstanding')}</h2>
           <div className="space-y-1">
             {data.customersWithDebt.map((c) => (
               <Link
@@ -183,35 +199,13 @@ export default function Dashboard() {
               >
                 <span>{c.customerName}</span>
                 <span className="text-red-600 font-medium">
-                  {Number(c.balance).toFixed(0)}
+                  ₪{Math.abs(Number(c.balance)).toFixed(0)}
                 </span>
               </Link>
             ))}
           </div>
         </Card>
       )}
-
-      {/* Navigation */}
-      <div className="grid grid-cols-2 gap-3 pt-2">
-        <Link href="/miniapp/orders">
-          <Button variant="ghost" className="w-full">
-            All Orders
-          </Button>
-        </Link>
-        <Link href="/miniapp/customers">
-          <Button variant="ghost" className="w-full">
-            Customers
-          </Button>
-        </Link>
-      </div>
-
-      <div className="text-center pt-2">
-        <Link href="/miniapp/settings">
-          <Button variant="ghost" size="sm">
-            Settings
-          </Button>
-        </Link>
-      </div>
     </div>
   );
 }

@@ -3,19 +3,20 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
+import { useT } from '@/hooks/useLang';
+import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
 
-interface InviteInfo {
-  groupName: string;
-  role: string;
-  status: string;
-}
+interface InviteInfo { groupName: string; role: string; status: string }
 
 export default function JoinPage() {
   const { code } = useParams<{ code: string }>();
   const { apiFetch } = useApi();
   const router = useRouter();
+  const t = useT();
+  const toast = useToast();
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
@@ -36,52 +37,50 @@ export default function JoinPage() {
       });
       router.push('/miniapp');
     } catch {
-      alert('Failed to respond to invite');
+      toast.error(t('join.failed'));
     } finally {
       setActing(false);
     }
   }
 
   if (loading) {
-    return <div className="p-4 text-center opacity-50">Loading...</div>;
+    return (
+      <>
+        <PageHeader title={t('join.title')} />
+        <div className="p-4 text-center opacity-50">{t('general.loading')}</div>
+      </>
+    );
   }
 
   if (!invite || invite.status !== 'pending') {
     return (
-      <div className="p-4 text-center">
-        <p>This invite is no longer valid.</p>
-      </div>
+      <>
+        <PageHeader title={t('join.title')} />
+        <div className="p-4 text-center">{t('join.invalid')}</div>
+      </>
     );
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold text-center">Group Invite</h1>
+    <>
+      <PageHeader title={t('join.title')} />
+      <div className="p-4 space-y-4 animate-fade-in">
+        <Card className="text-center">
+          <p className="text-lg mb-2">
+            {t('join.join_group')} <strong>{invite.groupName}</strong>
+          </p>
+          <p className="opacity-60">{t('join.as_role')} {t(`role.${invite.role}`)}</p>
+        </Card>
 
-      <Card className="text-center">
-        <p className="text-lg mb-2">
-          Join <strong>{invite.groupName}</strong>
-        </p>
-        <p className="opacity-60 capitalize">as {invite.role}</p>
-      </Card>
-
-      <div className="flex gap-3">
-        <Button
-          className="flex-1"
-          disabled={acting}
-          onClick={() => respond('accept')}
-        >
-          {acting ? '...' : 'Accept'}
-        </Button>
-        <Button
-          variant="secondary"
-          className="flex-1"
-          disabled={acting}
-          onClick={() => respond('decline')}
-        >
-          Decline
-        </Button>
+        <div className="flex gap-3">
+          <Button className="flex-1" disabled={acting} onClick={() => respond('accept')}>
+            {acting ? '...' : t('join.accept')}
+          </Button>
+          <Button variant="secondary" className="flex-1" disabled={acting} onClick={() => respond('decline')}>
+            {t('join.decline')}
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
