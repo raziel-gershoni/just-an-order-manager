@@ -7,10 +7,11 @@ import {
   groupMembers,
   groupInvites,
   orders,
+  orderItems,
   customers,
   breadTypes,
 } from '@/db/schema';
-import { eq, and, gte, lte, ne, asc } from 'drizzle-orm';
+import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
 import { notifyMemberJoined } from '@/lib/notifications';
@@ -213,6 +214,27 @@ function setupHandlers(bot: import('grammy').Bot) {
   });
 
   // /today command
+  // Helper: get items summary for orders
+  async function getOrderItemsSummaries(orderIds: number[]) {
+    if (orderIds.length === 0) return {};
+    const allItems = await db
+      .select({
+        orderId: orderItems.orderId,
+        breadTypeName: breadTypes.name,
+        quantity: orderItems.quantity,
+      })
+      .from(orderItems)
+      .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+      .where(inArray(orderItems.orderId, orderIds));
+
+    const map: Record<number, { breadTypeName: string; quantity: number }[]> = {};
+    for (const item of allItems) {
+      if (!map[item.orderId]) map[item.orderId] = [];
+      map[item.orderId].push(item);
+    }
+    return map;
+  }
+
   bot.command('today', async (ctx) => {
     const telegramId = String(ctx.from!.id);
     const [user] = await db
@@ -234,15 +256,13 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     const todayOrders = await db
       .select({
-        quantity: orders.quantity,
+        id: orders.id,
         status: orders.status,
         customerName: customers.name,
-        breadTypeName: breadTypes.name,
         notes: orders.notes,
       })
       .from(orders)
       .innerJoin(customers, eq(orders.customerId, customers.id))
-      .innerJoin(breadTypes, eq(orders.breadTypeId, breadTypes.id))
       .where(
         and(
           eq(orders.groupId, groupId),
@@ -257,16 +277,19 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
+    const itemsMap = await getOrderItemsSummaries(todayOrders.map((o) => o.id));
+
     const lines = [`<b>📋 ${t('notify.morning_summary', lang)}</b>`, ''];
     let total = 0;
     for (const o of todayOrders) {
+      const items = itemsMap[o.id] || [];
+      const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+      const qty = items.reduce((s, i) => s + i.quantity, 0);
       const statusEmoji =
         o.status === 'ready' ? '✅' : o.status === 'baking' ? '🔥' : '⏳';
-      lines.push(
-        `${statusEmoji} ${o.customerName} — ${o.quantity} ${o.breadTypeName}`
-      );
+      lines.push(`${statusEmoji} ${o.customerName} — ${summary}`);
       if (o.notes) lines.push(`   💬 ${o.notes}`);
-      total += o.quantity;
+      total += qty;
     }
     lines.push('');
     lines.push(
@@ -299,15 +322,13 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     const weekOrders = await db
       .select({
-        quantity: orders.quantity,
+        id: orders.id,
         deliveryDate: orders.deliveryDate,
         status: orders.status,
         customerName: customers.name,
-        breadTypeName: breadTypes.name,
       })
       .from(orders)
       .innerJoin(customers, eq(orders.customerId, customers.id))
-      .innerJoin(breadTypes, eq(orders.breadTypeId, breadTypes.id))
       .where(
         and(
           eq(orders.groupId, groupId),
@@ -323,6 +344,8 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
+    const itemsMap = await getOrderItemsSummaries(weekOrders.map((o) => o.id));
+
     const byDate: Record<string, typeof weekOrders> = {};
     for (const o of weekOrders) {
       const d = o.deliveryDate ?? 'ASAP';
@@ -332,14 +355,17 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     const lines = [`<b>📅 ${t('notify.weekly_summary', lang)}</b>`, ''];
     for (const [dateStr, dateOrders] of Object.entries(byDate)) {
-      const total = dateOrders.reduce((s, o) => s + o.quantity, 0);
+      const total = dateOrders.reduce((s, o) => {
+        const items = itemsMap[o.id] || [];
+        return s + items.reduce((ss, i) => ss + i.quantity, 0);
+      }, 0);
       lines.push(
         `<b>${dateStr}</b> (${total} ${t('notify.loaves', lang)})`
       );
       for (const o of dateOrders) {
-        lines.push(
-          `  • ${o.customerName} — ${o.quantity} ${o.breadTypeName}`
-        );
+        const items = itemsMap[o.id] || [];
+        const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+        lines.push(`  • ${o.customerName} — ${summary}`);
       }
       lines.push('');
     }

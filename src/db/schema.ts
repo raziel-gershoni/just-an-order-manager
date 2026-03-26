@@ -140,17 +140,24 @@ export const orders = pgTable('orders', {
   customerId: integer('customer_id')
     .notNull()
     .references(() => customers.id),
+  deliveryType: deliveryTypeEnum('delivery_type').notNull(),
+  deliveryDate: date('delivery_date'),
+  status: orderStatusEnum('order_status').notNull().default('pending'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const orderItems = pgTable('order_items', {
+  id: serial('id').primaryKey(),
+  orderId: integer('order_id')
+    .notNull()
+    .references(() => orders.id),
   breadTypeId: integer('bread_type_id')
     .notNull()
     .references(() => breadTypes.id),
   quantity: integer('quantity').notNull().default(1),
-  deliveryType: deliveryTypeEnum('delivery_type').notNull(),
-  deliveryDate: date('delivery_date'),
-  status: orderStatusEnum('order_status').notNull().default('pending'),
   pricePerUnit: decimal('price_per_unit', { precision: 10, scale: 2 }),
-  notes: text('notes'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 export const payments = pgTable('payments', {

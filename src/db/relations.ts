@@ -7,6 +7,7 @@ import {
   breadTypes,
   customers,
   orders,
+  orderItems,
   payments,
 } from './schema';
 
@@ -56,7 +57,7 @@ export const breadTypesRelations = relations(breadTypes, ({ one, many }) => ({
     fields: [breadTypes.groupId],
     references: [groups.id],
   }),
-  orders: many(orders),
+  orderItems: many(orderItems),
 }));
 
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -77,11 +78,19 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     fields: [orders.customerId],
     references: [customers.id],
   }),
+  items: many(orderItems),
+  payments: many(payments),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
   breadType: one(breadTypes, {
-    fields: [orders.breadTypeId],
+    fields: [orderItems.breadTypeId],
     references: [breadTypes.id],
   }),
-  payments: many(payments),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({

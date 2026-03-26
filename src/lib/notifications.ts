@@ -48,8 +48,7 @@ export async function notifyNewOrder(
   groupId: number,
   order: {
     customerName: string;
-    breadTypeName: string;
-    quantity: number;
+    items: { breadTypeName: string; quantity: number }[];
     deliveryDate: string | null;
     notes: string | null;
   }
@@ -60,9 +59,10 @@ export async function notifyNewOrder(
       `<b>🍞 ${t('notify.new_order', lang)}</b>`,
       ``,
       `<b>${t('notify.customer', lang)}:</b> ${order.customerName}`,
-      `<b>${t('notify.bread_type', lang)}:</b> ${order.breadTypeName}`,
-      `<b>${t('notify.quantity', lang)}:</b> ${order.quantity} ${t('notify.loaves', lang)}`,
     ];
+    for (const item of order.items) {
+      lines.push(`  • ${item.quantity} ${item.breadTypeName}`);
+    }
     if (order.deliveryDate) {
       lines.push(
         `<b>${t('notify.delivery_date', lang)}:</b> ${order.deliveryDate}`
@@ -79,8 +79,7 @@ export async function notifyOrderReady(
   groupId: number,
   order: {
     customerName: string;
-    breadTypeName: string;
-    quantity: number;
+    itemsSummary: string;
   }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['manager']);
@@ -88,7 +87,7 @@ export async function notifyOrderReady(
     [
       `<b>✅ ${t('notify.order_ready', lang)}</b>`,
       ``,
-      `${order.customerName} — ${order.quantity} ${order.breadTypeName}`,
+      `${order.customerName} — ${order.itemsSummary}`,
     ].join('\n')
   );
 }

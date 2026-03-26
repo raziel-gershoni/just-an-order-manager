@@ -16,19 +16,19 @@ import Link from 'next/link';
 interface DashboardData {
   todayOrders: {
     id: number;
-    quantity: number;
     status: string;
     notes: string | null;
     customerName: string;
-    breadTypeName: string;
+    totalQuantity: number;
+    itemsSummary: string;
   }[];
   upcomingOrders: {
     id: number;
-    quantity: number;
     deliveryDate: string | null;
     status: string;
     customerName: string;
-    breadTypeName: string;
+    totalQuantity: number;
+    itemsSummary: string;
   }[];
   pendingCount: number;
   customersWithDebt: {
@@ -151,8 +151,7 @@ export default function Dashboard() {
               >
                 <div>
                   <span className="font-medium">{o.customerName}</span>
-                  <span className="text-xs opacity-50 mx-1.5">×{o.quantity}</span>
-                  <span className="text-sm opacity-60">{o.breadTypeName}</span>
+                  <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
                 </div>
                 <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
               </Link>
@@ -174,8 +173,7 @@ export default function Dashboard() {
               >
                 <div>
                   <span className="font-medium">{o.customerName}</span>
-                  <span className="text-xs opacity-50 mx-1.5">×{o.quantity}</span>
-                  <span className="text-sm opacity-60">{o.breadTypeName}</span>
+                  <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
                 </div>
                 <span className="text-xs opacity-50">
                   {o.deliveryDate ? formatDateRelative(o.deliveryDate, lang) : ''}

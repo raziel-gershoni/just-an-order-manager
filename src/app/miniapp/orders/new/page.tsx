@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 
 interface Customer { id: number; name: string }
 interface BreadType { id: number; name: string; price: string }
+interface LineItem { breadTypeId: number; quantity: number }
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
@@ -27,8 +28,7 @@ export default function NewOrderPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [customerId, setCustomerId] = useState<number | null>(null);
-  const [breadTypeId, setBreadTypeId] = useState<number | null>(null);
-  const [quantity, setQuantity] = useState(1);
+  const [items, setItems] = useState<LineItem[]>([]);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -44,7 +44,9 @@ export default function NewOrderPage() {
       .then(([c, b]) => {
         setCustomers(c.customers);
         setBreadTypes(b.breadTypes);
-        if (b.breadTypes.length > 0) setBreadTypeId(b.breadTypes[0].id);
+        if (b.breadTypes.length > 0) {
+          setItems([{ breadTypeId: b.breadTypes[0].id, quantity: 1 }]);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -53,6 +55,21 @@ export default function NewOrderPage() {
   const filteredCustomers = customers.filter((c) =>
     c.name.toLowerCase().includes(customerSearch.toLowerCase())
   );
+
+  function updateItem(index: number, update: Partial<LineItem>) {
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...update } : item))
+    );
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addItem() {
+    if (breadTypes.length === 0) return;
+    setItems((prev) => [...prev, { breadTypeId: breadTypes[0].id, quantity: 1 }]);
+  }
 
   async function handleCreateCustomer() {
     if (!newCustomerName.trim()) return;
@@ -67,17 +84,16 @@ export default function NewOrderPage() {
   }
 
   async function handleSubmit() {
-    if (!customerId || !breadTypeId) return;
+    if (!customerId || items.length === 0) return;
     setSubmitting(true);
     try {
       await apiFetch('/orders', {
         method: 'POST',
         body: JSON.stringify({
           customerId,
-          breadTypeId,
-          quantity,
           deliveryType,
           deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
+          items,
           notes: notes || undefined,
         }),
       });
@@ -159,40 +175,66 @@ export default function NewOrderPage() {
           )}
         </Card>
 
-        {/* Bread Type */}
+        {/* Line Items */}
         <Card>
-          <h3 className="font-medium mb-2">{t('form.bread_type')}</h3>
-          <div className="flex flex-wrap gap-2">
-            {breadTypes.map((bt) => (
-              <button
-                key={bt.id}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  breadTypeId === bt.id
-                    ? 'bg-[var(--tg-theme-button-color,#3b82f6)] text-[var(--tg-theme-button-text-color,#ffffff)]'
-                    : 'bg-black/5 hover:bg-black/10'
-                }`}
-                onClick={() => setBreadTypeId(bt.id)}
-              >
-                {bt.name}
-              </button>
+          <h3 className="font-medium mb-3">{t('form.bread_type')}</h3>
+          <div className="space-y-3">
+            {items.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                {/* Bread type selector */}
+                <select
+                  className="flex-1 rounded-lg border border-black/10 bg-[var(--tg-theme-bg-color,#ffffff)] px-3 py-2 text-sm"
+                  value={item.breadTypeId}
+                  onChange={(e) =>
+                    updateItem(idx, { breadTypeId: Number(e.target.value) })
+                  }
+                >
+                  {breadTypes.map((bt) => (
+                    <option key={bt.id} value={bt.id}>
+                      {bt.name} (₪{bt.price})
+                    </option>
+                  ))}
+                </select>
+                {/* Quantity */}
+                <div className="flex items-center gap-1">
+                  <button
+                    className="w-8 h-8 rounded-full bg-black/5 text-sm font-bold"
+                    onClick={() =>
+                      updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })
+                    }
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center font-bold">{item.quantity}</span>
+                  <button
+                    className="w-8 h-8 rounded-full bg-black/5 text-sm font-bold"
+                    onClick={() =>
+                      updateItem(idx, { quantity: item.quantity + 1 })
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+                {/* Remove */}
+                {items.length > 1 && (
+                  <button
+                    className="w-8 h-8 rounded-full text-red-500 hover:bg-red-50 text-sm"
+                    onClick={() => removeItem(idx)}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             ))}
           </div>
-        </Card>
-
-        {/* Quantity */}
-        <Card>
-          <h3 className="font-medium mb-2">{t('form.quantity')}</h3>
-          <div className="flex items-center gap-4">
-            <button
-              className="w-10 h-10 rounded-full bg-black/5 text-xl font-bold"
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-            >−</button>
-            <span className="text-2xl font-bold w-8 text-center">{quantity}</span>
-            <button
-              className="w-10 h-10 rounded-full bg-black/5 text-xl font-bold"
-              onClick={() => setQuantity((q) => q + 1)}
-            >+</button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2"
+            onClick={addItem}
+          >
+            + {t('form.add')}
+          </Button>
         </Card>
 
         {/* Delivery */}
@@ -235,7 +277,7 @@ export default function NewOrderPage() {
         <Button
           className="w-full"
           size="lg"
-          disabled={!customerId || !breadTypeId || submitting}
+          disabled={!customerId || items.length === 0 || submitting}
           onClick={handleSubmit}
         >
           {submitting ? t('form.creating') : t('form.create_order')}

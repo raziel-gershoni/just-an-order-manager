@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, customers, breadTypes } from '@/db/schema';
-import { eq, and, asc, desc, gte, lte, sql } from 'drizzle-orm';
+import { orders, orderItems, customers, breadTypes } from '@/db/schema';
+import { eq, and, asc, desc, gte, lte, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder } from '@/lib/notifications';
@@ -19,37 +19,72 @@ export const GET = withGroup(async (request, _auth, groupId) => {
   if (dateTo) conditions.push(lte(orders.deliveryDate, dateTo));
   if (customerId) conditions.push(eq(orders.customerId, Number(customerId)));
 
-  const result = await db
+  // Get orders
+  const orderRows = await db
     .select({
       id: orders.id,
-      quantity: orders.quantity,
       deliveryType: orders.deliveryType,
       deliveryDate: orders.deliveryDate,
       status: orders.status,
-      pricePerUnit: orders.pricePerUnit,
       notes: orders.notes,
       createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt,
       customerName: customers.name,
       customerId: customers.id,
-      breadTypeName: breadTypes.name,
-      breadTypeId: breadTypes.id,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .innerJoin(breadTypes, eq(orders.breadTypeId, breadTypes.id))
     .where(and(...conditions))
     .orderBy(asc(orders.deliveryDate), desc(orders.createdAt));
+
+  // Get items for all these orders
+  const orderIds = orderRows.map((o) => o.id);
+  let itemsMap: Record<number, { breadTypeName: string; quantity: number; pricePerUnit: string | null }[]> = {};
+
+  if (orderIds.length > 0) {
+    const allItems = await db
+      .select({
+        orderId: orderItems.orderId,
+        breadTypeName: breadTypes.name,
+        quantity: orderItems.quantity,
+        pricePerUnit: orderItems.pricePerUnit,
+      })
+      .from(orderItems)
+      .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+      .where(inArray(orderItems.orderId, orderIds));
+
+    for (const item of allItems) {
+      if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
+      itemsMap[item.orderId].push({
+        breadTypeName: item.breadTypeName,
+        quantity: item.quantity,
+        pricePerUnit: item.pricePerUnit,
+      });
+    }
+  }
+
+  const result = orderRows.map((o) => {
+    const items = itemsMap[o.id] || [];
+    return {
+      ...o,
+      items,
+      totalQuantity: items.reduce((s, i) => s + i.quantity, 0),
+      itemsSummary: items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', '),
+    };
+  });
 
   return jsonResponse({ orders: result });
 });
 
-const createOrderSchema = z.object({
-  customerId: z.number().int().positive(),
+const itemSchema = z.object({
   breadTypeId: z.number().int().positive(),
   quantity: z.number().int().positive().default(1),
+});
+
+const createOrderSchema = z.object({
+  customerId: z.number().int().positive(),
   deliveryType: z.enum(['weekly', 'shabbat', 'specific_date', 'asap']),
   deliveryDate: z.string().optional(),
+  items: z.array(itemSchema).min(1),
   notes: z.string().max(1000).optional(),
 });
 
@@ -58,10 +93,9 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, breadTypeId, quantity, deliveryType, deliveryDate, notes } =
-    parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes } = parsed.data;
 
-  // Verify customer belongs to group
+  // Verify customer
   const [customer] = await db
     .select()
     .from(customers)
@@ -69,38 +103,55 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
 
-  // Get bread type for price snapshot
-  const [breadType] = await db
+  // Get bread types for price snapshot
+  const allBreadTypes = await db
     .select()
     .from(breadTypes)
-    .where(and(eq(breadTypes.id, breadTypeId), eq(breadTypes.groupId, groupId)))
-    .limit(1);
-  if (!breadType) return errorResponse('Bread type not found', 404);
+    .where(eq(breadTypes.groupId, groupId));
+  const btMap = Object.fromEntries(allBreadTypes.map((bt) => [bt.id, bt]));
+
+  for (const item of items) {
+    if (!btMap[item.breadTypeId]) {
+      return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
+    }
+  }
 
   const resolvedDate = resolveDeliveryDate(deliveryType, deliveryDate);
 
+  // Create order
   const [order] = await db
     .insert(orders)
     .values({
       groupId,
       customerId,
-      breadTypeId,
-      quantity,
       deliveryType,
       deliveryDate: resolvedDate,
-      pricePerUnit: breadType.price, // snapshot price
       notes,
     })
     .returning();
 
+  // Create order items
+  const itemValues = items.map((item) => ({
+    orderId: order.id,
+    breadTypeId: item.breadTypeId,
+    quantity: item.quantity,
+    pricePerUnit: btMap[item.breadTypeId].price,
+  }));
+
+  await db.insert(orderItems).values(itemValues);
+
   // Notify bakers
+  const notifItems = items.map((item) => ({
+    breadTypeName: btMap[item.breadTypeId].name,
+    quantity: item.quantity,
+  }));
+
   await notifyNewOrder(groupId, {
     customerName: customer.name,
-    breadTypeName: breadType.name,
-    quantity,
+    items: notifItems,
     deliveryDate: resolvedDate,
     notes: notes ?? null,
   });
 
-  return jsonResponse({ order }, 201);
+  return jsonResponse({ order, items: itemValues }, 201);
 });

@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, customers, breadTypes } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
@@ -32,7 +32,6 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
 
   const newStatus = parsed.data.status;
 
-  // Get current order
   const [order] = await db
     .select()
     .from(orders)
@@ -41,7 +40,6 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
 
   if (!order) return errorResponse('Order not found', 404);
 
-  // Validate transition
   const allowed = ORDER_STATUS_TRANSITIONS[order.status];
   if (!allowed?.includes(newStatus)) {
     return errorResponse(
@@ -50,7 +48,6 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     );
   }
 
-  // Update
   const [updated] = await db
     .update(orders)
     .set({ status: newStatus, updatedAt: new Date() })
@@ -64,17 +61,21 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       .from(customers)
       .where(eq(customers.id, order.customerId))
       .limit(1);
-    const [breadType] = await db
-      .select()
-      .from(breadTypes)
-      .where(eq(breadTypes.id, order.breadTypeId))
-      .limit(1);
 
-    if (customer && breadType) {
+    const items = await db
+      .select({
+        breadTypeName: breadTypes.name,
+        quantity: orderItems.quantity,
+      })
+      .from(orderItems)
+      .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+      .where(eq(orderItems.orderId, orderId));
+
+    if (customer) {
+      const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
       await notifyOrderReady(groupId, {
         customerName: customer.name,
-        breadTypeName: breadType.name,
-        quantity: order.quantity,
+        itemsSummary: summary,
       });
     }
   }

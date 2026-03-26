@@ -14,13 +14,13 @@ import { format, addDays } from 'date-fns';
 
 interface Order {
   id: number;
-  quantity: number;
   deliveryType: string;
   deliveryDate: string | null;
   status: string;
   notes: string | null;
   customerName: string;
-  breadTypeName: string;
+  totalQuantity: number;
+  itemsSummary: string;
 }
 
 type Tab = 'today' | 'week' | 'all';
@@ -128,8 +128,7 @@ export default function OrdersPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <span className="font-medium">{o.customerName}</span>
-                  <span className="text-xs opacity-50 mx-1.5">×{o.quantity}</span>
-                  <span className="text-sm opacity-60">{o.breadTypeName}</span>
+                  <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {o.deliveryDate && (

@@ -22,7 +22,7 @@ interface Customer {
   city: string | null;
   notes: string | null;
 }
-interface Order { id: number; quantity: number; deliveryDate: string | null; status: string; breadTypeName: string }
+interface Order { id: number; deliveryDate: string | null; status: string; totalQuantity: number; itemsSummary: string }
 interface Payment { id: number; amount: string; type: string; description: string | null; createdAt: string }
 
 export default function CustomerDetailPage() {
@@ -257,7 +257,7 @@ export default function CustomerDetailPage() {
                 <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
                   <Card className={`flex items-center justify-between py-2 border-status-${o.status}`}>
                     <span className="text-sm">
-                      ×{o.quantity} {o.breadTypeName}
+                      {o.itemsSummary}
                       {o.deliveryDate && (
                         <span className="opacity-50 ms-2">{formatDateRelative(o.deliveryDate, lang)}</span>
                       )}

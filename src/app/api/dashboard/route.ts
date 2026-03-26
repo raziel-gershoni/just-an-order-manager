@@ -1,26 +1,55 @@
 import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, customers, breadTypes, payments } from '@/db/schema';
-import { eq, and, gte, lte, sql, ne } from 'drizzle-orm';
+import { orders, orderItems, customers, breadTypes, payments } from '@/db/schema';
+import { eq, and, gte, lte, sql, ne, inArray } from 'drizzle-orm';
 import { format, addDays, startOfDay } from 'date-fns';
+
+async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any }[]) {
+  const orderIds = orderRows.map((o) => o.id);
+  if (orderIds.length === 0) return orderRows.map((o) => ({ ...o, items: [], totalQuantity: 0, itemsSummary: '' }));
+
+  const allItems = await db
+    .select({
+      orderId: orderItems.orderId,
+      breadTypeName: breadTypes.name,
+      quantity: orderItems.quantity,
+    })
+    .from(orderItems)
+    .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+    .where(inArray(orderItems.orderId, orderIds));
+
+  const itemsMap: Record<number, typeof allItems> = {};
+  for (const item of allItems) {
+    if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
+    itemsMap[item.orderId].push(item);
+  }
+
+  return orderRows.map((o) => {
+    const items = itemsMap[o.id] || [];
+    return {
+      ...o,
+      items,
+      totalQuantity: items.reduce((s, i) => s + i.quantity, 0),
+      itemsSummary: items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', '),
+    };
+  });
+}
 
 export const GET = withGroup(async (_request, _auth, groupId) => {
   const today = format(startOfDay(new Date()), 'yyyy-MM-dd');
   const weekEnd = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
   // Today's orders
-  const todayOrders = await db
+  const todayOrderRows = await db
     .select({
       id: orders.id,
-      quantity: orders.quantity,
       status: orders.status,
       notes: orders.notes,
       customerName: customers.name,
-      breadTypeName: breadTypes.name,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .innerJoin(breadTypes, eq(orders.breadTypeId, breadTypes.id))
     .where(
       and(
         eq(orders.groupId, groupId),
@@ -29,20 +58,18 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       )
     );
 
-  // Upcoming orders (next 7 days, excluding today)
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-  const upcomingOrders = await db
+  const todayOrders = await enrichOrdersWithItems(todayOrderRows);
+
+  // Upcoming orders
+  const upcomingOrderRows = await db
     .select({
       id: orders.id,
-      quantity: orders.quantity,
       deliveryDate: orders.deliveryDate,
       status: orders.status,
       customerName: customers.name,
-      breadTypeName: breadTypes.name,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .innerJoin(breadTypes, eq(orders.breadTypeId, breadTypes.id))
     .where(
       and(
         eq(orders.groupId, groupId),
@@ -52,13 +79,13 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       )
     );
 
+  const upcomingOrders = await enrichOrdersWithItems(upcomingOrderRows);
+
   // Pending count
   const [pendingResult] = await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(orders)
-    .where(
-      and(eq(orders.groupId, groupId), eq(orders.status, 'pending'))
-    );
+    .where(and(eq(orders.groupId, groupId), eq(orders.status, 'pending')));
 
   // Customers with debt
   const customersWithDebt = await db
@@ -73,11 +100,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     .groupBy(payments.customerId, customers.name)
     .having(sql`SUM(${payments.amount}) < 0`);
 
-  // Total pending loaves
-  const totalPendingLoaves = todayOrders.reduce(
-    (sum, o) => sum + o.quantity,
-    0
-  );
+  const totalPendingLoaves = todayOrders.reduce((s, o) => s + o.totalQuantity, 0);
 
   return jsonResponse({
     todayOrders,

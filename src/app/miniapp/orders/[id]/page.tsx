@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
 import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
@@ -13,18 +12,25 @@ import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import Link from 'next/link';
 
+interface OrderItem {
+  id: number;
+  breadTypeName: string;
+  quantity: number;
+  pricePerUnit: string | null;
+}
+
 interface OrderDetail {
   id: number;
-  quantity: number;
   deliveryType: string;
   deliveryDate: string | null;
   status: string;
-  pricePerUnit: string | null;
   notes: string | null;
   createdAt: string;
   customerName: string;
   customerId: number;
-  breadTypeName: string;
+  items: OrderItem[];
+  totalQuantity: number;
+  totalPrice: number;
 }
 
 const statusActions: Record<string, string[]> = {
@@ -106,14 +112,6 @@ export default function OrderDetailPage() {
               </Link>
             </div>
             <div className="flex justify-between">
-              <span className="opacity-60">{t('form.bread_type')}</span>
-              <span className="font-medium">{order.breadTypeName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="opacity-60">{t('form.quantity')}</span>
-              <span className="font-medium">×{order.quantity}</span>
-            </div>
-            <div className="flex justify-between">
               <span className="opacity-60">{t('form.delivery')}</span>
               <span className="font-medium">
                 {order.deliveryDate
@@ -121,25 +119,6 @@ export default function OrderDetailPage() {
                   : translate(`delivery.${order.deliveryType}`, lang)}
               </span>
             </div>
-            {order.pricePerUnit && (
-              <>
-                <div className="flex justify-between">
-                  <span className="opacity-60">{t('settings.price')}</span>
-                  <span className="font-medium">₪{order.pricePerUnit}</span>
-                </div>
-                <div className="flex justify-between font-bold">
-                  <span className="opacity-60">{t('orders.total')}</span>
-                  <span>
-                    {order.quantity > 1 && (
-                      <span className="font-normal opacity-50 me-1">
-                        ₪{order.pricePerUnit} × {order.quantity} =
-                      </span>
-                    )}
-                    ₪{(Number(order.pricePerUnit) * order.quantity).toFixed(0)}
-                  </span>
-                </div>
-              </>
-            )}
             {order.notes && (
               <div>
                 <span className="opacity-60">{t('notify.notes')}</span>
@@ -147,6 +126,32 @@ export default function OrderDetailPage() {
               </div>
             )}
           </div>
+        </Card>
+
+        {/* Items */}
+        <Card>
+          <h3 className="font-medium mb-2">{t('form.bread_type')}</h3>
+          <div className="space-y-2">
+            {order.items.map((item) => (
+              <div key={item.id} className="flex justify-between items-center">
+                <div>
+                  <span className="font-medium">{item.breadTypeName}</span>
+                  <span className="text-xs opacity-50 mx-1.5">×{item.quantity}</span>
+                </div>
+                {item.pricePerUnit && (
+                  <span className="opacity-60">
+                    ₪{(Number(item.pricePerUnit) * item.quantity).toFixed(0)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          {order.totalPrice > 0 && (
+            <div className="flex justify-between items-center mt-3 pt-3 border-t border-black/10 font-bold">
+              <span>{t('orders.total')}</span>
+              <span>₪{order.totalPrice.toFixed(0)}</span>
+            </div>
+          )}
         </Card>
 
         {/* Status actions */}
@@ -166,15 +171,14 @@ export default function OrderDetailPage() {
         )}
 
         {/* Charge prompt on delivery */}
-        {order.status === 'delivered' && order.pricePerUnit && (
+        {order.status === 'delivered' && order.totalPrice > 0 && (
           <Card className="border border-yellow-200">
             <p className="text-sm mb-2">
-              {t('orders.charge_prompt')} ₪
-              {(Number(order.pricePerUnit) * order.quantity).toFixed(0)}{' '}
+              {t('orders.charge_prompt')} ₪{order.totalPrice.toFixed(0)}{' '}
               {t('orders.for_this_order')}
             </p>
             <Link
-              href={`/miniapp/payments?customerId=${order.customerId}&orderId=${order.id}&amount=${(Number(order.pricePerUnit) * order.quantity).toFixed(2)}`}
+              href={`/miniapp/payments?customerId=${order.customerId}&orderId=${order.id}&amount=${order.totalPrice.toFixed(2)}`}
             >
               <Button size="sm" variant="secondary">
                 {t('orders.record_charge')}
