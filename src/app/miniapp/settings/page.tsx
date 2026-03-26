@@ -37,6 +37,10 @@ export default function SettingsPage() {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Group name
+  const [groupName, setGroupName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
   // New bread type form
   const [newBreadName, setNewBreadName] = useState('');
   const [newBreadPrice, setNewBreadPrice] = useState('');
@@ -48,6 +52,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!activeGroupId) return;
     Promise.all([
+      apiFetch<{ group: { name: string }; role: string }>(
+        `/groups/${activeGroupId}`
+      ),
       apiFetch<{ breadTypes: BreadType[] }>(
         `/groups/${activeGroupId}/bread-types`
       ),
@@ -58,7 +65,8 @@ export default function SettingsPage() {
         `/groups/${activeGroupId}/invites`
       ),
     ])
-      .then(([b, m, i]) => {
+      .then(([g, b, m, i]) => {
+        setGroupName(g.group.name);
         setBreadTypes(b.breadTypes);
         setMembers(m.members);
         setInvites(i.invites);
@@ -104,6 +112,37 @@ export default function SettingsPage() {
   return (
     <div className="p-4 space-y-6">
       <h1 className="text-xl font-bold">Settings</h1>
+
+      {/* Group Name */}
+      <section>
+        <h2 className="font-bold mb-2">Group Name</h2>
+        <Card>
+          <div className="flex gap-2">
+            <Input
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              size="sm"
+              disabled={!groupName.trim() || savingName}
+              onClick={async () => {
+                if (!activeGroupId || !groupName.trim()) return;
+                setSavingName(true);
+                try {
+                  await apiFetch(`/groups/${activeGroupId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ name: groupName.trim() }),
+                  });
+                } catch {}
+                setSavingName(false);
+              }}
+            >
+              {savingName ? '...' : 'Save'}
+            </Button>
+          </div>
+        </Card>
+      </section>
 
       {/* Members */}
       <section>
