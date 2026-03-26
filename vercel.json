@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/morning-reminder",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/weekly-summary",
-      "schedule": "0 18 * * 6"
     }
   ]
 }
