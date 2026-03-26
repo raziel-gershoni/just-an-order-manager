@@ -122,10 +122,23 @@ export default function OrderDetailPage() {
               </span>
             </div>
             {order.pricePerUnit && (
-              <div className="flex justify-between">
-                <span className="opacity-60">{t('settings.price')}</span>
-                <span className="font-medium">₪{order.pricePerUnit}</span>
-              </div>
+              <>
+                <div className="flex justify-between">
+                  <span className="opacity-60">{t('settings.price')}</span>
+                  <span className="font-medium">₪{order.pricePerUnit}</span>
+                </div>
+                <div className="flex justify-between font-bold">
+                  <span className="opacity-60">{t('orders.total')}</span>
+                  <span>
+                    {order.quantity > 1 && (
+                      <span className="font-normal opacity-50 me-1">
+                        ₪{order.pricePerUnit} × {order.quantity} =
+                      </span>
+                    )}
+                    ₪{(Number(order.pricePerUnit) * order.quantity).toFixed(0)}
+                  </span>
+                </div>
+              </>
             )}
             {order.notes && (
               <div>
