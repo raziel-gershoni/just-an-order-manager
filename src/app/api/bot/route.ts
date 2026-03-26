@@ -173,11 +173,31 @@ function setupHandlers(bot: import('grammy').Bot) {
     await ctx.answerCallbackQuery(
       lang === 'he' ? 'הצטרפת בהצלחה!' : 'Successfully joined!'
     );
-    await ctx.editMessageText(
-      lang === 'he'
-        ? '✅ הצטרפת לקבוצה בהצלחה!'
-        : '✅ Successfully joined the group!'
-    );
+
+    // Show Mini App button so invitee can open the manager
+    const miniAppUrl = process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/miniapp`
+      : undefined;
+
+    if (miniAppUrl) {
+      await ctx.editMessageText(
+        lang === 'he'
+          ? '✅ הצטרפת לקבוצה בהצלחה!'
+          : '✅ Successfully joined the group!',
+        {
+          reply_markup: new InlineKeyboard().webApp(
+            t('bot.open_manager', lang),
+            miniAppUrl
+          ),
+        }
+      );
+    } else {
+      await ctx.editMessageText(
+        lang === 'he'
+          ? '✅ הצטרפת לקבוצה בהצלחה!'
+          : '✅ Successfully joined the group!'
+      );
+    }
   });
 
   bot.callbackQuery(/^decline_invite:(.+)$/, async (ctx) => {
