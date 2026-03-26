@@ -111,19 +111,7 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
-    // Normal /start
-    const userGroups = await getUserGroups(user.id);
-
-    if (userGroups.length === 0) {
-      await ctx.reply(t('bot.welcome', lang), {
-        reply_markup: new InlineKeyboard().text(
-          t('bot.create_group', lang),
-          'create_group'
-        ),
-      });
-      return;
-    }
-
+    // Normal /start — always show the Mini App button
     const miniAppUrl = process.env.NEXT_PUBLIC_APP_URL
       ? `${process.env.NEXT_PUBLIC_APP_URL}/miniapp`
       : undefined;
