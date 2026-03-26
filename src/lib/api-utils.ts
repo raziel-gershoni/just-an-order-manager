@@ -24,8 +24,10 @@ export function withAuth(handler: AuthenticatedHandler) {
     try {
       const auth = await authenticateRequest(request);
       return handler(request, auth);
-    } catch {
-      return errorResponse('Unauthorized', 401);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[auth]', message);
+      return errorResponse(`Unauthorized: ${message}`, 401);
     }
   };
 }
