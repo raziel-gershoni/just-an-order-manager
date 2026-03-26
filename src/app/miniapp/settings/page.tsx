@@ -45,6 +45,11 @@ export default function SettingsPage() {
   const [newBreadName, setNewBreadName] = useState('');
   const [newBreadPrice, setNewBreadPrice] = useState('');
 
+  // Edit bread type
+  const [editingBreadId, setEditingBreadId] = useState<number | null>(null);
+  const [editBreadName, setEditBreadName] = useState('');
+  const [editBreadPrice, setEditBreadPrice] = useState('');
+
   // Invite form
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -74,6 +79,33 @@ export default function SettingsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [activeGroupId]);
+
+  async function saveBreadType(id: number) {
+    if (!editBreadName.trim() || !editBreadPrice) return;
+    const { breadType } = await apiFetch<{ breadType: BreadType }>(
+      `/bread-types/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editBreadName.trim(),
+          price: editBreadPrice,
+        }),
+      }
+    );
+    setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? breadType : bt)));
+    setEditingBreadId(null);
+  }
+
+  async function toggleBreadType(id: number, isActive: boolean) {
+    const { breadType } = await apiFetch<{ breadType: BreadType }>(
+      `/bread-types/${id}`,
+      {
+        method: isActive ? 'DELETE' : 'PATCH',
+        ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
+      }
+    );
+    setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? breadType : bt)));
+  }
 
   async function addBreadType() {
     if (!newBreadName || !newBreadPrice || !activeGroupId) return;
@@ -200,17 +232,70 @@ export default function SettingsPage() {
       <section>
         <h2 className="font-bold mb-2">Bread Types</h2>
         <div className="space-y-2">
-          {breadTypes.map((bt) => (
-            <Card key={bt.id} className="flex justify-between items-center">
-              <div>
-                <span className="font-medium">{bt.name}</span>
-                {!bt.isActive && (
-                  <span className="text-xs text-red-500 ml-2">inactive</span>
-                )}
-              </div>
-              <span className="opacity-60">{bt.price}</span>
-            </Card>
-          ))}
+          {breadTypes.map((bt) =>
+            editingBreadId === bt.id ? (
+              <Card key={bt.id}>
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    placeholder="Name"
+                    value={editBreadName}
+                    onChange={(e) => setEditBreadName(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    placeholder="Price"
+                    type="number"
+                    value={editBreadPrice}
+                    onChange={(e) => setEditBreadPrice(e.target.value)}
+                    className="w-20"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => saveBreadType(bt.id)}>
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditingBreadId(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <Card key={bt.id} className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${!bt.isActive ? 'opacity-40 line-through' : ''}`}>
+                    {bt.name}
+                  </span>
+                  <span className={`opacity-60 ${!bt.isActive ? 'opacity-30' : ''}`}>
+                    ₪{bt.price}
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingBreadId(bt.id);
+                      setEditBreadName(bt.name);
+                      setEditBreadPrice(bt.price);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleBreadType(bt.id, bt.isActive)}
+                  >
+                    {bt.isActive ? 'Disable' : 'Enable'}
+                  </Button>
+                </div>
+              </Card>
+            )
+          )}
         </div>
         <Card className="mt-2">
           <h3 className="text-sm font-medium mb-2">Add Bread Type</h3>
