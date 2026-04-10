@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
 import { useT, useLang } from '@/hooks/useLang';
+import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
@@ -45,12 +47,28 @@ export default function OrderDetailPage() {
   const { apiFetch } = useApi();
   const t = useT();
   const lang = useLang();
+  const toast = useToast();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Payment flow state
+  const [balance, setBalance] = useState<number | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [showPaymentInput, setShowPaymentInput] = useState(false);
+  const [submittingPay, setSubmittingPay] = useState(false);
+  const [paymentDone, setPaymentDone] = useState(false);
+
   useEffect(() => {
     apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
-      .then((d) => setOrder(d.order))
+      .then((d) => {
+        setOrder(d.order);
+        // Fetch balance for delivered orders
+        if (d.order.status === 'delivered') {
+          apiFetch<{ balance: string }>(`/customers/${d.order.customerId}/balance`)
+            .then((b) => setBalance(Number(b.balance)))
+            .catch(() => {});
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
@@ -60,7 +78,37 @@ export default function OrderDetailPage() {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
-    setOrder((prev) => (prev ? { ...prev, status } : prev));
+    setOrder((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, status };
+      // Fetch balance when marking as delivered
+      if (status === 'delivered') {
+        apiFetch<{ balance: string }>(`/customers/${prev.customerId}/balance`)
+          .then((b) => setBalance(Number(b.balance)))
+          .catch(() => {});
+      }
+      return updated;
+    });
+  }
+
+  async function handlePay(paid: boolean, amount?: string) {
+    setSubmittingPay(true);
+    try {
+      const { balance: newBalance } = await apiFetch<{ balance: string }>(
+        `/orders/${id}/pay`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ paid, amount }),
+        }
+      );
+      setBalance(Number(newBalance));
+      setPaymentDone(true);
+      toast.success(paid ? t('orders.payment_recorded') : t('orders.charge_recorded'));
+    } catch {
+      toast.error(t('orders.update_failed'));
+    } finally {
+      setSubmittingPay(false);
+    }
   }
 
   if (loading) {
@@ -89,6 +137,9 @@ export default function OrderDetailPage() {
     delivered: translate('status.delivered', lang),
     cancelled: translate('status.cancelled', lang),
   };
+
+  // Check if charge already exists (payment flow already completed)
+  const hasEnoughCredit = balance !== null && balance >= order.totalPrice;
 
   return (
     <>
@@ -154,6 +205,15 @@ export default function OrderDetailPage() {
           )}
         </Card>
 
+        {/* Edit button - only for pending orders */}
+        {order.status === 'pending' && (
+          <Link href={`/miniapp/orders/new?edit=${order.id}`}>
+            <Button variant="secondary" className="w-full">
+              {t('orders.edit')}
+            </Button>
+          </Link>
+        )}
+
         {/* Status actions */}
         {statusActions[order.status] && (
           <div className="flex gap-2 flex-wrap">
@@ -170,20 +230,97 @@ export default function OrderDetailPage() {
           </div>
         )}
 
-        {/* Charge prompt on delivery */}
-        {order.status === 'delivered' && order.totalPrice > 0 && (
+        {/* Payment flow on delivery */}
+        {order.status === 'delivered' && order.totalPrice > 0 && !paymentDone && (
           <Card className="border border-yellow-200">
-            <p className="text-sm mb-2">
-              {t('orders.charge_prompt')} ₪{order.totalPrice.toFixed(0)}{' '}
-              {t('orders.for_this_order')}
-            </p>
-            <Link
-              href={`/miniapp/payments?customerId=${order.customerId}&orderId=${order.id}&amount=${order.totalPrice.toFixed(2)}`}
-            >
-              <Button size="sm" variant="secondary">
-                {t('orders.record_charge')}
-              </Button>
-            </Link>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span>{t('orders.total')}</span>
+                <span className="font-bold">₪{order.totalPrice.toFixed(0)}</span>
+              </div>
+              {balance !== null && (
+                <div className="flex justify-between text-sm">
+                  <span>{t('customers.balance')}</span>
+                  <span className={balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    ₪{balance.toFixed(0)}
+                  </span>
+                </div>
+              )}
+
+              {showPaymentInput ? (
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder={order.totalPrice.toFixed(0)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      disabled={!paymentAmount || submittingPay}
+                      onClick={() => handlePay(true, paymentAmount)}
+                    >
+                      {submittingPay ? '...' : `${t('payments.record')} ₪${paymentAmount || '0'}`}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPaymentInput(false)}
+                    >
+                      {t('payments.cancel')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  {hasEnoughCredit ? (
+                    <Button
+                      className="flex-1"
+                      disabled={submittingPay}
+                      onClick={() => handlePay(false)}
+                    >
+                      {t('orders.deduct_credit')}
+                    </Button>
+                  ) : (
+                    <Button
+                      className="flex-1"
+                      disabled={submittingPay}
+                      onClick={() => {
+                        setPaymentAmount(order.totalPrice.toFixed(2));
+                        setShowPaymentInput(true);
+                      }}
+                    >
+                      {t('orders.customer_paid')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    className="flex-1"
+                    disabled={submittingPay}
+                    onClick={() => handlePay(false)}
+                  >
+                    {t('orders.not_yet_paid')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Payment done confirmation */}
+        {paymentDone && balance !== null && (
+          <Card className="border border-green-200">
+            <div className="text-center text-sm">
+              {balance === 0 ? (
+                <span className="text-green-600 font-medium">{t('customers.balance_square')}</span>
+              ) : balance > 0 ? (
+                <span className="text-green-600">{t('customers.balance_credit')}: ₪{balance.toFixed(0)}</span>
+              ) : (
+                <span className="text-red-600">{t('customers.balance_debt')}: ₪{Math.abs(balance).toFixed(0)}</span>
+              )}
+            </div>
           </Card>
         )}
       </div>

@@ -173,6 +173,31 @@ const translations: Record<string, Record<Lang, string>> = {
   'bot.accept': { en: 'Accept', he: 'אשר' },
   'bot.decline': { en: 'Decline', he: 'דחה' },
 
+  // Balance labels
+  'customers.balance_square': { en: 'Settled', he: 'מסולק' },
+  'customers.balance_credit': { en: 'Credit', he: 'קרדיט' },
+  'customers.balance_debt': { en: 'Debt', he: 'חוב' },
+
+  // Order payment flow (delivered)
+  'orders.customer_paid': { en: 'Record Payment', he: 'רשום תשלום' },
+  'orders.deduct_credit': { en: 'Deduct from Credit', he: 'קזז מקרדיט' },
+  'orders.not_yet_paid': { en: 'Not Paid', he: 'לא שולם' },
+  'orders.charge_recorded': { en: 'Charge recorded!', he: 'חיוב נרשם!' },
+  'orders.covered_by_credit': { en: 'Covered by credit', he: 'כוסה מקרדיט' },
+  'orders.payment_recorded': { en: 'Payment recorded!', he: 'תשלום נרשם!' },
+
+  // Order edit
+  'orders.edit': { en: 'Edit', he: 'עריכה' },
+  'orders.updated': { en: 'Order updated!', he: 'הזמנה עודכנה!' },
+  'orders.update_failed': { en: 'Failed to update order', he: 'עדכון ההזמנה נכשל' },
+  'form.update_order': { en: 'Update Order', he: 'עדכן הזמנה' },
+  'form.updating': { en: 'Updating...', he: '...מעדכן' },
+
+  // Notification balance
+  'notify.settled': { en: 'settled', he: 'מסולק' },
+  'notify.remaining_debt': { en: 'remaining debt', he: 'חוב שנותר' },
+  'notify.credit_balance': { en: 'credit', he: 'קרדיט' },
+
   // Payment types
   'payment.payment': { en: 'Payment', he: 'תשלום' },
   'payment.charge': { en: 'Charge', he: 'חיוב' },

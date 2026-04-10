@@ -94,15 +94,22 @@ export async function notifyOrderReady(
 
 export async function notifyPrepayment(
   groupId: number,
-  data: { customerName: string; amount: string; creditLoaves: number }
+  data: { customerName: string; amount: string; balance: number }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
-  await sendToRecipients(recipients, (lang) =>
-    [
+  await sendToRecipients(recipients, (lang) => {
+    const lines = [
       `<b>💰 ${data.customerName} ${t('notify.prepayment', lang)} ₪${data.amount}</b>`,
-      `${t('notify.credit_for', lang)} ${data.creditLoaves} ${t('notify.loaves', lang)}`,
-    ].join('\n')
-  );
+    ];
+    if (data.balance === 0) {
+      lines.push(`✅ ${t('notify.settled', lang)}`);
+    } else if (data.balance > 0) {
+      lines.push(`${t('notify.credit_balance', lang)}: ₪${data.balance.toFixed(0)}`);
+    } else {
+      lines.push(`${t('notify.remaining_debt', lang)}: ₪${Math.abs(data.balance).toFixed(0)}`);
+    }
+    return lines.join('\n');
+  });
 }
 
 export async function notifyBalanceAlert(

@@ -132,18 +132,29 @@ export default function CustomerDetailPage() {
               ? 'border border-red-200'
               : balanceNum > 0
               ? 'border border-green-200'
-              : ''
+              : 'border border-green-200'
           }
         >
           <div className="text-center">
             <span className="text-sm opacity-60">{t('customers.balance')}</span>
-            <div
-              className={`text-3xl font-bold ${
-                balanceNum < 0 ? 'text-red-600' : balanceNum > 0 ? 'text-green-600' : ''
-              }`}
-            >
-              ₪{balanceNum.toFixed(0)}
-            </div>
+            {balanceNum === 0 ? (
+              <div className="text-2xl font-bold text-green-600">
+                {t('customers.balance_square')}
+              </div>
+            ) : (
+              <>
+                <div className={`text-3xl font-bold ${
+                  balanceNum < 0 ? 'text-red-600' : 'text-green-600'
+                }`}>
+                  ₪{Math.abs(balanceNum).toFixed(0)}
+                </div>
+                <span className={`text-sm ${
+                  balanceNum < 0 ? 'text-red-500' : 'text-green-500'
+                }`}>
+                  {balanceNum > 0 ? t('customers.balance_credit') : t('customers.balance_debt')}
+                </span>
+              </>
+            )}
           </div>
         </Card>
 

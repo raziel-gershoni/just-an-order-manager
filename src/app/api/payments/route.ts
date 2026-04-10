@@ -1,10 +1,10 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { payments, customers } from '@/db/schema';
+import { payments, customers, orders, orderItems, breadTypes } from '@/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { notifyPrepayment, notifyBalanceAlert } from '@/lib/notifications';
-import { DEFAULT_BREAD_PRICE, BALANCE_DEBT_THRESHOLD } from '@/lib/constants';
+import { BALANCE_DEBT_THRESHOLD } from '@/lib/constants';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -55,6 +55,47 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
 
+  // Auto-create charge if recording a payment for an order without an existing charge
+  if (type === 'payment' && orderId) {
+    const [existingCharge] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.orderId, orderId),
+          eq(payments.type, 'charge'),
+          eq(payments.groupId, groupId)
+        )
+      )
+      .limit(1);
+
+    if (!existingCharge) {
+      // Calculate order total for the charge
+      const items = await db
+        .select({
+          quantity: orderItems.quantity,
+          pricePerUnit: orderItems.pricePerUnit,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId));
+
+      const orderTotal = items.reduce(
+        (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
+        0
+      );
+
+      if (orderTotal > 0) {
+        await db.insert(payments).values({
+          groupId,
+          customerId,
+          amount: `-${orderTotal.toFixed(2)}`,
+          type: 'charge',
+          orderId,
+        });
+      }
+    }
+  }
+
   // For charges, amount should be negative
   const finalAmount =
     type === 'charge' && Number(amount) > 0 ? `-${amount}` : amount;
@@ -83,13 +124,12 @@ export const POST = withGroup(async (request, _auth, groupId) => {
 
   const balance = Number(balanceResult.balance);
 
-  // Notify on prepayment (positive amount)
+  // Notify on payment
   if (type === 'payment' && Number(amount) > 0) {
-    const creditLoaves = Math.floor(balance / DEFAULT_BREAD_PRICE);
     await notifyPrepayment(groupId, {
       customerName: customer.name,
       amount,
-      creditLoaves,
+      balance,
     });
   }
 

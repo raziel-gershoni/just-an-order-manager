@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
@@ -17,17 +17,33 @@ interface LineItem { breadTypeId: number; quantity: number }
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
 export default function NewOrderPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-center opacity-50">...</div>}>
+      <OrderFormContent />
+    </Suspense>
+  );
+}
+
+function OrderFormContent() {
   const { apiFetch } = useApi();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const t = useT();
   const toast = useToast();
+
+  const editId = searchParams.get('edit');
+  const presetCustomerId = searchParams.get('customerId');
+  const isEdit = !!editId;
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [customerId, setCustomerId] = useState<number | null>(null);
+  const [customerId, setCustomerId] = useState<number | null>(
+    presetCustomerId ? Number(presetCustomerId) : null
+  );
+  const [customerName, setCustomerName] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -37,14 +53,37 @@ export default function NewOrderPage() {
   const [newCustomerName, setNewCustomerName] = useState('');
 
   useEffect(() => {
-    Promise.all([
+    const loads: Promise<unknown>[] = [
       apiFetch<{ customers: Customer[] }>('/customers'),
       apiFetch<{ breadTypes: BreadType[] }>('/bread-types'),
-    ])
-      .then(([c, b]) => {
+    ];
+
+    if (isEdit) {
+      loads.push(apiFetch<{ order: { customerId: number; customerName: string; deliveryType: string; deliveryDate: string | null; notes: string | null; status: string; items: { breadTypeId: number; quantity: number }[] } }>(`/orders/${editId}`));
+    }
+
+    Promise.all(loads)
+      .then(([c, b, o]: any[]) => {
         setCustomers(c.customers);
         setBreadTypes(b.breadTypes);
-        if (b.breadTypes.length > 0) {
+
+        if (isEdit && o?.order) {
+          const order = o.order;
+          // Guard: only allow editing pending orders
+          if (order.status !== 'pending') {
+            router.replace(`/miniapp/orders/${editId}`);
+            return;
+          }
+          setCustomerId(order.customerId);
+          setCustomerName(order.customerName);
+          setItems(order.items.map((i: { breadTypeId: number; quantity: number }) => ({
+            breadTypeId: i.breadTypeId,
+            quantity: i.quantity,
+          })));
+          setDeliveryType(order.deliveryType as DeliveryType);
+          setDeliveryDate(order.deliveryDate || '');
+          setNotes(order.notes || '');
+        } else if (!isEdit && b.breadTypes.length > 0) {
           setItems([{ breadTypeId: b.breadTypes[0].id, quantity: 1 }]);
         }
       })
@@ -87,20 +126,34 @@ export default function NewOrderPage() {
     if (!customerId || items.length === 0) return;
     setSubmitting(true);
     try {
-      await apiFetch('/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          customerId,
-          deliveryType,
-          deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
-          items,
-          notes: notes || undefined,
-        }),
-      });
-      toast.success(t('orders.created'));
-      router.push('/miniapp');
+      if (isEdit) {
+        await apiFetch(`/orders/${editId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            deliveryType,
+            deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
+            items,
+            notes: notes || undefined,
+          }),
+        });
+        toast.success(t('orders.updated'));
+        router.push(`/miniapp/orders/${editId}`);
+      } else {
+        await apiFetch('/orders', {
+          method: 'POST',
+          body: JSON.stringify({
+            customerId,
+            deliveryType,
+            deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
+            items,
+            notes: notes || undefined,
+          }),
+        });
+        toast.success(t('orders.created'));
+        router.push('/miniapp');
+      }
     } catch {
-      toast.error(t('orders.create_failed'));
+      toast.error(isEdit ? t('orders.update_failed') : t('orders.create_failed'));
     } finally {
       setSubmitting(false);
     }
@@ -109,13 +162,15 @@ export default function NewOrderPage() {
   if (loading) {
     return (
       <>
-        <PageHeader title={t('orders.new_order')} />
+        <PageHeader title={isEdit ? t('orders.edit') : t('orders.new_order')} />
         <div className="p-4 text-center opacity-50">{t('general.loading')}</div>
       </>
     );
   }
 
-  const selectedCustomer = customers.find((c) => c.id === customerId);
+  const selectedCustomer = isEdit
+    ? { id: customerId!, name: customerName }
+    : customers.find((c) => c.id === customerId);
 
   const deliveryOptions: [DeliveryType, string][] = [
     ['shabbat', t('delivery.shabbat')],
@@ -126,12 +181,16 @@ export default function NewOrderPage() {
 
   return (
     <>
-      <PageHeader title={t('orders.new_order')} />
+      <PageHeader title={isEdit ? t('orders.edit') : t('orders.new_order')} />
       <div className="p-4 space-y-4 animate-fade-in">
         {/* Customer */}
         <Card>
           <h3 className="font-medium mb-2">{t('form.customer')}</h3>
-          {customerId ? (
+          {isEdit ? (
+            <div className="flex items-center justify-between">
+              <span className="font-bold">{customerName}</span>
+            </div>
+          ) : customerId ? (
             <div className="flex items-center justify-between">
               <span className="font-bold">{selectedCustomer?.name}</span>
               <Button variant="ghost" size="sm" onClick={() => setCustomerId(null)}>
@@ -280,7 +339,9 @@ export default function NewOrderPage() {
           disabled={!customerId || items.length === 0 || submitting}
           onClick={handleSubmit}
         >
-          {submitting ? t('form.creating') : t('form.create_order')}
+          {submitting
+            ? (isEdit ? t('form.updating') : t('form.creating'))
+            : (isEdit ? t('form.update_order') : t('form.create_order'))}
         </Button>
       </div>
     </>
