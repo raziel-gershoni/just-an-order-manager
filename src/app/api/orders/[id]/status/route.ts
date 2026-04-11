@@ -4,7 +4,7 @@ import { orders, orderItems, customers, breadTypes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
-import { notifyOrderReady } from '@/lib/notifications';
+import { notifyOrderReady, notifyCustomerWhatsApp } from '@/lib/notifications';
 
 function getOrderId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -77,6 +77,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
         customerName: customer.name,
         itemsSummary: summary,
       });
+      await notifyCustomerWhatsApp(customer.phone);
     }
   }
 

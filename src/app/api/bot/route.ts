@@ -14,7 +14,7 @@ import {
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
-import { notifyMemberJoined } from '@/lib/notifications';
+import { notifyMemberJoined, notifyCustomerWhatsApp } from '@/lib/notifications';
 
 // ---- Helpers ----
 
@@ -433,6 +433,18 @@ function setupHandlers(bot: import('grammy').Bot) {
       .update(orders)
       .set({ status: newStatus as any, updatedAt: new Date() })
       .where(eq(orders.id, orderId));
+
+    // Send WhatsApp notification when order is ready
+    if (newStatus === 'ready') {
+      const [customer] = await db
+        .select({ phone: customers.phone })
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .limit(1);
+      if (customer) {
+        await notifyCustomerWhatsApp(customer.phone);
+      }
+    }
 
     await ctx.answerCallbackQuery(`${t(`status.${newStatus}`, lang)} ✅`);
     await ctx.editMessageReplyMarkup({ reply_markup: undefined });

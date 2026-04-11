@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { t } from './i18n';
+import { sendWhatsAppTemplate } from './whatsapp';
 
 type Role = 'owner' | 'manager' | 'baker';
 
@@ -90,6 +91,12 @@ export async function notifyOrderReady(
       `${order.customerName} — ${order.itemsSummary}`,
     ].join('\n')
   );
+}
+
+export async function notifyCustomerWhatsApp(customerPhone: string | null) {
+  if (!customerPhone) return;
+  const templateName = process.env.WHATSAPP_TEMPLATE_NAME || 'order_ready';
+  await sendWhatsAppTemplate(customerPhone, templateName, 'he');
 }
 
 export async function notifyPrepayment(
