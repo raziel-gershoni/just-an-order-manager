@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
+import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -20,9 +21,13 @@ export default function CustomersPage() {
   const { apiFetch } = useApi();
   const { activeGroupId } = useGroup();
   const t = useT();
+  const toast = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!activeGroupId) return;
@@ -32,13 +37,58 @@ export default function CustomersPage() {
       .finally(() => setLoading(false));
   }, [activeGroupId]);
 
+  async function handleAdd() {
+    if (!newName.trim()) return;
+    setAdding(true);
+    try {
+      const { customer } = await apiFetch<{ customer: Customer }>('/customers', {
+        method: 'POST',
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      setCustomers((prev) => [...prev, customer].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewName('');
+      setShowAdd(false);
+      toast.success(t('customers.saved'));
+    } catch {
+      toast.error(t('customers.save_failed'));
+    } finally {
+      setAdding(false);
+    }
+  }
+
   const filtered = customers.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="p-4 space-y-4 animate-fade-in">
-      <h1 className="text-xl font-bold">{t('customers.title')}</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-xl font-bold">{t('customers.title')}</h1>
+        {!showAdd && (
+          <Button size="sm" onClick={() => setShowAdd(true)}>
+            + {t('form.add_customer')}
+          </Button>
+        )}
+      </div>
+
+      {showAdd && (
+        <Card>
+          <div className="flex gap-2">
+            <Input
+              placeholder={t('form.customer_name')}
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="flex-1"
+            />
+            <Button size="sm" disabled={!newName.trim() || adding} onClick={handleAdd}>
+              {adding ? '...' : t('form.add')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowAdd(false); setNewName(''); }}>
+              {t('payments.cancel')}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Input
         placeholder={t('customers.search')}
