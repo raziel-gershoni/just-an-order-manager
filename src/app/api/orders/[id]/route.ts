@@ -77,7 +77,9 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .limit(1);
 
   if (!order) return errorResponse('Order not found', 404);
-  if (order.status !== 'pending') return errorResponse('Can only edit pending orders', 400);
+  if (order.status === 'delivered' || order.status === 'cancelled') {
+    return errorResponse('Cannot edit completed or cancelled orders', 400);
+  }
 
   // Build update data
   const updateData: Record<string, unknown> = { updatedAt: new Date() };

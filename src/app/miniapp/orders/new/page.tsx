@@ -69,8 +69,8 @@ function OrderFormContent() {
 
         if (isEdit && o?.order) {
           const order = o.order;
-          // Guard: only allow editing pending orders
-          if (order.status !== 'pending') {
+          // Guard: only allow editing non-terminal orders
+          if (order.status === 'delivered' || order.status === 'cancelled') {
             router.replace(`/miniapp/orders/${editId}`);
             return;
           }

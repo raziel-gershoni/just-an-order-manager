@@ -206,7 +206,7 @@ export default function OrderDetailPage() {
         </Card>
 
         {/* Edit button - only for pending orders */}
-        {order.status === 'pending' && (
+        {order.status !== 'delivered' && order.status !== 'cancelled' && (
           <Link href={`/miniapp/orders/new?edit=${order.id}`}>
             <Button variant="secondary" className="w-full">
               {t('orders.edit')}
