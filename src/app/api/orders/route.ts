@@ -4,7 +4,7 @@ import { orders, orderItems, customers, breadTypes } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
-import { notifyNewOrder } from '@/lib/notifications';
+import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -152,6 +152,10 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     deliveryDate: resolvedDate,
     notes: notes ?? null,
   });
+
+  // WhatsApp notification to customer
+  const itemsSummary = notifItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+  await notifyCustomerWhatsApp(customer.phone, 'order_received', [`: ${itemsSummary}`]);
 
   return jsonResponse({ order, items: itemValues }, 201);
 });

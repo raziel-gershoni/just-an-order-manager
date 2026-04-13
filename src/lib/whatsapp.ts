@@ -24,12 +24,27 @@ export function normalizePhoneNumber(phone: string): string | null {
 export async function sendWhatsAppTemplate(
   to: string,
   templateName: string,
-  lang: string = 'he'
+  lang: string = 'he',
+  params?: string[]
 ): Promise<boolean> {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) return false;
 
   const normalized = normalizePhoneNumber(to);
   if (!normalized) return false;
+
+  const template: Record<string, unknown> = {
+    name: templateName,
+    language: { code: lang },
+  };
+
+  if (params && params.length > 0) {
+    template.components = [
+      {
+        type: 'body',
+        parameters: params.map((text) => ({ type: 'text', text })),
+      },
+    ];
+  }
 
   try {
     const res = await fetch(
@@ -44,10 +59,7 @@ export async function sendWhatsAppTemplate(
           messaging_product: 'whatsapp',
           to: normalized,
           type: 'template',
-          template: {
-            name: templateName,
-            language: { code: lang },
-          },
+          template,
         }),
       }
     );

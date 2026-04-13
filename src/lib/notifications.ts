@@ -93,10 +93,14 @@ export async function notifyOrderReady(
   );
 }
 
-export async function notifyCustomerWhatsApp(customerPhone: string | null) {
+export async function notifyCustomerWhatsApp(
+  customerPhone: string | null,
+  templateName?: string,
+  params?: string[]
+) {
   if (!customerPhone) return;
-  const templateName = process.env.WHATSAPP_TEMPLATE_NAME || 'order_ready';
-  await sendWhatsAppTemplate(customerPhone, templateName, 'he');
+  const template = templateName || process.env.WHATSAPP_TEMPLATE_NAME || 'order_ready';
+  await sendWhatsAppTemplate(customerPhone, template, 'he', params);
 }
 
 export async function notifyPrepayment(
