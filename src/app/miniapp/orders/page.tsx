@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/Button';
 import { t as translate } from '@/lib/i18n';
 import { formatDateRelative } from '@/lib/date-utils';
 import Link from 'next/link';
-import { format, addDays } from 'date-fns';
 
 interface Order {
   id: number;
@@ -23,7 +22,7 @@ interface Order {
   itemsSummary: string;
 }
 
-type Tab = 'today' | 'week' | 'all';
+type Tab = 'active' | 'completed' | 'all';
 
 export default function OrdersPage() {
   const { apiFetch } = useApi();
@@ -32,21 +31,17 @@ export default function OrdersPage() {
   const lang = useLang();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('today');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>('active');
 
   useEffect(() => {
     if (!activeGroupId) return;
     setLoading(true);
     const params = new URLSearchParams();
 
-    if (tab === 'today') {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      params.set('dateFrom', today);
-      params.set('dateTo', today);
-    } else if (tab === 'week') {
-      params.set('dateFrom', format(new Date(), 'yyyy-MM-dd'));
-      params.set('dateTo', format(addDays(new Date(), 7), 'yyyy-MM-dd'));
+    if (tab === 'active') {
+      params.set('active', 'true');
+    } else if (tab === 'completed') {
+      params.set('status', 'delivered');
     }
 
     apiFetch<{ orders: Order[] }>(`/orders?${params}`)
@@ -55,26 +50,9 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
   }, [activeGroupId, tab]);
 
-  async function updateStatus(orderId: number, status: string) {
-    await apiFetch(`/orders/${orderId}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    });
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status } : o))
-    );
-  }
-
-  const statusActions: Record<string, string[]> = {
-    pending: ['confirmed', 'cancelled'],
-    confirmed: ['baking', 'cancelled'],
-    baking: ['ready'],
-    ready: ['delivered'],
-  };
-
   const tabLabels: Record<Tab, string> = {
-    today: t('orders.tab_today'),
-    week: t('orders.tab_week'),
+    active: t('orders.tab_active'),
+    completed: t('orders.tab_completed'),
     all: t('orders.tab_all'),
   };
 
@@ -89,7 +67,7 @@ export default function OrdersPage() {
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {(['today', 'week', 'all'] as const).map((tabKey) => (
+        {(['active', 'completed', 'all'] as const).map((tabKey) => (
           <button
             key={tabKey}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
@@ -120,47 +98,24 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-2">
           {orders.map((o) => (
-            <Card
-              key={o.id}
-              className={`cursor-pointer border-status-${o.status}`}
-              onClick={() => setExpandedId(expandedId === o.id ? null : o.id)}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-medium">{o.customerName}</span>
-                  <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {o.deliveryDate && (
-                    <span className="text-xs opacity-50">
-                      {formatDateRelative(o.deliveryDate, lang)}
-                    </span>
-                  )}
-                  <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
-                </div>
-              </div>
-
-              {expandedId === o.id && (
-                <div className="mt-3 pt-3 border-t border-black/10 space-y-2 animate-expand">
-                  {o.notes && <p className="text-sm opacity-60">{o.notes}</p>}
-                  <div className="flex gap-2 flex-wrap">
-                    {statusActions[o.status]?.map((s) => (
-                      <Button
-                        key={s}
-                        size="sm"
-                        variant={s === 'cancelled' ? 'danger' : 'secondary'}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateStatus(o.id, s);
-                        }}
-                      >
-                        {translate(`status.${s}`, lang)}
-                      </Button>
-                    ))}
+            <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
+              <Card className={`border-status-${o.status}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium">{o.customerName}</span>
+                    <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {o.deliveryDate && (
+                      <span className="text-xs opacity-50">
+                        {formatDateRelative(o.deliveryDate, lang)}
+                      </span>
+                    )}
+                    <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
                   </div>
                 </div>
-              )}
-            </Card>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

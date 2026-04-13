@@ -48,6 +48,8 @@ const translations: Record<string, Record<Lang, string>> = {
   'orders.tab_today': { en: 'Today', he: 'היום' },
   'orders.tab_week': { en: 'This Week', he: 'השבוע' },
   'orders.tab_all': { en: 'All', he: 'הכל' },
+  'orders.tab_active': { en: 'Active', he: 'פעילות' },
+  'orders.tab_completed': { en: 'Completed', he: 'הושלמו' },
   'orders.total': { en: 'Total', he: 'סה״כ' },
   'orders.empty': { en: 'No orders yet', he: 'אין עדיין הזמנות' },
   'orders.empty_hint': { en: 'Create your first order to get started', he: 'צרו את ההזמנה הראשונה כדי להתחיל' },

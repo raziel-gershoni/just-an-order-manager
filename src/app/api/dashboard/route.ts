@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, orderItems, customers, breadTypes, payments } from '@/db/schema';
-import { eq, and, gte, lte, sql, ne, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, ne, inArray, or, isNull, notInArray } from 'drizzle-orm';
 import { format, addDays, startOfDay } from 'date-fns';
 
 async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any }[]) {
@@ -40,7 +40,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
   const weekEnd = format(addDays(new Date(), 7), 'yyyy-MM-dd');
   const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
-  // Today's orders
+  // Today's orders (includes orders with no delivery date that are still active)
   const todayOrderRows = await db
     .select({
       id: orders.id,
@@ -53,8 +53,14 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     .where(
       and(
         eq(orders.groupId, groupId),
-        eq(orders.deliveryDate, today),
-        ne(orders.status, 'cancelled')
+        ne(orders.status, 'cancelled'),
+        or(
+          eq(orders.deliveryDate, today),
+          and(
+            isNull(orders.deliveryDate),
+            notInArray(orders.status, ['delivered', 'cancelled'])
+          )
+        )
       )
     );
 

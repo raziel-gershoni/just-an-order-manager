@@ -18,7 +18,7 @@ export function resolveDeliveryDate(
     case 'specific_date':
       return specificDate || null;
     case 'asap':
-      return format(new Date(), 'yyyy-MM-dd');
+      return null;
     case 'weekly':
       return format(getNextShabbatDate(), 'yyyy-MM-dd');
     default:

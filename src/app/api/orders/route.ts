@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, orderItems, customers, breadTypes } from '@/db/schema';
-import { eq, and, asc, desc, gte, lte, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
@@ -9,12 +9,14 @@ import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
   const status = url.searchParams.get('status');
+  const active = url.searchParams.get('active');
   const dateFrom = url.searchParams.get('dateFrom');
   const dateTo = url.searchParams.get('dateTo');
   const customerId = url.searchParams.get('customerId');
 
   const conditions = [eq(orders.groupId, groupId)];
   if (status) conditions.push(eq(orders.status, status as any));
+  if (active === 'true') conditions.push(notInArray(orders.status, ['delivered', 'cancelled']));
   if (dateFrom) conditions.push(gte(orders.deliveryDate, dateFrom));
   if (dateTo) conditions.push(lte(orders.deliveryDate, dateTo));
   if (customerId) conditions.push(eq(orders.customerId, Number(customerId)));
