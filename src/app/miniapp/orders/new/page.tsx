@@ -48,6 +48,7 @@ function OrderFormContent() {
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [totalOverride, setTotalOverride] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -83,6 +84,7 @@ function OrderFormContent() {
           setDeliveryType(order.deliveryType as DeliveryType);
           setDeliveryDate(order.deliveryDate || '');
           setNotes(order.notes || '');
+          setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
         } else if (!isEdit && b.breadTypes.length > 0) {
           setItems([{ breadTypeId: b.breadTypes[0].id, quantity: 1 }]);
         }
@@ -134,6 +136,7 @@ function OrderFormContent() {
             deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
             items,
             notes: notes || undefined,
+            totalOverride: totalOverride || null,
           }),
         });
         toast.success(t('orders.updated'));
@@ -147,6 +150,7 @@ function OrderFormContent() {
             deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
             items,
             notes: notes || undefined,
+            totalOverride: totalOverride || null,
           }),
         });
         toast.success(t('orders.created'));
@@ -330,6 +334,16 @@ function OrderFormContent() {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder={t('form.notes_placeholder')}
+        />
+
+        {/* Custom total */}
+        <Input
+          label={t('form.custom_total')}
+          type="number"
+          inputMode="decimal"
+          value={totalOverride}
+          onChange={(e) => setTotalOverride(e.target.value)}
+          placeholder="0"
         />
 
         {/* Submit */}

@@ -30,6 +30,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
       status: orders.status,
       customerId: orders.customerId,
       customerName: customers.name,
+      totalOverride: orders.totalOverride,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
@@ -48,10 +49,11 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .from(orderItems)
     .where(eq(orderItems.orderId, id));
 
-  const orderTotal = items.reduce(
+  const calculatedTotal = items.reduce(
     (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
     0
   );
+  const orderTotal = order.totalOverride ? Number(order.totalOverride) : calculatedTotal;
 
   // Check if charge already exists for this order
   const [existingCharge] = await db

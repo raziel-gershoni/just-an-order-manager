@@ -33,6 +33,8 @@ interface OrderDetail {
   items: OrderItem[];
   totalQuantity: number;
   totalPrice: number;
+  calculatedTotal: number;
+  totalOverride: string | null;
 }
 
 const statusActions: Record<string, string[]> = {
@@ -50,6 +52,11 @@ export default function OrderDetailPage() {
   const toast = useToast();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Price override state
+  const [showPriceEdit, setShowPriceEdit] = useState(false);
+  const [priceInput, setPriceInput] = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
 
   // Payment flow state
   const [balance, setBalance] = useState<number | null>(null);
@@ -108,6 +115,26 @@ export default function OrderDetailPage() {
       toast.error(t('orders.update_failed'));
     } finally {
       setSubmittingPay(false);
+    }
+  }
+
+  async function handleSetPrice(override: string | null) {
+    setSavingPrice(true);
+    try {
+      const { order: updated } = await apiFetch<{ order: OrderDetail }>(
+        `/orders/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ totalOverride: override }),
+        }
+      );
+      setOrder(updated);
+      setShowPriceEdit(false);
+      setPriceInput('');
+    } catch {
+      toast.error(t('orders.update_failed'));
+    } finally {
+      setSavingPrice(false);
     }
   }
 
@@ -197,10 +224,69 @@ export default function OrderDetailPage() {
               </div>
             ))}
           </div>
-          {order.totalPrice > 0 && (
-            <div className="flex justify-between items-center mt-3 pt-3 border-t border-black/10 font-bold">
-              <span>{t('orders.total')}</span>
-              <span>₪{order.totalPrice.toFixed(0)}</span>
+          {order.calculatedTotal > 0 && (
+            <div className="mt-3 pt-3 border-t border-black/10">
+              <div className="flex justify-between items-center font-bold">
+                <span>{t('orders.total')}</span>
+                <div className="flex items-center gap-2">
+                  {order.totalOverride ? (
+                    <>
+                      <span className="line-through opacity-40 font-normal text-sm">
+                        ₪{order.calculatedTotal.toFixed(0)}
+                      </span>
+                      <span>₪{order.totalPrice.toFixed(0)}</span>
+                    </>
+                  ) : (
+                    <span>₪{order.totalPrice.toFixed(0)}</span>
+                  )}
+                  {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                    <button
+                      className="text-xs opacity-50 underline font-normal"
+                      onClick={() => {
+                        setPriceInput(order.totalPrice.toFixed(0));
+                        setShowPriceEdit(true);
+                      }}
+                    >
+                      {t('settings.edit')}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {showPriceEdit && (
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={priceInput}
+                    onChange={(e) => setPriceInput(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!priceInput || savingPrice}
+                    onClick={() => handleSetPrice(priceInput)}
+                  >
+                    {savingPrice ? '...' : t('settings.save')}
+                  </Button>
+                  {order.totalOverride && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={savingPrice}
+                      onClick={() => handleSetPrice(null)}
+                    >
+                      ✕
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowPriceEdit(false)}
+                  >
+                    {t('payments.cancel')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </Card>

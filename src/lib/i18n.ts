@@ -194,6 +194,7 @@ const translations: Record<string, Record<Lang, string>> = {
   'orders.update_failed': { en: 'Failed to update order', he: 'עדכון ההזמנה נכשל' },
   'form.update_order': { en: 'Update Order', he: 'עדכן הזמנה' },
   'form.updating': { en: 'Updating...', he: '...מעדכן' },
+  'form.custom_total': { en: 'Custom total (optional)', he: '(סכום מותאם (אופציונלי' },
 
   // Notification balance
   'notify.settled': { en: 'settled', he: 'מסולק' },

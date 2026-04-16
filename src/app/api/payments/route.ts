@@ -70,6 +70,13 @@ export const POST = withGroup(async (request, _auth, groupId) => {
       .limit(1);
 
     if (!existingCharge) {
+      // Get order for potential override
+      const [order] = await db
+        .select({ totalOverride: orders.totalOverride })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+
       // Calculate order total for the charge
       const items = await db
         .select({
@@ -79,10 +86,11 @@ export const POST = withGroup(async (request, _auth, groupId) => {
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId));
 
-      const orderTotal = items.reduce(
+      const calculatedTotal = items.reduce(
         (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
         0
       );
+      const orderTotal = order?.totalOverride ? Number(order.totalOverride) : calculatedTotal;
 
       if (orderTotal > 0) {
         await db.insert(payments).values({

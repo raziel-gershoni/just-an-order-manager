@@ -23,6 +23,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       updatedAt: orders.updatedAt,
       customerName: customers.name,
       customerId: customers.id,
+      totalOverride: orders.totalOverride,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
@@ -44,18 +45,20 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     .where(eq(orderItems.orderId, order.id));
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = items.reduce(
+  const calculatedTotal = items.reduce(
     (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
     0
   );
+  const totalPrice = order.totalOverride ? Number(order.totalOverride) : calculatedTotal;
 
-  return jsonResponse({ order: { ...order, items, totalQuantity, totalPrice } });
+  return jsonResponse({ order: { ...order, items, totalQuantity, totalPrice, calculatedTotal } });
 });
 
 const updateOrderSchema = z.object({
   deliveryType: z.enum(['weekly', 'shabbat', 'specific_date', 'asap']).optional(),
   deliveryDate: z.string().optional(),
   notes: z.string().max(1000).optional(),
+  totalOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
     quantity: z.number().int().positive(),
@@ -98,6 +101,10 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     updateData.notes = parsed.data.notes || null;
   }
 
+  if (parsed.data.totalOverride !== undefined) {
+    updateData.totalOverride = parsed.data.totalOverride;
+  }
+
   // Update order fields
   await db
     .update(orders)
@@ -138,6 +145,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       deliveryDate: orders.deliveryDate,
       status: orders.status,
       notes: orders.notes,
+      totalOverride: orders.totalOverride,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       customerName: customers.name,
@@ -148,7 +156,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .where(eq(orders.id, id))
     .limit(1);
 
-  const items = await db
+  const updatedItems = await db
     .select({
       id: orderItems.id,
       breadTypeId: orderItems.breadTypeId,
@@ -160,11 +168,12 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .where(eq(orderItems.orderId, id));
 
-  const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = items.reduce(
+  const totalQuantity = updatedItems.reduce((s, i) => s + i.quantity, 0);
+  const calculatedTotal = updatedItems.reduce(
     (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
     0
   );
+  const totalPrice = updated.totalOverride ? Number(updated.totalOverride) : calculatedTotal;
 
-  return jsonResponse({ order: { ...updated, items, totalQuantity, totalPrice } });
+  return jsonResponse({ order: { ...updated, items: updatedItems, totalQuantity, totalPrice, calculatedTotal } });
 });

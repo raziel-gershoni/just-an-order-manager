@@ -88,6 +88,7 @@ const createOrderSchema = z.object({
   deliveryDate: z.string().optional(),
   items: z.array(itemSchema).min(1),
   notes: z.string().max(1000).optional(),
+  totalOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
 });
 
 export const POST = withGroup(async (request, _auth, groupId) => {
@@ -95,7 +96,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, deliveryType, deliveryDate, items, notes } = parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride } = parsed.data;
 
   // Verify customer
   const [customer] = await db
@@ -129,6 +130,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
       deliveryType,
       deliveryDate: resolvedDate,
       notes,
+      totalOverride: totalOverride || null,
     })
     .returning();
 
