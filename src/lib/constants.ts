@@ -1,6 +1,6 @@
 export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ['confirmed', 'cancelled'],
-  confirmed: ['baking', 'cancelled'],
+  confirmed: ['baking', 'ready', 'cancelled'],
   baking: ['ready', 'cancelled'],
   ready: ['delivered', 'cancelled'],
   delivered: [],

@@ -150,7 +150,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     quantity: item.quantity,
   }));
 
-  await notifyNewOrder(groupId, {
+  await notifyNewOrder(groupId, order.id, {
     customerName: customer.name,
     items: notifItems,
     deliveryDate: resolvedDate,

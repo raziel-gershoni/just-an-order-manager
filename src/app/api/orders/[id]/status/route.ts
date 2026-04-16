@@ -73,7 +73,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
 
     if (customer) {
       const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
-      await notifyOrderReady(groupId, {
+      await notifyOrderReady(groupId, orderId, {
         customerName: customer.name,
         itemsSummary: summary,
       });

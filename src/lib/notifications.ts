@@ -1,4 +1,5 @@
 import { getBot } from './bot';
+import { InlineKeyboard } from 'grammy';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -33,12 +34,14 @@ async function getRecipientsByRole(
 
 async function sendToRecipients(
   recipients: Recipient[],
-  messageFn: (lang: 'en' | 'he') => string
+  messageFn: (lang: 'en' | 'he') => string,
+  replyMarkup?: InlineKeyboard
 ) {
   const results = await Promise.allSettled(
     recipients.map((r) =>
       getBot().api.sendMessage(r.chatId, messageFn(r.language), {
         parse_mode: 'HTML',
+        reply_markup: replyMarkup,
       })
     )
   );
@@ -47,6 +50,7 @@ async function sendToRecipients(
 
 export async function notifyNewOrder(
   groupId: number,
+  orderId: number,
   order: {
     customerName: string;
     items: { breadTypeName: string; quantity: number }[];
@@ -55,6 +59,9 @@ export async function notifyNewOrder(
   }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
+  const keyboard = new InlineKeyboard()
+    .text('אשר ✅', `order_status:${orderId}:confirmed`);
+
   await sendToRecipients(recipients, (lang) => {
     const lines = [
       `<b>🍞 ${t('notify.new_order', lang)}</b>`,
@@ -73,23 +80,28 @@ export async function notifyNewOrder(
       lines.push(`<b>${t('notify.notes', lang)}:</b> ${order.notes}`);
     }
     return lines.join('\n');
-  });
+  }, keyboard);
 }
 
 export async function notifyOrderReady(
   groupId: number,
+  orderId: number,
   order: {
     customerName: string;
     itemsSummary: string;
   }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['manager']);
+  const keyboard = new InlineKeyboard()
+    .text('נמסר ✅', `order_status:${orderId}:delivered`);
+
   await sendToRecipients(recipients, (lang) =>
     [
       `<b>✅ ${t('notify.order_ready', lang)}</b>`,
       ``,
       `${order.customerName} — ${order.itemsSummary}`,
-    ].join('\n')
+    ].join('\n'),
+    keyboard
   );
 }
 

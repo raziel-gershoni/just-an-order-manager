@@ -39,7 +39,7 @@ interface OrderDetail {
 
 const statusActions: Record<string, string[]> = {
   pending: ['confirmed', 'cancelled'],
-  confirmed: ['baking', 'cancelled'],
+  confirmed: ['baking', 'ready', 'cancelled'],
   baking: ['ready'],
   ready: ['delivered'],
 };
