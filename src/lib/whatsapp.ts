@@ -66,10 +66,11 @@ export async function sendWhatsAppTemplate(
 
     if (!res.ok) {
       const err = await res.text();
-      console.error('WhatsApp send failed:', err);
+      console.error('WhatsApp send failed:', normalized, err);
       return false;
     }
 
+    console.log('WhatsApp sent:', normalized, templateName);
     return true;
   } catch (err) {
     console.error('WhatsApp send error:', err);
