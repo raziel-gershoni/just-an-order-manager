@@ -91,15 +91,29 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     });
   }
 
-  // Create payment if customer paid
+  // Create payment if customer paid (skip if payment already exists for this order)
   if (action === 'paid' && amount) {
-    await db.insert(payments).values({
-      groupId,
-      customerId: order.customerId,
-      amount,
-      type: 'payment',
-      orderId: id,
-    });
+    const [existingPayment] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.orderId, id),
+          eq(payments.type, 'payment'),
+          eq(payments.groupId, groupId)
+        )
+      )
+      .limit(1);
+
+    if (!existingPayment) {
+      await db.insert(payments).values({
+        groupId,
+        customerId: order.customerId,
+        amount,
+        type: 'payment',
+        orderId: id,
+      });
+    }
   }
 
   // Set paid flag: true for 'paid' and 'credit', false for 'unpaid'
