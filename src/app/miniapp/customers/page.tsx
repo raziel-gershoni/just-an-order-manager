@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Search, UserPlus, Users, ChevronRight, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 
 interface Customer {
@@ -120,13 +121,13 @@ export default function CustomersPage() {
           description={t('customers.empty_hint')}
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filtered.map((c) => (
             <Link key={c.id} href={`/miniapp/customers/${c.id}`}>
               <Card className="flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                    {c.name.charAt(0)}
+                    {getInitial(c.name)}
                   </div>
                   <div>
                     <span className="font-medium">{c.name}</span>

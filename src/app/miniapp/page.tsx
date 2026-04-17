@@ -179,11 +179,11 @@ export default function Dashboard() {
                   <Link
                     key={o.id}
                     href={`/miniapp/orders/${o.id}`}
-                    className={`flex items-center justify-between py-3 first:pt-0 last:pb-0 border-status-${displayStatus}`}
+                    className={`flex items-center justify-between py-3 ps-3 first:pt-0 last:pb-0 border-status-${displayStatus}`}
                   >
                     <div className="min-w-0 flex-1">
-                      <span className="font-medium">{o.customerName}</span>
-                      <span className="text-sm text-muted-foreground ms-2">{o.itemsSummary}</span>
+                      <div className="font-medium">{o.customerName}</div>
+                      <div className="text-sm text-muted-foreground">{o.itemsSummary}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ms-2">
                       <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />

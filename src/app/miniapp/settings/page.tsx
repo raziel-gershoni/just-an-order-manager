@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { Copy, Check, Pencil, Plus } from 'lucide-react';
+import { getInitial } from '@/lib/name-utils';
 
 interface BreadType { id: number; name: string; price: string; isActive: boolean }
 interface Member { id: number; userId: number; name: string; role: string }
@@ -156,7 +157,7 @@ export default function SettingsPage() {
             <div key={m.id} className="flex justify-between items-center px-4 py-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                  {m.name.charAt(0)}
+                  {getInitial(m.name)}
                 </div>
                 <span className="font-medium">{m.name}</span>
               </div>

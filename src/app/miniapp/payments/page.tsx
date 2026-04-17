@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
+import { getInitial } from '@/lib/name-utils';
 
 interface Customer { id: number; name: string }
 
@@ -132,7 +133,7 @@ function PaymentsContent() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                  {selectedCustomer.name.charAt(0)}
+                  {getInitial(selectedCustomer.name)}
                 </div>
                 <span className="font-medium">{selectedCustomer.name}</span>
                 <Check className="h-4 w-4 text-emerald-500" />
@@ -150,7 +151,7 @@ function PaymentsContent() {
                   onClick={() => setCustomerId(c.id)}
                 >
                   <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                    {c.name.charAt(0)}
+                    {getInitial(c.name)}
                   </div>
                   {c.name}
                 </button>

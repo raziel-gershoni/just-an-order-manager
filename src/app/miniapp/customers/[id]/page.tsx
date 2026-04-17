@@ -234,18 +234,18 @@ export default function CustomerDetailPage() {
           {orders.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {orders.slice(0, 10).map((o) => {
                 const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
                 return (
                   <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                    <Card className={cn('flex items-center justify-between py-2.5 hover:shadow-md transition-shadow border-status-' + displayStatus)}>
-                      <span className="text-sm">
-                        {o.itemsSummary}
+                    <Card className={cn('flex items-center justify-between py-2.5 ps-5 hover:shadow-md transition-shadow border-status-' + displayStatus)}>
+                      <div className="text-sm">
+                        <div>{o.itemsSummary}</div>
                         {o.deliveryDate && (
-                          <span className="text-muted-foreground ms-2">{formatDateRelative(o.deliveryDate, lang)}</span>
+                          <div className="text-muted-foreground">{formatDateRelative(o.deliveryDate, lang)}</div>
                         )}
-                      </span>
+                      </div>
                       <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
                     </Card>
                   </Link>

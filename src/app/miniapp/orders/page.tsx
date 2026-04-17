@@ -113,13 +113,13 @@ export default function OrdersPage() {
           }
         />
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {orders.map((o) => {
             const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
             return (
               <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
                 <Card className={cn(
-                  'hover:shadow-md transition-shadow cursor-pointer border-status-' + displayStatus
+                  'hover:shadow-md transition-shadow cursor-pointer ps-5 border-status-' + displayStatus
                 )}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">

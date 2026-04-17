@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check } from 'lucide-react';
+import { getInitial } from '@/lib/name-utils';
 
 interface Customer { id: number; name: string }
 interface BreadType { id: number; name: string; price: string }
@@ -210,7 +211,7 @@ function OrderFormContent() {
           {isEdit ? (
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                {customerName.charAt(0)}
+                {getInitial(customerName)}
               </div>
               <span className="font-medium">{customerName}</span>
             </div>
@@ -218,7 +219,7 @@ function OrderFormContent() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                  {selectedCustomer?.name.charAt(0)}
+                  {getInitial(selectedCustomer?.name ?? '')}
                 </div>
                 <span className="font-medium">{selectedCustomer?.name}</span>
                 <Check className="h-4 w-4 text-emerald-500" />
@@ -246,7 +247,7 @@ function OrderFormContent() {
                     onClick={() => { setCustomerId(c.id); setCustomerSearch(''); }}
                   >
                     <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                      {c.name.charAt(0)}
+                      {getInitial(c.name)}
                     </div>
                     {c.name}
                   </button>
