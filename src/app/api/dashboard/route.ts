@@ -45,6 +45,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     .select({
       id: orders.id,
       status: orders.status,
+      paid: orders.paid,
       notes: orders.notes,
       customerName: customers.name,
     })

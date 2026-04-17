@@ -17,6 +17,7 @@ interface DashboardData {
   todayOrders: {
     id: number;
     status: string;
+    paid: boolean;
     notes: string | null;
     customerName: string;
     totalQuantity: number;
@@ -143,19 +144,22 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-2">
-            {data?.todayOrders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/miniapp/orders/${o.id}`}
-                className={`flex items-center justify-between py-2 px-3 rounded-lg border-status-${o.status}`}
-              >
-                <div>
-                  <span className="font-medium">{o.customerName}</span>
-                  <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
-                </div>
-                <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
-              </Link>
-            ))}
+            {data?.todayOrders.map((o) => {
+              const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
+              return (
+                <Link
+                  key={o.id}
+                  href={`/miniapp/orders/${o.id}`}
+                  className={`flex items-center justify-between py-2 px-3 rounded-lg border-status-${displayStatus}`}
+                >
+                  <div>
+                    <span className="font-medium">{o.customerName}</span>
+                    <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
+                  </div>
+                  <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                </Link>
+              );
+            })}
           </div>
         )}
       </Card>

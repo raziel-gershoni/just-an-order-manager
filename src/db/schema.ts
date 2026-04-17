@@ -145,6 +145,7 @@ export const orders = pgTable('orders', {
   status: orderStatusEnum('order_status').notNull().default('pending'),
   notes: text('notes'),
   totalOverride: decimal('total_override', { precision: 10, scale: 2 }),
+  paid: boolean('paid').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

@@ -7,6 +7,7 @@ const translations: Record<string, Record<Lang, string>> = {
   'status.baking': { en: 'Baking', he: 'באפייה' },
   'status.ready': { en: 'Ready', he: 'מוכן' },
   'status.delivered': { en: 'Delivered', he: 'נמסר' },
+  'status.to_be_paid': { en: 'To Be Paid', he: 'לתשלום' },
   'status.cancelled': { en: 'Cancelled', he: 'בוטל' },
 
   // Delivery types
@@ -187,6 +188,8 @@ const translations: Record<string, Record<Lang, string>> = {
   'orders.charge_recorded': { en: 'Charge recorded!', he: 'חיוב נרשם!' },
   'orders.covered_by_credit': { en: 'Covered by credit', he: 'כוסה מקרדיט' },
   'orders.payment_recorded': { en: 'Payment recorded!', he: 'תשלום נרשם!' },
+  'orders.mark_paid': { en: 'Mark as Paid', he: 'סמן כשולם' },
+  'orders.deliver_and_pay': { en: 'Deliver & Record Payment', he: 'מסור ורשום תשלום' },
 
   // Order edit
   'orders.edit': { en: 'Edit', he: 'עריכה' },

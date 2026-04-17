@@ -24,6 +24,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       customerName: customers.name,
       customerId: customers.id,
       totalOverride: orders.totalOverride,
+      paid: orders.paid,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
@@ -150,6 +151,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       updatedAt: orders.updatedAt,
       customerName: customers.name,
       customerId: customers.id,
+      paid: orders.paid,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))

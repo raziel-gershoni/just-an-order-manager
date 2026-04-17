@@ -28,6 +28,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       deliveryType: orders.deliveryType,
       deliveryDate: orders.deliveryDate,
       status: orders.status,
+      paid: orders.paid,
       notes: orders.notes,
       createdAt: orders.createdAt,
       customerName: customers.name,

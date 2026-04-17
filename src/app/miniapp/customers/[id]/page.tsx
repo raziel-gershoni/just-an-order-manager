@@ -22,7 +22,7 @@ interface Customer {
   city: string | null;
   notes: string | null;
 }
-interface Order { id: number; deliveryDate: string | null; status: string; totalQuantity: number; itemsSummary: string }
+interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; totalQuantity: number; itemsSummary: string }
 interface Payment { id: number; amount: string; type: string; description: string | null; createdAt: string }
 
 export default function CustomerDetailPage() {
@@ -264,19 +264,22 @@ export default function CustomerDetailPage() {
             <p className="text-sm opacity-40">{t('orders.empty')}</p>
           ) : (
             <div className="space-y-2">
-              {orders.slice(0, 10).map((o) => (
-                <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                  <Card className={`flex items-center justify-between py-2 border-status-${o.status}`}>
-                    <span className="text-sm">
-                      {o.itemsSummary}
-                      {o.deliveryDate && (
-                        <span className="opacity-50 ms-2">{formatDateRelative(o.deliveryDate, lang)}</span>
-                      )}
-                    </span>
-                    <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
-                  </Card>
-                </Link>
-              ))}
+              {orders.slice(0, 10).map((o) => {
+                const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
+                return (
+                  <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
+                    <Card className={`flex items-center justify-between py-2 border-status-${displayStatus}`}>
+                      <span className="text-sm">
+                        {o.itemsSummary}
+                        {o.deliveryDate && (
+                          <span className="opacity-50 ms-2">{formatDateRelative(o.deliveryDate, lang)}</span>
+                        )}
+                      </span>
+                      <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

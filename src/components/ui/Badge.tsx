@@ -6,6 +6,7 @@ const statusColors: Record<string, string> = {
   baking: 'bg-orange-100 text-orange-800',
   ready: 'bg-green-100 text-green-800',
   delivered: 'bg-gray-100 text-gray-600',
+  to_be_paid: 'bg-amber-100 text-amber-800',
   cancelled: 'bg-red-100 text-red-800',
 };
 

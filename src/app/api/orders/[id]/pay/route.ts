@@ -12,7 +12,7 @@ function getOrderId(url: string): number {
 }
 
 const paySchema = z.object({
-  paid: z.boolean(),
+  action: z.enum(['paid', 'credit', 'unpaid', 'mark_paid']),
   amount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
 });
 
@@ -39,6 +39,18 @@ export const POST = withGroup(async (request, _auth, groupId) => {
 
   if (!order) return errorResponse('Order not found', 404);
   if (order.status !== 'delivered') return errorResponse('Order must be delivered', 400);
+
+  const { action, amount } = parsed.data;
+
+  // "mark_paid" just flips the paid flag, no financial records
+  if (action === 'mark_paid') {
+    await db.update(orders).set({ paid: true, updatedAt: new Date() }).where(eq(orders.id, id));
+    const [balanceResult] = await db
+      .select({ balance: sql<string>`COALESCE(SUM(${payments.amount}), 0)` })
+      .from(payments)
+      .where(and(eq(payments.customerId, order.customerId), eq(payments.groupId, groupId)));
+    return jsonResponse({ balance: balanceResult.balance, paid: true });
+  }
 
   // Calculate order total
   const items = await db
@@ -80,15 +92,19 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   }
 
   // Create payment if customer paid
-  if (parsed.data.paid && parsed.data.amount) {
+  if (action === 'paid' && amount) {
     await db.insert(payments).values({
       groupId,
       customerId: order.customerId,
-      amount: parsed.data.amount,
+      amount,
       type: 'payment',
       orderId: id,
     });
   }
+
+  // Set paid flag: true for 'paid' and 'credit', false for 'unpaid'
+  const isPaid = action !== 'unpaid';
+  await db.update(orders).set({ paid: isPaid, updatedAt: new Date() }).where(eq(orders.id, id));
 
   // Get updated balance
   const [balanceResult] = await db
@@ -106,13 +122,13 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   const balance = Number(balanceResult.balance);
 
   // Notify on payment
-  if (parsed.data.paid && parsed.data.amount) {
+  if (action === 'paid' && amount) {
     await notifyPrepayment(groupId, {
       customerName: order.customerName,
-      amount: parsed.data.amount,
+      amount,
       balance,
     });
   }
 
-  return jsonResponse({ balance: balanceResult.balance });
+  return jsonResponse({ balance: balanceResult.balance, paid: isPaid });
 });

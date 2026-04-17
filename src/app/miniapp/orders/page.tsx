@@ -16,6 +16,7 @@ interface Order {
   deliveryType: string;
   deliveryDate: string | null;
   status: string;
+  paid: boolean;
   notes: string | null;
   customerName: string;
   totalQuantity: number;
@@ -97,26 +98,29 @@ export default function OrdersPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {orders.map((o) => (
-            <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-              <Card className={`border-status-${o.status}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-medium">{o.customerName}</span>
-                    <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
+          {orders.map((o) => {
+            const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
+            return (
+              <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
+                <Card className={`border-status-${displayStatus}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-medium">{o.customerName}</span>
+                      <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {o.deliveryDate && (
+                        <span className="text-xs opacity-50">
+                          {formatDateRelative(o.deliveryDate, lang)}
+                        </span>
+                      )}
+                      <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {o.deliveryDate && (
-                      <span className="text-xs opacity-50">
-                        {formatDateRelative(o.deliveryDate, lang)}
-                      </span>
-                    )}
-                    <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

@@ -65,4 +65,5 @@ body {
 .border-status-baking { border-left: 3px solid #f97316; }
 .border-status-ready { border-left: 3px solid #22c55e; }
 .border-status-delivered { border-left: 3px solid #9ca3af; }
+.border-status-to_be_paid { border-left: 3px solid #d97706; }
 .border-status-cancelled { border-left: 3px solid #ef4444; }
