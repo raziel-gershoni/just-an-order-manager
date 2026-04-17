@@ -113,7 +113,7 @@ export default function OrdersPage() {
           }
         />
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {orders.map((o) => {
             const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
             return (

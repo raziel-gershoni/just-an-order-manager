@@ -234,7 +234,7 @@ export default function CustomerDetailPage() {
           {orders.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>
           ) : (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {orders.slice(0, 10).map((o) => {
                 const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
                 return (

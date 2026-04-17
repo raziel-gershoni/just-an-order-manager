@@ -121,7 +121,7 @@ export default function CustomersPage() {
           description={t('customers.empty_hint')}
         />
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {filtered.map((c) => (
             <Link key={c.id} href={`/miniapp/customers/${c.id}`}>
               <Card className="flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
