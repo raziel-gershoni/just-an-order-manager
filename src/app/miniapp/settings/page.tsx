@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { Copy, Check, Pencil, Plus, Pause, Play, Trash2 } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
-interface BreadType { id: number; name: string; price: string; isActive: boolean }
+interface BreadType { id: number; name: string; price: string; isActive: boolean; sortOrder: number }
 interface Member { id: number; userId: number; name: string; role: string }
 interface Invite { id: number; inviteCode: string; role: string; status: string }
 
@@ -51,7 +51,9 @@ export default function SettingsPage() {
     ])
       .then(([g, b, m, i]) => {
         setGroupName(g.group.name);
-        setBreadTypes(b.breadTypes);
+        setBreadTypes(
+          [...b.breadTypes].sort((a: BreadType, b: BreadType) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder || a.id - b.id)
+        );
         setMembers(m.members);
         setInvites(i.invites);
       })
@@ -88,7 +90,7 @@ export default function SettingsPage() {
     setJustToggledId(id);
     setBreadTypes((prev) =>
       prev.map((bt) => (bt.id === id ? breadType : bt))
-        .sort((a, b) => Number(b.isActive) - Number(a.isActive))
+        .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder || a.id - b.id)
     );
     setTimeout(() => setJustToggledId(null), 400);
   }
