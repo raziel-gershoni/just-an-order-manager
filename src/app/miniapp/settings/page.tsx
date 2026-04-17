@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Pencil, Plus } from 'lucide-react';
+import { Copy, Check, Pencil, Plus, Pause, Play } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
 interface BreadType { id: number; name: string; price: string; isActive: boolean }
@@ -239,8 +239,8 @@ export default function SettingsPage() {
                   <Button size="icon" variant="ghost" onClick={() => { setEditingBreadId(bt.id); setEditBreadName(bt.name); setEditBreadPrice(bt.price); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => toggleBreadType(bt.id, bt.isActive)}>
-                    {bt.isActive ? t('settings.disable') : t('settings.enable')}
+                  <Button size="icon" variant="ghost" onClick={() => toggleBreadType(bt.id, bt.isActive)}>
+                    {bt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
               </Card>
