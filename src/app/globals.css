@@ -119,6 +119,15 @@ body {
   animation: pulse-soft 2s ease-in-out infinite;
 }
 
+@keyframes fade-reorder {
+  0% { opacity: 0.4; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-reorder {
+  animation: fade-reorder 0.3s ease-out;
+}
+
 /* ---- Status border colors ---- */
 .border-status-pending { border-inline-start: 3px solid oklch(0.75 0.15 85); }
 .border-status-confirmed { border-inline-start: 3px solid oklch(0.65 0.15 230); }

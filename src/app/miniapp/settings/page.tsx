@@ -36,6 +36,7 @@ export default function SettingsPage() {
   const [newBreadName, setNewBreadName] = useState('');
   const [newBreadPrice, setNewBreadPrice] = useState('');
 
+  const [justToggledId, setJustToggledId] = useState<number | null>(null);
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -84,7 +85,12 @@ export default function SettingsPage() {
       method: isActive ? 'DELETE' : 'PATCH',
       ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
     });
-    setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? breadType : bt)));
+    setJustToggledId(id);
+    setBreadTypes((prev) =>
+      prev.map((bt) => (bt.id === id ? breadType : bt))
+        .sort((a, b) => Number(b.isActive) - Number(a.isActive))
+    );
+    setTimeout(() => setJustToggledId(null), 400);
   }
 
   async function addBreadType() {
@@ -239,7 +245,7 @@ export default function SettingsPage() {
                 </div>
               </Card>
             ) : (
-              <Card key={bt.id} className="flex justify-between items-center">
+              <Card key={bt.id} className={cn('flex justify-between items-center', justToggledId === bt.id && 'animate-reorder')}>
                 <div className="flex items-center gap-2">
                   <span className={cn('font-medium', !bt.isActive && 'text-muted-foreground line-through')}>{bt.name}</span>
                   <span className={cn(
