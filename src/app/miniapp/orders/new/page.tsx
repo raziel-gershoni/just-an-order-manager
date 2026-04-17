@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { cn } from '@/lib/utils';
+import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check } from 'lucide-react';
 
 interface Customer { id: number; name: string }
 interface BreadType { id: number; name: string; price: string }
@@ -18,11 +20,23 @@ type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
 export default function NewOrderPage() {
   return (
-    <Suspense fallback={<div className="p-4 text-center opacity-50">...</div>}>
+    <Suspense fallback={
+      <div className="p-5 space-y-4">
+        <div className="h-10 rounded-xl bg-muted animate-pulse" />
+        <div className="h-32 rounded-xl bg-muted animate-pulse" />
+      </div>
+    }>
       <OrderFormContent />
     </Suspense>
   );
 }
+
+const deliveryIcons: Record<DeliveryType, typeof Calendar> = {
+  shabbat: Calendar,
+  asap: Zap,
+  specific_date: CalendarDays,
+  weekly: Repeat,
+};
 
 function OrderFormContent() {
   const { apiFetch } = useApi();
@@ -70,7 +84,6 @@ function OrderFormContent() {
 
         if (isEdit && o?.order) {
           const order = o.order;
-          // Guard: only allow editing non-terminal orders
           if (order.status === 'delivered' || order.status === 'cancelled') {
             router.replace(`/miniapp/orders/${editId}`);
             return;
@@ -167,7 +180,11 @@ function OrderFormContent() {
     return (
       <>
         <PageHeader title={isEdit ? t('orders.edit') : t('orders.new_order')} />
-        <div className="p-4 text-center opacity-50">{t('general.loading')}</div>
+        <div className="p-5 space-y-4">
+          <div className="h-24 rounded-xl bg-muted animate-pulse" />
+          <div className="h-32 rounded-xl bg-muted animate-pulse" />
+          <div className="h-20 rounded-xl bg-muted animate-pulse" />
+        </div>
       </>
     );
   }
@@ -186,45 +203,62 @@ function OrderFormContent() {
   return (
     <>
       <PageHeader title={isEdit ? t('orders.edit') : t('orders.new_order')} />
-      <div className="p-4 space-y-4 animate-fade-in">
+      <div className="p-5 space-y-4 animate-fade-in">
         {/* Customer */}
         <Card>
-          <h3 className="font-medium mb-2">{t('form.customer')}</h3>
+          <h3 className="font-semibold mb-3">{t('form.customer')}</h3>
           {isEdit ? (
-            <div className="flex items-center justify-between">
-              <span className="font-bold">{customerName}</span>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                {customerName.charAt(0)}
+              </div>
+              <span className="font-medium">{customerName}</span>
             </div>
           ) : customerId ? (
             <div className="flex items-center justify-between">
-              <span className="font-bold">{selectedCustomer?.name}</span>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                  {selectedCustomer?.name.charAt(0)}
+                </div>
+                <span className="font-medium">{selectedCustomer?.name}</span>
+                <Check className="h-4 w-4 text-emerald-500" />
+              </div>
               <Button variant="ghost" size="sm" onClick={() => setCustomerId(null)}>
                 {t('form.change')}
               </Button>
             </div>
           ) : (
             <div className="space-y-2">
-              <Input
-                placeholder={t('form.search_customer')}
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-              />
-              <div className="max-h-40 overflow-y-auto space-y-1">
+              <div className="relative">
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  className="w-full rounded-lg border border-input bg-card ps-9 pe-3 py-2.5 text-base outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground/50"
+                  placeholder={t('form.search_customer')}
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+              </div>
+              <div className="max-h-40 overflow-y-auto space-y-0.5">
                 {filteredCustomers.map((c) => (
                   <button
                     key={c.id}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 transition"
+                    className="w-full text-start px-3 py-2.5 rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
                     onClick={() => { setCustomerId(c.id); setCustomerSearch(''); }}
                   >
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                      {c.name.charAt(0)}
+                    </div>
                     {c.name}
                   </button>
                 ))}
               </div>
               {!showNewCustomer ? (
                 <Button variant="ghost" size="sm" onClick={() => setShowNewCustomer(true)}>
-                  + {t('form.add_customer')}
+                  <UserPlus className="h-4 w-4" />
+                  {t('form.add_customer')}
                 </Button>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex gap-2 animate-expand">
                   <Input
                     placeholder={t('form.customer_name')}
                     value={newCustomerName}
@@ -240,17 +274,14 @@ function OrderFormContent() {
 
         {/* Line Items */}
         <Card>
-          <h3 className="font-medium mb-3">{t('form.bread_type')}</h3>
+          <h3 className="font-semibold mb-3">{t('form.bread_type')}</h3>
           <div className="space-y-3">
             {items.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2">
-                {/* Bread type selector */}
                 <select
-                  className="flex-1 rounded-lg border border-black/10 bg-[var(--tg-theme-bg-color,#ffffff)] px-3 py-2 text-sm"
+                  className="flex-1 rounded-lg border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
                   value={item.breadTypeId}
-                  onChange={(e) =>
-                    updateItem(idx, { breadTypeId: Number(e.target.value) })
-                  }
+                  onChange={(e) => updateItem(idx, { breadTypeId: Number(e.target.value) })}
                 >
                   {breadTypes.map((bt) => (
                     <option key={bt.id} value={bt.id}>
@@ -258,104 +289,98 @@ function OrderFormContent() {
                     </option>
                   ))}
                 </select>
-                {/* Quantity */}
                 <div className="flex items-center gap-1">
                   <button
-                    className="w-8 h-8 rounded-full bg-black/5 text-sm font-bold"
-                    onClick={() =>
-                      updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })
-                    }
+                    className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+                    onClick={() => updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })}
                   >
-                    −
+                    <Minus className="h-4 w-4" />
                   </button>
-                  <span className="w-6 text-center font-bold">{item.quantity}</span>
+                  <span className="w-8 text-center font-bold tabular-nums">{item.quantity}</span>
                   <button
-                    className="w-8 h-8 rounded-full bg-black/5 text-sm font-bold"
-                    onClick={() =>
-                      updateItem(idx, { quantity: item.quantity + 1 })
-                    }
+                    className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+                    onClick={() => updateItem(idx, { quantity: item.quantity + 1 })}
                   >
-                    +
+                    <Plus className="h-4 w-4" />
                   </button>
                 </div>
-                {/* Remove */}
                 {items.length > 1 && (
                   <button
-                    className="w-8 h-8 rounded-full text-red-500 hover:bg-red-50 text-sm"
+                    className="w-10 h-10 rounded-lg text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
                     onClick={() => removeItem(idx)}
                   >
-                    ✕
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>
             ))}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-2"
-            onClick={addItem}
-          >
-            + {t('form.add')}
+          <Button variant="ghost" size="sm" className="mt-3" onClick={addItem}>
+            <Plus className="h-4 w-4" />
+            {t('form.add')}
           </Button>
         </Card>
 
         {/* Delivery */}
         <Card>
-          <h3 className="font-medium mb-2">{t('form.delivery')}</h3>
+          <h3 className="font-semibold mb-3">{t('form.delivery')}</h3>
           <div className="grid grid-cols-2 gap-2">
-            {deliveryOptions.map(([type, label]) => (
-              <button
-                key={type}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition ${
-                  deliveryType === type
-                    ? 'bg-[var(--tg-theme-button-color,#3b82f6)] text-[var(--tg-theme-button-text-color,#ffffff)]'
-                    : 'bg-black/5 hover:bg-black/10'
-                }`}
-                onClick={() => setDeliveryType(type)}
-              >
-                {label}
-              </button>
-            ))}
+            {deliveryOptions.map(([type, label]) => {
+              const Icon = deliveryIcons[type];
+              return (
+                <button
+                  key={type}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all border',
+                    deliveryType === type
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'bg-card border-border hover:bg-muted text-foreground'
+                  )}
+                  onClick={() => setDeliveryType(type)}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              );
+            })}
           </div>
           {deliveryType === 'specific_date' && (
             <Input
               type="date"
               value={deliveryDate}
               onChange={(e) => setDeliveryDate(e.target.value)}
-              className="mt-2"
+              className="mt-3"
             />
           )}
         </Card>
 
-        {/* Notes */}
-        <TextArea
-          label={t('form.notes')}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder={t('form.notes_placeholder')}
-        />
-
-        {/* Custom total */}
-        <Input
-          label={t('form.custom_total')}
-          type="number"
-          inputMode="decimal"
-          value={totalOverride}
-          onChange={(e) => setTotalOverride(e.target.value)}
-          placeholder="0"
-        />
+        {/* Notes & Custom Total */}
+        <Card className="space-y-3 p-4">
+          <TextArea
+            label={t('form.notes')}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={t('form.notes_placeholder')}
+          />
+          <Input
+            label={t('form.custom_total')}
+            type="number"
+            inputMode="decimal"
+            value={totalOverride}
+            onChange={(e) => setTotalOverride(e.target.value)}
+            placeholder="0"
+          />
+        </Card>
 
         {/* Submit */}
         <Button
           className="w-full"
           size="lg"
-          disabled={!customerId || items.length === 0 || submitting}
+          disabled={!customerId || items.length === 0}
+          loading={submitting}
           onClick={handleSubmit}
         >
-          {submitting
-            ? (isEdit ? t('form.updating') : t('form.creating'))
-            : (isEdit ? t('form.update_order') : t('form.create_order'))}
+          {isEdit ? t('form.update_order') : t('form.create_order')}
         </Button>
       </div>
     </>

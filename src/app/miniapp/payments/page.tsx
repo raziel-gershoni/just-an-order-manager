@@ -9,12 +9,19 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
 
 interface Customer { id: number; name: string }
 
 export default function PaymentsPage() {
   return (
-    <Suspense fallback={<div className="p-4 text-center opacity-50">...</div>}>
+    <Suspense fallback={
+      <div className="p-5 space-y-4">
+        <div className="h-14 rounded-xl bg-muted animate-pulse" />
+        <div className="h-32 rounded-xl bg-muted animate-pulse" />
+      </div>
+    }>
       <PaymentsContent />
     </Suspense>
   );
@@ -78,7 +85,10 @@ function PaymentsContent() {
     return (
       <>
         <PageHeader title={t('payments.title')} />
-        <div className="p-4 text-center opacity-50">{t('general.loading')}</div>
+        <div className="p-5 space-y-4">
+          <div className="h-14 rounded-xl bg-muted animate-pulse" />
+          <div className="h-32 rounded-xl bg-muted animate-pulse" />
+        </div>
       </>
     );
   }
@@ -88,21 +98,27 @@ function PaymentsContent() {
   return (
     <>
       <PageHeader title={t('payments.title')} />
-      <div className="p-4 space-y-4 animate-fade-in">
+      <div className="p-5 space-y-4 animate-fade-in">
         {/* Type toggle */}
-        <div className="flex gap-2">
+        <div className="flex gap-1 bg-muted p-1 rounded-lg">
           <button
-            className={`flex-1 py-3 rounded-lg font-medium transition ${
-              type === 'payment' ? 'bg-green-500 text-white' : 'bg-black/5'
-            }`}
+            className={cn(
+              'flex-1 py-2.5 rounded-md text-sm font-medium transition-all',
+              type === 'payment'
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
             onClick={() => setType('payment')}
           >
             {t('payments.payment_plus')}
           </button>
           <button
-            className={`flex-1 py-3 rounded-lg font-medium transition ${
-              type === 'charge' ? 'bg-red-500 text-white' : 'bg-black/5'
-            }`}
+            className={cn(
+              'flex-1 py-2.5 rounded-md text-sm font-medium transition-all',
+              type === 'charge'
+                ? 'bg-destructive text-white shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
             onClick={() => setType('charge')}
           >
             {t('payments.charge_minus')}
@@ -111,22 +127,31 @@ function PaymentsContent() {
 
         {/* Customer */}
         <Card>
-          <h3 className="font-medium mb-2">{t('form.customer')}</h3>
+          <h3 className="font-semibold mb-3">{t('form.customer')}</h3>
           {customerId && selectedCustomer ? (
             <div className="flex items-center justify-between">
-              <span className="font-bold">{selectedCustomer.name}</span>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                  {selectedCustomer.name.charAt(0)}
+                </div>
+                <span className="font-medium">{selectedCustomer.name}</span>
+                <Check className="h-4 w-4 text-emerald-500" />
+              </div>
               <Button variant="ghost" size="sm" onClick={() => setCustomerId(null)}>
                 {t('form.change')}
               </Button>
             </div>
           ) : (
-            <div className="max-h-40 overflow-y-auto space-y-1">
+            <div className="max-h-40 overflow-y-auto space-y-0.5">
               {customers.map((c) => (
                 <button
                   key={c.id}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5"
+                  className="w-full text-start px-3 py-2.5 rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
                   onClick={() => setCustomerId(c.id)}
                 >
+                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                    {c.name.charAt(0)}
+                  </div>
                   {c.name}
                 </button>
               ))}
@@ -134,32 +159,33 @@ function PaymentsContent() {
           )}
         </Card>
 
-        <Input
-          label={t('payments.amount')}
-          type="number"
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="0"
-        />
+        <Card className="space-y-3">
+          <Input
+            label={t('payments.amount')}
+            type="number"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0"
+          />
 
-        <Input
-          label={t('payments.description')}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder={t('payments.description_hint')}
-        />
+          <Input
+            label={t('payments.description')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={t('payments.description_hint')}
+          />
+        </Card>
 
         <Button
           className="w-full"
           size="lg"
           variant={type === 'charge' ? 'danger' : 'primary'}
-          disabled={!customerId || !amount || submitting}
+          disabled={!customerId || !amount}
+          loading={submitting}
           onClick={handleSubmit}
         >
-          {submitting
-            ? t('payments.recording')
-            : `${t('payments.record')} ${type === 'payment' ? '+' : '-'}₪${amount || '0'}`}
+          {`${t('payments.record')} ${type === 'payment' ? '+' : '-'}₪${amount || '0'}`}
         </Button>
       </div>
     </>

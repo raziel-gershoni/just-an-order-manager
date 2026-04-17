@@ -1,14 +1,18 @@
 'use client';
 
 import { type HTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
 
 export function Card({
-  className = '',
+  className,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f9fafb)] p-4 ${className}`}
+      className={cn(
+        'rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow',
+        className
+      )}
       {...props}
     />
   );

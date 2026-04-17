@@ -12,6 +12,8 @@ import { Input, TextArea } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
+import { Plus, Banknote, Pencil } from 'lucide-react';
 import Link from 'next/link';
 
 interface Customer {
@@ -38,7 +40,6 @@ export default function CustomerDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Edit mode
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -105,7 +106,11 @@ export default function CustomerDetailPage() {
     return (
       <>
         <PageHeader title={t('form.customer')} />
-        <div className="p-4 text-center opacity-50">{t('general.loading')}</div>
+        <div className="p-5 space-y-4">
+          <div className="h-28 rounded-xl bg-muted animate-pulse" />
+          <div className="h-14 rounded-xl bg-muted animate-pulse" />
+          <div className="h-32 rounded-xl bg-muted animate-pulse" />
+        </div>
       </>
     );
   }
@@ -114,7 +119,7 @@ export default function CustomerDetailPage() {
     return (
       <>
         <PageHeader title={t('form.customer')} />
-        <div className="p-4 text-center">{t('customers.not_found')}</div>
+        <div className="p-5 text-center text-muted-foreground">{t('customers.not_found')}</div>
       </>
     );
   }
@@ -124,49 +129,42 @@ export default function CustomerDetailPage() {
   return (
     <>
       <PageHeader title={customer.name} />
-      <div className="p-4 space-y-4 animate-fade-in">
+      <div className="p-5 space-y-4 animate-fade-in">
         {/* Balance */}
-        <Card
-          className={
-            balanceNum < 0
-              ? 'border border-red-200'
-              : balanceNum > 0
-              ? 'border border-green-200'
-              : 'border border-green-200'
-          }
-        >
-          <div className="text-center">
-            <span className="text-sm opacity-60">{t('customers.balance')}</span>
-            {balanceNum === 0 ? (
-              <div className="text-2xl font-bold text-green-600">
-                {t('customers.balance_square')}
+        <Card className={cn(
+          'text-center',
+          balanceNum < 0 ? 'border-destructive/20 bg-destructive/3' : 'border-emerald-200 bg-emerald-50/50'
+        )}>
+          <span className="text-sm text-muted-foreground">{t('customers.balance')}</span>
+          {balanceNum === 0 ? (
+            <div className="text-2xl font-bold text-emerald-600 mt-1">
+              {t('customers.balance_square')}
+            </div>
+          ) : (
+            <>
+              <div className={cn('text-3xl font-bold tabular-nums mt-1', balanceNum < 0 ? 'text-destructive' : 'text-emerald-600')}>
+                ₪{Math.abs(balanceNum).toFixed(0)}
               </div>
-            ) : (
-              <>
-                <div className={`text-3xl font-bold ${
-                  balanceNum < 0 ? 'text-red-600' : 'text-green-600'
-                }`}>
-                  ₪{Math.abs(balanceNum).toFixed(0)}
-                </div>
-                <span className={`text-sm ${
-                  balanceNum < 0 ? 'text-red-500' : 'text-green-500'
-                }`}>
-                  {balanceNum > 0 ? t('customers.balance_credit') : t('customers.balance_debt')}
-                </span>
-              </>
-            )}
-          </div>
+              <span className={cn('text-sm', balanceNum < 0 ? 'text-destructive/70' : 'text-emerald-600/70')}>
+                {balanceNum > 0 ? t('customers.balance_credit') : t('customers.balance_debt')}
+              </span>
+            </>
+          )}
         </Card>
 
         {/* Quick actions */}
         <div className="grid grid-cols-2 gap-3">
           <Link href={`/miniapp/orders/new?customerId=${customer.id}`}>
-            <Button className="w-full" size="sm">{t('dash.new_order')}</Button>
+            <Card className="flex items-center gap-2 p-3 hover:shadow-md cursor-pointer bg-primary/5 border-primary/15">
+              <Plus className="h-4 w-4 text-primary" />
+              <span className="font-medium text-sm">{t('dash.new_order')}</span>
+            </Card>
           </Link>
           <Link href={`/miniapp/payments?customerId=${customer.id}`}>
-            <Button variant="secondary" className="w-full" size="sm">
-              {t('dash.record_payment')}
-            </Button>
+            <Card className="flex items-center gap-2 p-3 hover:shadow-md cursor-pointer bg-secondary/50">
+              <Banknote className="h-4 w-4 text-secondary-foreground" />
+              <span className="font-medium text-sm">{t('dash.record_payment')}</span>
+            </Card>
           </Link>
         </div>
 
@@ -174,84 +172,57 @@ export default function CustomerDetailPage() {
         <Card>
           {editing ? (
             <div className="space-y-3">
-              <Input
-                label={t('form.customer_name')}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-              />
-              <Input
-                label={t('customers.phone')}
-                value={editPhone}
-                onChange={(e) => setEditPhone(e.target.value)}
-                type="tel"
-              />
-              <Input
-                label={t('customers.address')}
-                value={editAddress}
-                onChange={(e) => setEditAddress(e.target.value)}
-              />
-              <Input
-                label={t('customers.city')}
-                value={editCity}
-                onChange={(e) => setEditCity(e.target.value)}
-              />
-              <TextArea
-                label={t('notify.notes')}
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-              />
+              <Input label={t('form.customer_name')} value={editName} onChange={(e) => setEditName(e.target.value)} />
+              <Input label={t('customers.phone')} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} type="tel" />
+              <Input label={t('customers.address')} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+              <Input label={t('customers.city')} value={editCity} onChange={(e) => setEditCity(e.target.value)} />
+              <TextArea label={t('notify.notes')} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={!editName.trim() || saving}
-                  onClick={handleSave}
-                >
-                  {saving ? '...' : t('settings.save')}
+                <Button size="sm" disabled={!editName.trim()} loading={saving} onClick={handleSave}>
+                  {t('settings.save')}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setEditing(false)}
-                >
+                <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
                   {t('payments.cancel')}
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2 flex-1">
-                  {customer.phone && (
-                    <div className="flex justify-between">
-                      <span className="opacity-60">{t('customers.phone')}</span>
-                      <span>{customer.phone}</span>
-                    </div>
-                  )}
-                  {customer.address && (
-                    <div className="flex justify-between">
-                      <span className="opacity-60">{t('customers.address')}</span>
-                      <span>{customer.address}</span>
-                    </div>
-                  )}
-                  {customer.city && (
-                    <div className="flex justify-between">
-                      <span className="opacity-60">{t('customers.city')}</span>
-                      <span>{customer.city}</span>
-                    </div>
-                  )}
-                  {customer.notes && (
-                    <div>
-                      <span className="opacity-60">{t('notify.notes')}</span>
-                      <p className="mt-1">{customer.notes}</p>
-                    </div>
-                  )}
-                  {!customer.phone && !customer.address && !customer.city && !customer.notes && (
-                    <p className="text-sm opacity-40">{t('customers.empty_hint')}</p>
-                  )}
-                </div>
+            <div>
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-semibold">{t('form.customer')}</span>
                 <Button variant="ghost" size="sm" onClick={startEditing}>
+                  <Pencil className="h-3.5 w-3.5" />
                   {t('customers.edit')}
                 </Button>
+              </div>
+              <div className="space-y-2">
+                {customer.phone && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t('customers.phone')}</span>
+                    <span>{customer.phone}</span>
+                  </div>
+                )}
+                {customer.address && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t('customers.address')}</span>
+                    <span>{customer.address}</span>
+                  </div>
+                )}
+                {customer.city && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t('customers.city')}</span>
+                    <span>{customer.city}</span>
+                  </div>
+                )}
+                {customer.notes && (
+                  <div className="pt-2 border-t border-border text-sm">
+                    <span className="text-muted-foreground">{t('notify.notes')}</span>
+                    <p className="mt-1">{customer.notes}</p>
+                  </div>
+                )}
+                {!customer.phone && !customer.address && !customer.city && !customer.notes && (
+                  <p className="text-sm text-muted-foreground">{t('customers.empty_hint')}</p>
+                )}
               </div>
             </div>
           )}
@@ -261,18 +232,18 @@ export default function CustomerDetailPage() {
         <div>
           <h2 className="font-bold mb-2">{t('customers.order_history')} ({orders.length})</h2>
           {orders.length === 0 ? (
-            <p className="text-sm opacity-40">{t('orders.empty')}</p>
+            <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>
           ) : (
             <div className="space-y-2">
               {orders.slice(0, 10).map((o) => {
                 const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
                 return (
                   <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                    <Card className={`flex items-center justify-between py-2 border-status-${displayStatus}`}>
+                    <Card className={cn('flex items-center justify-between py-2.5 hover:shadow-md transition-shadow border-status-' + displayStatus)}>
                       <span className="text-sm">
                         {o.itemsSummary}
                         {o.deliveryDate && (
-                          <span className="opacity-50 ms-2">{formatDateRelative(o.deliveryDate, lang)}</span>
+                          <span className="text-muted-foreground ms-2">{formatDateRelative(o.deliveryDate, lang)}</span>
                         )}
                       </span>
                       <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
@@ -288,23 +259,23 @@ export default function CustomerDetailPage() {
         <div>
           <h2 className="font-bold mb-2">{t('customers.payment_history')} ({payments.length})</h2>
           {payments.length === 0 ? (
-            <p className="text-sm opacity-40">{t('orders.empty')}</p>
+            <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>
           ) : (
-            <div className="space-y-1">
+            <Card className="divide-y divide-border p-0">
               {payments.slice(0, 10).map((p) => (
-                <div key={p.id} className="flex justify-between text-sm py-1">
+                <div key={p.id} className="flex justify-between text-sm py-3 px-4">
                   <div>
-                    <span>{translate(`payment.${p.type}`, lang)}</span>
+                    <span className="font-medium">{translate(`payment.${p.type}`, lang)}</span>
                     {p.description && (
-                      <span className="opacity-50 ms-2">{p.description}</span>
+                      <span className="text-muted-foreground ms-2">{p.description}</span>
                     )}
                   </div>
-                  <span className={Number(p.amount) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  <span className={cn('font-medium tabular-nums', Number(p.amount) >= 0 ? 'text-emerald-600' : 'text-destructive')}>
                     {Number(p.amount) >= 0 ? '+' : ''}₪{Math.abs(Number(p.amount)).toFixed(0)}
                   </span>
                 </div>
               ))}
-            </div>
+            </Card>
           )}
         </div>
       </div>

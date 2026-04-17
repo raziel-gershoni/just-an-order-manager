@@ -7,8 +7,11 @@ import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
 import { formatDateRelative } from '@/lib/date-utils';
+import { Plus, ClipboardList, ChevronRight, ChevronLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 interface Order {
@@ -34,6 +37,8 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('active');
 
+  const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
+
   useEffect(() => {
     if (!activeGroupId) return;
     setLoading(true);
@@ -58,24 +63,28 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="p-4 space-y-4 animate-fade-in">
+    <div className="p-5 space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t('orders.title')}</h1>
+        <h1 className="text-xl font-bold tracking-tight">{t('orders.title')}</h1>
         <Link href="/miniapp/orders/new">
-          <Button size="sm">+ {t('orders.new')}</Button>
+          <Button size="sm">
+            <Plus className="h-4 w-4" />
+            {t('orders.new')}
+          </Button>
         </Link>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-1 bg-muted p-1 rounded-lg">
         {(['active', 'completed', 'all'] as const).map((tabKey) => (
           <button
             key={tabKey}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            className={cn(
+              'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all',
               tab === tabKey
-                ? 'bg-[var(--tg-theme-button-color,#3b82f6)] text-[var(--tg-theme-button-text-color,#fff)]'
-                : 'bg-black/5'
-            }`}
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
             onClick={() => setTab(tabKey)}
           >
             {tabLabels[tabKey]}
@@ -84,37 +93,49 @@ export default function OrdersPage() {
       </div>
 
       {loading ? (
-        <div className="text-center opacity-50 py-8">{t('general.loading')}</div>
-      ) : orders.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-4xl mb-3">📋</p>
-          <p className="font-medium opacity-70">{t('orders.empty')}</p>
-          <p className="text-sm opacity-40 mt-1">{t('orders.empty_hint')}</p>
-          <Link href="/miniapp/orders/new">
-            <Button variant="secondary" size="sm" className="mt-4">
-              + {t('dash.new_order')}
-            </Button>
-          </Link>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />
+          ))}
         </div>
+      ) : orders.length === 0 ? (
+        <EmptyState
+          icon={ClipboardList}
+          title={t('orders.empty')}
+          description={t('orders.empty_hint')}
+          action={
+            <Link href="/miniapp/orders/new">
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4" />
+                {t('dash.new_order')}
+              </Button>
+            </Link>
+          }
+        />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {orders.map((o) => {
             const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
             return (
               <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                <Card className={`border-status-${displayStatus}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-medium">{o.customerName}</span>
-                      <span className="text-sm opacity-60 ms-1.5">{o.itemsSummary}</span>
+                <Card className={cn(
+                  'hover:shadow-md transition-shadow cursor-pointer border-status-' + displayStatus
+                )}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{o.customerName}</div>
+                      <div className="text-sm text-muted-foreground mt-0.5">{o.itemsSummary}</div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {o.deliveryDate && (
-                        <span className="text-xs opacity-50">
-                          {formatDateRelative(o.deliveryDate, lang)}
-                        </span>
-                      )}
-                      <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                        {o.deliveryDate && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatDateRelative(o.deliveryDate, lang)}
+                          </span>
+                        )}
+                      </div>
+                      <Chevron className="h-4 w-4 text-muted-foreground/30" />
                     </div>
                   </div>
                 </Card>

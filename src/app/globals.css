@@ -1,24 +1,75 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---- Warm & Crafty Bakery Theme ---- */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Warm cream & brown palette */
+  --background: oklch(0.97 0.01 75);
+  --foreground: oklch(0.22 0.02 55);
+
+  --card: oklch(0.99 0.005 75);
+  --card-foreground: oklch(0.22 0.02 55);
+
+  --primary: oklch(0.65 0.14 60);
+  --primary-foreground: oklch(0.98 0.005 75);
+
+  --secondary: oklch(0.94 0.02 130);
+  --secondary-foreground: oklch(0.30 0.04 130);
+
+  --muted: oklch(0.94 0.01 75);
+  --muted-foreground: oklch(0.55 0.02 55);
+
+  --accent: oklch(0.60 0.15 35);
+  --accent-foreground: oklch(0.98 0.005 75);
+
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.005 75);
+
+  --border: oklch(0.90 0.01 75);
+  --input: oklch(0.90 0.01 75);
+  --ring: oklch(0.65 0.14 60);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Animations */
+/* ---- Animations ---- */
+
 @keyframes slide-down {
   from {
     opacity: 0;
@@ -31,8 +82,8 @@ body {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes expand {
@@ -42,8 +93,13 @@ body {
   }
   to {
     opacity: 1;
-    max-height: 200px;
+    max-height: 500px;
   }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .animate-slide-down {
@@ -51,19 +107,23 @@ body {
 }
 
 .animate-fade-in {
-  animation: fade-in 0.2s ease-out;
+  animation: fade-in 0.3s ease-out;
 }
 
 .animate-expand {
-  animation: expand 0.2s ease-out;
+  animation: expand 0.25s ease-out;
   overflow: hidden;
 }
 
-/* Status border colors */
-.border-status-pending { border-left: 3px solid #eab308; }
-.border-status-confirmed { border-left: 3px solid #3b82f6; }
-.border-status-baking { border-left: 3px solid #f97316; }
-.border-status-ready { border-left: 3px solid #22c55e; }
-.border-status-delivered { border-left: 3px solid #9ca3af; }
-.border-status-to_be_paid { border-left: 3px solid #d97706; }
-.border-status-cancelled { border-left: 3px solid #ef4444; }
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ---- Status border colors ---- */
+.border-status-pending { border-inline-start: 3px solid oklch(0.75 0.15 85); }
+.border-status-confirmed { border-inline-start: 3px solid oklch(0.65 0.15 230); }
+.border-status-baking { border-inline-start: 3px solid oklch(0.70 0.17 55); }
+.border-status-ready { border-inline-start: 3px solid oklch(0.65 0.18 155); }
+.border-status-delivered { border-inline-start: 3px solid oklch(0.70 0.01 75); }
+.border-status-to_be_paid { border-inline-start: 3px solid oklch(0.70 0.15 70); }
+.border-status-cancelled { border-inline-start: 3px solid oklch(0.55 0.2 25); }

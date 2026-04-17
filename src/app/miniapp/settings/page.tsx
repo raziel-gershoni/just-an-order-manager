@@ -7,6 +7,8 @@ import { useT } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { cn } from '@/lib/utils';
+import { Copy, Check, Pencil, Plus } from 'lucide-react';
 
 interface BreadType { id: number; name: string; price: string; isActive: boolean }
 interface Member { id: number; userId: number; name: string; role: string }
@@ -33,6 +35,7 @@ export default function SettingsPage() {
 
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!activeGroupId) return;
@@ -91,23 +94,40 @@ export default function SettingsPage() {
     setInviteLink(result.inviteLink);
   }
 
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    await navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   if (loading) {
-    return <div className="p-4 text-center opacity-50">{t('general.loading')}</div>;
+    return (
+      <div className="p-5 space-y-4">
+        <div className="h-8 w-32 rounded bg-muted animate-pulse" />
+        <div className="h-20 rounded-xl bg-muted animate-pulse" />
+        <div className="h-20 rounded-xl bg-muted animate-pulse" />
+        <div className="h-32 rounded-xl bg-muted animate-pulse" />
+      </div>
+    );
   }
 
   return (
-    <div className="p-4 space-y-6 animate-fade-in">
-      <h1 className="text-xl font-bold">{t('settings.title')}</h1>
+    <div className="p-5 space-y-6 animate-fade-in">
+      <h1 className="text-xl font-bold tracking-tight">{t('settings.title')}</h1>
 
       {/* Group Name */}
       <section>
-        <h2 className="font-bold mb-2">{t('settings.group_name')}</h2>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+          {t('settings.group_name')}
+        </h2>
         <Card>
           <div className="flex gap-2">
             <Input value={groupName} onChange={(e) => setGroupName(e.target.value)} className="flex-1" />
             <Button
               size="sm"
-              disabled={!groupName.trim() || savingName}
+              disabled={!groupName.trim()}
+              loading={savingName}
               onClick={async () => {
                 if (!activeGroupId || !groupName.trim()) return;
                 setSavingName(true);
@@ -120,7 +140,7 @@ export default function SettingsPage() {
                 setSavingName(false);
               }}
             >
-              {savingName ? '...' : t('settings.save')}
+              {t('settings.save')}
             </Button>
           </div>
         </Card>
@@ -128,32 +148,42 @@ export default function SettingsPage() {
 
       {/* Members */}
       <section>
-        <h2 className="font-bold mb-2">{t('settings.members')}</h2>
-        <Card>
-          <div className="space-y-2">
-            {members.map((m) => (
-              <div key={m.id} className="flex justify-between items-center">
-                <span>{m.name}</span>
-                <span className="text-sm opacity-50">{t(`role.${m.role}`)}</span>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+          {t('settings.members')}
+        </h2>
+        <Card className="divide-y divide-border p-0">
+          {members.map((m) => (
+            <div key={m.id} className="flex justify-between items-center px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                  {m.name.charAt(0)}
+                </div>
+                <span className="font-medium">{m.name}</span>
               </div>
-            ))}
-          </div>
+              <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {t(`role.${m.role}`)}
+              </span>
+            </div>
+          ))}
         </Card>
       </section>
 
       {/* Invite */}
       <section>
-        <h2 className="font-bold mb-2">{t('settings.invite')}</h2>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+          {t('settings.invite')}
+        </h2>
         <Card>
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-1 bg-muted p-1 rounded-lg mb-3">
             {(['baker', 'manager'] as const).map((role) => (
               <button
                 key={role}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                className={cn(
+                  'flex-1 py-2 rounded-md text-sm font-medium transition-all',
                   inviteRole === role
-                    ? 'bg-[var(--tg-theme-button-color,#3b82f6)] text-white'
-                    : 'bg-black/5'
-                }`}
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
                 onClick={() => setInviteRole(role)}
               >
                 {t(`role.${role}`)}
@@ -162,21 +192,28 @@ export default function SettingsPage() {
           </div>
           <Button size="sm" onClick={createInvite}>{t('settings.create_invite')}</Button>
           {inviteLink && (
-            <div className="mt-2 p-2 bg-black/5 rounded text-sm break-all">{inviteLink}</div>
+            <div className="mt-3 flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <span className="text-sm break-all flex-1 text-muted-foreground">{inviteLink}</span>
+              <Button size="icon" variant="ghost" onClick={copyInviteLink}>
+                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
           )}
         </Card>
       </section>
 
       {/* Bread Types */}
       <section>
-        <h2 className="font-bold mb-2">{t('settings.bread_types')}</h2>
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+          {t('settings.bread_types')}
+        </h2>
         <div className="space-y-2">
           {breadTypes.map((bt) =>
             editingBreadId === bt.id ? (
-              <Card key={bt.id}>
-                <div className="flex gap-2 mb-2">
+              <Card key={bt.id} className="animate-expand">
+                <div className="flex gap-2 mb-3">
                   <Input placeholder={t('settings.name')} value={editBreadName} onChange={(e) => setEditBreadName(e.target.value)} className="flex-1" />
-                  <Input placeholder={t('settings.price')} type="number" value={editBreadPrice} onChange={(e) => setEditBreadPrice(e.target.value)} className="w-20" />
+                  <Input placeholder={t('settings.price')} type="number" value={editBreadPrice} onChange={(e) => setEditBreadPrice(e.target.value)} className="w-24" />
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => saveBreadType(bt.id)}>{t('settings.save')}</Button>
@@ -186,12 +223,20 @@ export default function SettingsPage() {
             ) : (
               <Card key={bt.id} className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <span className={`font-medium ${!bt.isActive ? 'opacity-40 line-through' : ''}`}>{bt.name}</span>
-                  <span className={`opacity-60 ${!bt.isActive ? 'opacity-30' : ''}`}>₪{bt.price}</span>
+                  <span className={cn('font-medium', !bt.isActive && 'text-muted-foreground line-through')}>{bt.name}</span>
+                  <span className={cn(
+                    'text-xs font-medium px-2 py-0.5 rounded-full tabular-nums',
+                    bt.isActive ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-muted-foreground/50'
+                  )}>
+                    ₪{bt.price}
+                  </span>
+                  {!bt.isActive && (
+                    <span className="text-xs text-muted-foreground">({t('settings.inactive')})</span>
+                  )}
                 </div>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => { setEditingBreadId(bt.id); setEditBreadName(bt.name); setEditBreadPrice(bt.price); }}>
-                    {t('settings.edit')}
+                  <Button size="icon" variant="ghost" onClick={() => { setEditingBreadId(bt.id); setEditBreadName(bt.name); setEditBreadPrice(bt.price); }}>
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => toggleBreadType(bt.id, bt.isActive)}>
                     {bt.isActive ? t('settings.disable') : t('settings.enable')}
@@ -201,11 +246,14 @@ export default function SettingsPage() {
             )
           )}
         </div>
-        <Card className="mt-2">
-          <h3 className="text-sm font-medium mb-2">{t('settings.add_bread')}</h3>
+        <Card className="mt-3">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+            <Plus className="h-4 w-4" />
+            {t('settings.add_bread')}
+          </h3>
           <div className="flex gap-2">
             <Input placeholder={t('settings.name')} value={newBreadName} onChange={(e) => setNewBreadName(e.target.value)} className="flex-1" />
-            <Input placeholder={t('settings.price')} type="number" value={newBreadPrice} onChange={(e) => setNewBreadPrice(e.target.value)} className="w-20" />
+            <Input placeholder={t('settings.price')} type="number" value={newBreadPrice} onChange={(e) => setNewBreadPrice(e.target.value)} className="w-24" />
             <Button size="sm" onClick={addBreadType}>{t('form.add')}</Button>
           </div>
         </Card>

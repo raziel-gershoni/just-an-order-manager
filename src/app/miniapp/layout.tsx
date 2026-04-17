@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { Toaster, toast as sonnerToast } from 'sonner';
 import { TelegramProvider, useTelegram } from '@/components/providers/TelegramProvider';
 import { GroupCtx } from '@/hooks/useGroup';
 import { ToastCtx, type Toast } from '@/hooks/useToast';
-import { ToastContainer } from '@/components/ui/Toast';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { LangCtx } from '@/hooks/useLang';
 import { t, type Lang } from '@/lib/i18n';
@@ -19,6 +19,12 @@ function AppProviders({ children }: { children: ReactNode }) {
     (message: string, type: 'success' | 'error' = 'success') => {
       const id = Date.now().toString();
       setToasts((prev) => [...prev, { id, message, type }]);
+      // Also fire Sonner toast
+      if (type === 'success') {
+        sonnerToast.success(message);
+      } else {
+        sonnerToast.error(message);
+      }
     },
     []
   );
@@ -58,10 +64,18 @@ function AppProviders({ children }: { children: ReactNode }) {
         <GroupCtx.Provider value={{ activeGroupId, setActiveGroupId }}>
           <div
             dir={dir}
-            className="min-h-screen bg-[var(--tg-theme-bg-color,#ffffff)] text-[var(--tg-theme-text-color,#000000)]"
+            className="min-h-screen bg-background text-foreground"
           >
-            <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-            <div className="pb-16 animate-fade-in">{children}</div>
+            <Toaster
+              position="top-center"
+              toastOptions={{
+                className: 'font-sans',
+                style: {
+                  borderRadius: '0.75rem',
+                },
+              }}
+            />
+            <div className="pb-20 animate-fade-in">{children}</div>
             <BottomNav
               labels={{
                 home: t('nav.home', lang),

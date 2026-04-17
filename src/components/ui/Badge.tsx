@@ -1,27 +1,33 @@
 'use client';
 
+import { cn } from '@/lib/utils';
+
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  baking: 'bg-orange-100 text-orange-800',
-  ready: 'bg-green-100 text-green-800',
-  delivered: 'bg-gray-100 text-gray-600',
-  to_be_paid: 'bg-amber-100 text-amber-800',
-  cancelled: 'bg-red-100 text-red-800',
+  pending: 'bg-amber-50 text-amber-800 border-amber-200',
+  confirmed: 'bg-sky-50 text-sky-800 border-sky-200',
+  baking: 'bg-orange-50 text-orange-800 border-orange-200',
+  ready: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  delivered: 'bg-stone-100 text-stone-600 border-stone-200',
+  to_be_paid: 'bg-amber-50 text-amber-800 border-amber-300',
+  cancelled: 'bg-red-50 text-red-800 border-red-200',
 };
 
 export function Badge({
   status,
   label,
+  className,
 }: {
   status: string;
   label: string;
+  className?: string;
 }) {
   return (
     <span
-      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        statusColors[status] ?? 'bg-gray-100 text-gray-800'
-      }`}
+      className={cn(
+        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        statusColors[status] ?? 'bg-stone-100 text-stone-800 border-stone-200',
+        className
+      )}
     >
       {label}
     </span>
