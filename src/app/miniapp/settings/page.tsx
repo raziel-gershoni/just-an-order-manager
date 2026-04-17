@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
+import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Pencil, Plus, Pause, Play } from 'lucide-react';
+import { Copy, Check, Pencil, Plus, Pause, Play, Trash2 } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
 interface BreadType { id: number; name: string; price: string; isActive: boolean }
@@ -19,6 +20,7 @@ export default function SettingsPage() {
   const { apiFetch } = useApi();
   const { activeGroupId } = useGroup();
   const t = useT();
+  const toast = useToast();
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -64,6 +66,17 @@ export default function SettingsPage() {
     });
     setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? breadType : bt)));
     setEditingBreadId(null);
+  }
+
+  async function deleteBreadType(id: number) {
+    try {
+      await apiFetch(`/bread-types/${id}?hard=true`, { method: 'DELETE' });
+      setBreadTypes((prev) => prev.filter((bt) => bt.id !== id));
+      setEditingBreadId(null);
+      toast.success(t('settings.deleted'));
+    } catch {
+      toast.error(t('settings.delete_failed'));
+    }
   }
 
   async function toggleBreadType(id: number, isActive: boolean) {
@@ -216,9 +229,13 @@ export default function SettingsPage() {
                   <Input placeholder={t('settings.name')} value={editBreadName} onChange={(e) => setEditBreadName(e.target.value)} className="flex-1" />
                   <Input placeholder={t('settings.price')} type="number" value={editBreadPrice} onChange={(e) => setEditBreadPrice(e.target.value)} className="w-24" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <Button size="sm" onClick={() => saveBreadType(bt.id)}>{t('settings.save')}</Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditingBreadId(null)}>{t('payments.cancel')}</Button>
+                  <div className="flex-1" />
+                  <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => deleteBreadType(bt.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </Card>
             ) : (

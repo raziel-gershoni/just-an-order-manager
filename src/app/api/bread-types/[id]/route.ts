@@ -63,7 +63,20 @@ export const DELETE = withAuth(async (request, auth) => {
     return errorResponse('Bakers cannot manage bread types', 403);
   }
 
-  // Soft-delete: deactivate instead of deleting (orders may reference it)
+  const url = new URL(request.url);
+  const hard = url.searchParams.get('hard') === 'true';
+
+  if (hard) {
+    // Hard delete — will fail if orders reference this bread type
+    try {
+      await db.delete(breadTypes).where(eq(breadTypes.id, breadTypeId));
+      return jsonResponse({ deleted: true });
+    } catch {
+      return errorResponse('Cannot delete: bread type is used in existing orders. Disable it instead.', 409);
+    }
+  }
+
+  // Soft-delete: deactivate instead of deleting
   const [updated] = await db
     .update(breadTypes)
     .set({ isActive: false })
