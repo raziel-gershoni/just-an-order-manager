@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Pencil, Plus, Pause, Play, Trash2 } from 'lucide-react';
+import { Copy, Check, Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
 interface BreadType { id: number; name: string; price: string; isActive: boolean; sortOrder: number }
@@ -37,6 +37,8 @@ export default function SettingsPage() {
   const [newBreadPrice, setNewBreadPrice] = useState('');
 
   const [justToggledId, setJustToggledId] = useState<number | null>(null);
+  const [justMovedId, setJustMovedId] = useState<number | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -104,6 +106,37 @@ export default function SettingsPage() {
     setBreadTypes((prev) => [...prev, breadType]);
     setNewBreadName('');
     setNewBreadPrice('');
+  }
+
+  async function moveBreadType(id: number, direction: 'up' | 'down') {
+    const sorted = [...breadTypes];
+    const idx = sorted.findIndex((bt) => bt.id === id);
+    if (idx < 0) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sorted.length) return;
+
+    // Don't swap across active/inactive boundary
+    if (sorted[idx].isActive !== sorted[targetIdx].isActive) return;
+
+    [sorted[idx], sorted[targetIdx]] = [sorted[targetIdx], sorted[idx]];
+    const reordered = sorted.map((bt, i) => ({ ...bt, sortOrder: i }));
+    setBreadTypes(reordered);
+
+    setJustMovedId(id);
+    setTimeout(() => setJustMovedId(null), 400);
+
+    setSavingOrder(true);
+    try {
+      await apiFetch(`/groups/${activeGroupId}/bread-types/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ orderedIds: reordered.map((bt) => bt.id) }),
+      });
+    } catch {
+      toast.error(t('settings.reorder_failed'));
+    } finally {
+      setSavingOrder(false);
+    }
   }
 
   async function createInvite() {
@@ -247,8 +280,28 @@ export default function SettingsPage() {
                 </div>
               </Card>
             ) : (
-              <Card key={bt.id} className={cn('flex justify-between items-center', justToggledId === bt.id && 'animate-reorder')}>
+              <Card key={bt.id} className={cn('flex justify-between items-center', (justToggledId === bt.id || justMovedId === bt.id) && 'animate-reorder')}>
                 <div className="flex items-center gap-2">
+                  <div className="flex flex-col -my-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      disabled={savingOrder || breadTypes.findIndex((b) => b.isActive === bt.isActive) === breadTypes.indexOf(bt)}
+                      onClick={() => moveBreadType(bt.id, 'up')}
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      disabled={savingOrder || breadTypes.findLastIndex((b) => b.isActive === bt.isActive) === breadTypes.indexOf(bt)}
+                      onClick={() => moveBreadType(bt.id, 'down')}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                   <span className={cn('font-medium', !bt.isActive && 'text-muted-foreground line-through')}>{bt.name}</span>
                   <span className={cn(
                     'text-xs font-medium px-2 py-0.5 rounded-full tabular-nums',

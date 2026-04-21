@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { breadTypes } from '@/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function getGroupId(url: string): number {
@@ -43,6 +43,11 @@ export const POST = withAuth(async (request, auth) => {
   const parsed = createBreadTypeSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
+  const [{ maxSort }] = await db
+    .select({ maxSort: sql<number>`coalesce(max(${breadTypes.sortOrder}), -1)` })
+    .from(breadTypes)
+    .where(eq(breadTypes.groupId, groupId));
+
   const [breadType] = await db
     .insert(breadTypes)
     .values({
@@ -50,7 +55,7 @@ export const POST = withAuth(async (request, auth) => {
       name: parsed.data.name,
       description: parsed.data.description,
       price: parsed.data.price,
-      sortOrder: parsed.data.sortOrder ?? 0,
+      sortOrder: parsed.data.sortOrder ?? maxSort + 1,
     })
     .returning();
 

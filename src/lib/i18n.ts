@@ -124,6 +124,7 @@ const translations: Record<string, Record<Lang, string>> = {
   'settings.delete': { en: 'Delete', he: 'מחק' },
   'settings.delete_failed': { en: 'Cannot delete — used in orders. Disable instead.', he: 'לא ניתן למחוק — בשימוש בהזמנות. השבת במקום.' },
   'settings.deleted': { en: 'Deleted!', he: '!נמחק' },
+  'settings.reorder_failed': { en: 'Failed to reorder', he: 'שינוי הסדר נכשל' },
 
   // Join
   'join.title': { en: 'Group Invite', he: 'הזמנה לקבוצה' },
