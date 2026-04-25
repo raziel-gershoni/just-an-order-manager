@@ -21,17 +21,6 @@ export function normalizePhoneNumber(phone: string): string | null {
   return null;
 }
 
-/**
- * Build a wa.me deep link with optional pre-filled text.
- * Returns null if the phone number can't be normalized.
- */
-export function buildWhatsAppLink(phone: string, message?: string): string | null {
-  const normalized = normalizePhoneNumber(phone);
-  if (!normalized) return null;
-  const text = message ? `?text=${encodeURIComponent(message)}` : '';
-  return `https://wa.me/${normalized}${text}`;
-}
-
 export async function sendWhatsAppTemplate(
   to: string,
   templateName: string,

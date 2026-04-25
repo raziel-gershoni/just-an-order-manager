@@ -14,7 +14,6 @@ import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Plus, Banknote, Pencil, MessageCircle, Repeat } from 'lucide-react';
-import { buildWhatsAppLink } from '@/lib/whatsapp';
 import Link from 'next/link';
 
 interface Customer {
@@ -48,6 +47,7 @@ export default function CustomerDetailPage() {
   const [editCity, setEditCity] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -172,21 +172,26 @@ export default function CustomerDetailPage() {
         {/* Reminder button */}
         {customer.phone && (
           <button
-            onClick={() => {
-              const link = buildWhatsAppLink(
-                customer.phone!,
-                t('reminder.message').replace('{name}', customer.name)
-              );
-              if (!link) {
-                toast.error(t('reminder.invalid_phone'));
-                return;
+            disabled={sendingReminder}
+            onClick={async () => {
+              setSendingReminder(true);
+              try {
+                const res = await apiFetch<{ sent: number; failed: number }>(
+                  '/customers/remind',
+                  { method: 'POST', body: JSON.stringify({ customerIds: [customer.id] }) }
+                );
+                if (res.sent > 0) toast.success(t('reminder.sent'));
+                else toast.error(t('reminder.send_failed'));
+              } catch {
+                toast.error(t('reminder.send_failed'));
+              } finally {
+                setSendingReminder(false);
               }
-              window.open(link, '_blank', 'noopener,noreferrer');
             }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-medium text-sm hover:bg-emerald-100 transition-colors active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-medium text-sm hover:bg-emerald-100 transition-colors active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <MessageCircle className="h-4 w-4" />
-            {t('reminder.send')}
+            {sendingReminder ? t('reminder.sending') : t('reminder.send')}
           </button>
         )}
 
