@@ -35,6 +35,7 @@ interface OrderDetail {
   createdAt: string;
   customerName: string;
   customerId: number;
+  customerPhone: string | null;
   items: OrderItem[];
   totalQuantity: number;
   totalPrice: number;
@@ -67,6 +68,7 @@ export default function OrderDetailPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [showPaymentInput, setShowPaymentInput] = useState(false);
   const [submittingPay, setSubmittingPay] = useState(false);
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
 
   useEffect(() => {
     apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
@@ -83,9 +85,10 @@ export default function OrderDetailPage() {
   }, [id]);
 
   async function updateStatus(status: string) {
+    const willNotify = status === 'ready' || status === 'cancelled';
     await apiFetch(`/orders/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(willNotify && { notifyCustomer }) }),
     });
     setOrder((prev) => {
       if (!prev) return prev;
@@ -310,6 +313,19 @@ export default function OrderDetailPage() {
               {t('orders.edit')}
             </Button>
           </Link>
+        )}
+
+        {/* Notify customer toggle (only when an action would send WA) */}
+        {!showDeliveryPay && order.customerPhone && (nonDeliverActions.includes('ready') || nonDeliverActions.includes('cancelled')) && (
+          <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-muted/50 transition-colors -my-1">
+            <input
+              type="checkbox"
+              checked={notifyCustomer}
+              onChange={(e) => setNotifyCustomer(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+            />
+            <span className="text-sm font-medium">{t('notify.send_whatsapp')}</span>
+          </label>
         )}
 
         {/* Status actions (non-deliver) */}

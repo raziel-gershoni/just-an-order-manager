@@ -139,6 +139,7 @@ const translations: Record<string, Record<Lang, string>> = {
   'orders.recurring': { en: 'Recurring', he: 'חוזר' },
   'orders.repeat_weekly': { en: 'Repeat weekly', he: 'חזרה שבועית' },
   'orders.repeat_weekly_hint': { en: 'A new order is auto-created when this one is delivered', he: 'הזמנה חדשה תיווצר אוטומטית כשתימסר' },
+  'notify.send_whatsapp': { en: 'Notify customer on WhatsApp', he: 'שלח התראה בוואטסאפ ללקוח' },
 
   // Join
   'join.title': { en: 'Group Invite', he: 'הזמנה לקבוצה' },

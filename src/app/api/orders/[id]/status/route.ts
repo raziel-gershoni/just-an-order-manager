@@ -22,6 +22,7 @@ const updateStatusSchema = z.object({
     'delivered',
     'cancelled',
   ]),
+  notifyCustomer: z.boolean().optional(),
 });
 
 export const PATCH = withGroup(async (request, _auth, groupId) => {
@@ -32,6 +33,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
   if (!parsed.success) return errorResponse(parsed.error.message);
 
   const newStatus = parsed.data.status;
+  const shouldNotify = parsed.data.notifyCustomer !== false;
 
   const [order] = await db
     .select()
@@ -115,7 +117,19 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
         customerName: customer.name,
         itemsSummary: summary,
       });
-      await notifyCustomerWhatsApp(customer.phone);
+      if (shouldNotify) await notifyCustomerWhatsApp(customer.phone);
+    }
+  }
+
+  // Notify customer on cancel
+  if (newStatus === 'cancelled' && shouldNotify) {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, order.customerId))
+      .limit(1);
+    if (customer?.phone) {
+      await notifyCustomerWhatsApp(customer.phone, 'order_cancelled');
     }
   }
 

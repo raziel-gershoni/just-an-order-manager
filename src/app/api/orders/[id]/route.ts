@@ -23,6 +23,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       updatedAt: orders.updatedAt,
       customerName: customers.name,
       customerId: customers.id,
+      customerPhone: customers.phone,
       totalOverride: orders.totalOverride,
       paid: orders.paid,
       isRecurring: orders.isRecurring,

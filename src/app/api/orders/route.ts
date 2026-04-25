@@ -92,6 +92,7 @@ const createOrderSchema = z.object({
   notes: z.string().max(1000).optional(),
   totalOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
   isRecurring: z.boolean().optional(),
+  notifyCustomer: z.boolean().optional(),
 });
 
 export const POST = withGroup(async (request, _auth, groupId) => {
@@ -99,7 +100,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isRecurring } = parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isRecurring, notifyCustomer } = parsed.data;
 
   // Verify customer
   const [customer] = await db
@@ -162,8 +163,10 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   });
 
   // WhatsApp notification to customer
-  const itemsSummary = notifItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
-  await notifyCustomerWhatsApp(customer.phone, 'order_received', [`: ${itemsSummary}`]);
+  if (notifyCustomer !== false) {
+    const itemsSummary = notifItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+    await notifyCustomerWhatsApp(customer.phone, 'order_received', [`: ${itemsSummary}`]);
+  }
 
   return jsonResponse({ order, items: itemValues }, 201);
 });

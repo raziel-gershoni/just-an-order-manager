@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
-interface Customer { id: number; name: string }
+interface Customer { id: number; name: string; phone?: string | null }
 interface BreadType { id: number; name: string; price: string }
 interface LineItem { breadTypeId: number; quantity: number }
 
@@ -65,6 +65,7 @@ function OrderFormContent() {
   const [notes, setNotes] = useState('');
   const [totalOverride, setTotalOverride] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -169,6 +170,7 @@ function OrderFormContent() {
             notes: notes || undefined,
             totalOverride: totalOverride || null,
             isRecurring,
+            notifyCustomer,
           }),
         });
         toast.success(t('orders.created'));
@@ -395,6 +397,19 @@ function OrderFormContent() {
             placeholder="0"
           />
         </Card>
+
+        {/* Notify customer (only on create, only if customer has phone) */}
+        {!isEdit && selectedCustomer && 'phone' in selectedCustomer && (selectedCustomer as Customer).phone && (
+          <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+            <input
+              type="checkbox"
+              checked={notifyCustomer}
+              onChange={(e) => setNotifyCustomer(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+            />
+            <span className="text-sm font-medium">{t('notify.send_whatsapp')}</span>
+          </label>
+        )}
 
         {/* Submit */}
         <Button
