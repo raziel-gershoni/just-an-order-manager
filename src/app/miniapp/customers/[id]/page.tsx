@@ -13,7 +13,8 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil } from 'lucide-react';
+import { Plus, Banknote, Pencil, MessageCircle, Repeat } from 'lucide-react';
+import { buildWhatsAppLink } from '@/lib/whatsapp';
 import Link from 'next/link';
 
 interface Customer {
@@ -24,7 +25,7 @@ interface Customer {
   city: string | null;
   notes: string | null;
 }
-interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; totalQuantity: number; itemsSummary: string }
+interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; isRecurring?: boolean; totalQuantity: number; itemsSummary: string }
 interface Payment { id: number; amount: string; type: string; description: string | null; createdAt: string }
 
 export default function CustomerDetailPage() {
@@ -168,6 +169,27 @@ export default function CustomerDetailPage() {
           </Link>
         </div>
 
+        {/* Reminder button */}
+        {customer.phone && (
+          <button
+            onClick={() => {
+              const link = buildWhatsAppLink(
+                customer.phone!,
+                t('reminder.message').replace('{name}', customer.name)
+              );
+              if (!link) {
+                toast.error(t('reminder.invalid_phone'));
+                return;
+              }
+              window.open(link, '_blank', 'noopener,noreferrer');
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-medium text-sm hover:bg-emerald-100 transition-colors active:scale-[0.98]"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {t('reminder.send')}
+          </button>
+        )}
+
         {/* Info / Edit */}
         <Card>
           {editing ? (
@@ -241,7 +263,10 @@ export default function CustomerDetailPage() {
                   <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
                     <Card className={cn('flex items-center justify-between py-2.5 ps-5 hover:shadow-md transition-shadow border-status-' + displayStatus)}>
                       <div className="text-sm">
-                        <div>{o.itemsSummary}</div>
+                        <div className="flex items-center gap-1.5">
+                          {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                          <span>{o.itemsSummary}</span>
+                        </div>
                         {o.deliveryDate && (
                           <div className="text-muted-foreground">{formatDateRelative(o.deliveryDate, lang)}</div>
                         )}

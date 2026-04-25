@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "is_recurring" boolean DEFAULT false NOT NULL;

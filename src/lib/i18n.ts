@@ -126,6 +126,19 @@ const translations: Record<string, Record<Lang, string>> = {
   'settings.deleted': { en: 'Deleted!', he: '!נמחק' },
   'settings.reorder_failed': { en: 'Failed to reorder', he: 'שינוי הסדר נכשל' },
 
+  // Reminders & recurring
+  'reminder.send': { en: 'Send Reminder', he: 'שלח תזכורת' },
+  'reminder.send_all': { en: 'Send Reminders', he: 'שלח תזכורות' },
+  'reminder.dialog_title': { en: 'Send Order Reminders', he: 'שלח תזכורות הזמנה' },
+  'reminder.dialog_hint': { en: 'Tap to send via WhatsApp', he: 'הקש לשליחה בוואטסאפ' },
+  'reminder.no_phone_customers': { en: 'No customers with phone numbers', he: 'אין לקוחות עם מספר טלפון' },
+  'reminder.message': { en: "Hi {name}! Want to place a bread order this week? 🍞", he: 'היי {name}! רוצה להזמין לחם השבוע? 🍞' },
+  'reminder.invalid_phone': { en: 'Invalid phone number', he: 'מספר טלפון לא תקין' },
+  'reminder.whatsapp': { en: 'WhatsApp', he: 'וואטסאפ' },
+  'orders.recurring': { en: 'Recurring', he: 'חוזר' },
+  'orders.repeat_weekly': { en: 'Repeat weekly', he: 'חזרה שבועית' },
+  'orders.repeat_weekly_hint': { en: 'A new order is auto-created when this one is delivered', he: 'הזמנה חדשה תיווצר אוטומטית כשתימסר' },
+
   // Join
   'join.title': { en: 'Group Invite', he: 'הזמנה לקבוצה' },
   'join.join_group': { en: 'Join', he: 'הצטרף ל' },

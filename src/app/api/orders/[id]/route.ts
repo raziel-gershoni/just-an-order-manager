@@ -25,6 +25,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       customerId: customers.id,
       totalOverride: orders.totalOverride,
       paid: orders.paid,
+      isRecurring: orders.isRecurring,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
@@ -60,6 +61,7 @@ const updateOrderSchema = z.object({
   deliveryDate: z.string().optional(),
   notes: z.string().max(1000).optional(),
   totalOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+  isRecurring: z.boolean().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
     quantity: z.number().int().positive(),
@@ -104,6 +106,10 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
 
   if (parsed.data.totalOverride !== undefined) {
     updateData.totalOverride = parsed.data.totalOverride;
+  }
+
+  if (parsed.data.isRecurring !== undefined) {
+    updateData.isRecurring = parsed.data.isRecurring;
   }
 
   // Update order fields
@@ -152,6 +158,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       customerName: customers.name,
       customerId: customers.id,
       paid: orders.paid,
+      isRecurring: orders.isRecurring,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
 import { formatDateRelative } from '@/lib/date-utils';
-import { Plus, ClipboardList, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Plus, ClipboardList, ChevronRight, ChevronLeft, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -20,6 +20,7 @@ interface Order {
   deliveryDate: string | null;
   status: string;
   paid: boolean;
+  isRecurring?: boolean;
   notes: string | null;
   customerName: string;
   totalQuantity: number;
@@ -123,7 +124,10 @@ export default function OrdersPage() {
                 )}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium">{o.customerName}</div>
+                      <div className="font-medium flex items-center gap-1.5">
+                        {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                        {o.customerName}
+                      </div>
                       <div className="text-sm text-muted-foreground mt-0.5">{o.itemsSummary}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

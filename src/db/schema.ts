@@ -146,6 +146,7 @@ export const orders = pgTable('orders', {
   notes: text('notes'),
   totalOverride: decimal('total_override', { precision: 10, scale: 2 }),
   paid: boolean('paid').notNull().default(false),
+  isRecurring: boolean('is_recurring').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

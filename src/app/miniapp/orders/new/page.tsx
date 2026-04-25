@@ -64,6 +64,7 @@ function OrderFormContent() {
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
   const [totalOverride, setTotalOverride] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -99,6 +100,7 @@ function OrderFormContent() {
           setDeliveryDate(order.deliveryDate || '');
           setNotes(order.notes || '');
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
+          setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
         } else if (!isEdit && b.breadTypes.length > 0) {
           setItems([{ breadTypeId: b.breadTypes[0].id, quantity: 1 }]);
         }
@@ -151,6 +153,7 @@ function OrderFormContent() {
             items,
             notes: notes || undefined,
             totalOverride: totalOverride || null,
+            isRecurring,
           }),
         });
         toast.success(t('orders.updated'));
@@ -165,6 +168,7 @@ function OrderFormContent() {
             items,
             notes: notes || undefined,
             totalOverride: totalOverride || null,
+            isRecurring,
           }),
         });
         toast.success(t('orders.created'));
@@ -352,6 +356,25 @@ function OrderFormContent() {
               onChange={(e) => setDeliveryDate(e.target.value)}
               className="mt-3"
             />
+          )}
+          {deliveryType !== 'asap' && (
+            <label className="mt-3 flex items-start gap-2.5 cursor-pointer p-2.5 -mx-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+              <input
+                type="checkbox"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Repeat className="h-3.5 w-3.5" />
+                  {t('orders.repeat_weekly')}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {t('orders.repeat_weekly_hint')}
+                </div>
+              </div>
+            </label>
           )}
         </Card>
 

@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
 import { notifyOrderReady, notifyCustomerWhatsApp } from '@/lib/notifications';
+import { resolveDeliveryDate } from '@/lib/date-utils';
 
 function getOrderId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -53,6 +54,43 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .set({ status: newStatus, updatedAt: new Date() })
     .where(eq(orders.id, orderId))
     .returning();
+
+  // Auto-create next recurring order when delivered
+  if (newStatus === 'delivered' && order.isRecurring) {
+    const items = await db
+      .select({
+        breadTypeId: orderItems.breadTypeId,
+        quantity: orderItems.quantity,
+        pricePerUnit: orderItems.pricePerUnit,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId));
+
+    if (items.length > 0) {
+      const nextDate = resolveDeliveryDate(order.deliveryType);
+      const [nextOrder] = await db
+        .insert(orders)
+        .values({
+          groupId,
+          customerId: order.customerId,
+          deliveryType: order.deliveryType,
+          deliveryDate: nextDate,
+          notes: order.notes,
+          totalOverride: order.totalOverride,
+          isRecurring: true,
+        })
+        .returning();
+
+      await db.insert(orderItems).values(
+        items.map((i) => ({
+          orderId: nextOrder.id,
+          breadTypeId: i.breadTypeId,
+          quantity: i.quantity,
+          pricePerUnit: i.pricePerUnit,
+        }))
+      );
+    }
+  }
 
   // Notify on ready
   if (newStatus === 'ready') {

@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Plus, Banknote, Wheat, CalendarDays, AlertTriangle, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Plus, Banknote, Wheat, CalendarDays, AlertTriangle, ChevronRight, ChevronLeft, Repeat } from 'lucide-react';
 import Link from 'next/link';
 
 interface DashboardData {
@@ -21,6 +21,7 @@ interface DashboardData {
     id: number;
     status: string;
     paid: boolean;
+    isRecurring?: boolean;
     notes: string | null;
     customerName: string;
     totalQuantity: number;
@@ -30,6 +31,7 @@ interface DashboardData {
     id: number;
     deliveryDate: string | null;
     status: string;
+    isRecurring?: boolean;
     customerName: string;
     totalQuantity: number;
     itemsSummary: string;
@@ -182,7 +184,10 @@ export default function Dashboard() {
                     className={`flex items-center justify-between py-3 ps-3 first:pt-0 last:pb-0 border-status-${displayStatus}`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium">{o.customerName}</div>
+                      <div className="font-medium flex items-center gap-1.5">
+                        {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                        {o.customerName}
+                      </div>
                       <div className="text-sm text-muted-foreground">{o.itemsSummary}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ms-2">
@@ -215,7 +220,10 @@ export default function Dashboard() {
                   className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
                 >
                   <div className="min-w-0 flex-1">
-                    <span className="font-medium">{o.customerName}</span>
+                    <span className="font-medium inline-flex items-center gap-1.5">
+                      {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                      {o.customerName}
+                    </span>
                     <span className="text-sm text-muted-foreground ms-2">{o.itemsSummary}</span>
                   </div>
                   <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0 ms-2">

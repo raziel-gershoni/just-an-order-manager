@@ -46,6 +46,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       id: orders.id,
       status: orders.status,
       paid: orders.paid,
+      isRecurring: orders.isRecurring,
       notes: orders.notes,
       customerName: customers.name,
     })
@@ -73,6 +74,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       id: orders.id,
       deliveryDate: orders.deliveryDate,
       status: orders.status,
+      isRecurring: orders.isRecurring,
       customerName: customers.name,
     })
     .from(orders)

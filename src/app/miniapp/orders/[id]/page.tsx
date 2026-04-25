@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -30,6 +30,7 @@ interface OrderDetail {
   deliveryDate: string | null;
   status: string;
   paid: boolean;
+  isRecurring?: boolean;
   notes: string | null;
   createdAt: string;
   customerName: string;
@@ -214,6 +215,15 @@ export default function OrderDetailPage() {
                   : translate(`delivery.${order.deliveryType}`, lang)}
               </span>
             </div>
+            {order.isRecurring && (
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">{t('orders.recurring')}</span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  <Repeat className="h-3 w-3" />
+                  {t('orders.repeat_weekly')}
+                </span>
+              </div>
+            )}
             {order.notes && (
               <div className="pt-2 border-t border-border">
                 <span className="text-sm text-muted-foreground">{t('notify.notes')}</span>
