@@ -14,8 +14,13 @@ import {
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
-import { notifyMemberJoined, notifyCustomerWhatsApp } from '@/lib/notifications';
-import { ensureOrderCharge } from '@/lib/order-payments';
+import { notifyMemberJoined, notifyCustomerWhatsApp, notifyPrepayment } from '@/lib/notifications';
+import {
+  ensureOrderCharge,
+  ensureOrderPayment,
+  calculateOrderTotal,
+  getCustomerBalance,
+} from '@/lib/order-payments';
 
 // ---- Helpers ----
 
@@ -454,6 +459,86 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     await ctx.answerCallbackQuery(`${t(`status.${newStatus}`, lang)} ✅`);
     await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+
+    // Follow up with payment dialog after delivery
+    if (newStatus === 'delivered') {
+      const total = await calculateOrderTotal(orderId);
+      if (total > 0) {
+        const [customer] = await db
+          .select({ name: customers.name })
+          .from(customers)
+          .where(eq(customers.id, order.customerId))
+          .limit(1);
+        const keyboard = new InlineKeyboard()
+          .text(`✅ ${t('bot.paid_in_full', lang)}`, `order_pay:${orderId}:paid`)
+          .text(`📝 ${t('bot.to_be_paid', lang)}`, `order_pay:${orderId}:unpaid`);
+        const lines = [
+          `<b>${customer?.name ?? ''}</b>`,
+          `${t('bot.payment_question', lang)}`,
+          `${t('bot.amount', lang)}: ₪${total.toFixed(0)}`,
+        ];
+        await ctx.reply(lines.join('\n'), {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        });
+      }
+    }
+  });
+
+  // Payment dialog inline buttons (after delivery)
+  bot.callbackQuery(/^order_pay:(\d+):(\w+)$/, async (ctx) => {
+    const orderId = Number(ctx.match![1]);
+    const action = ctx.match![2];
+    const telegramId = String(ctx.from.id);
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+    if (!user) return;
+    const lang = user.language as Lang;
+
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!order) return;
+
+    if (action === 'paid') {
+      const total = await calculateOrderTotal(orderId);
+      const amount = total.toFixed(2);
+      await ensureOrderPayment(orderId, order.groupId, order.customerId, amount);
+      await db
+        .update(orders)
+        .set({ paid: true, updatedAt: new Date() })
+        .where(eq(orders.id, orderId));
+
+      const [customer] = await db
+        .select({ name: customers.name })
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .limit(1);
+      const balance = await getCustomerBalance(order.customerId, order.groupId);
+      if (customer) {
+        await notifyPrepayment(order.groupId, {
+          customerName: customer.name,
+          amount,
+          balance: Number(balance),
+        });
+      }
+
+      await ctx.answerCallbackQuery(`✅ ${t('bot.payment_recorded', lang)}`);
+      await ctx.editMessageText(
+        `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
+      );
+    } else {
+      // 'unpaid' — charge is already recorded by the deliver handler,
+      // paid flag stays false. Just acknowledge and clear the keyboard.
+      await ctx.answerCallbackQuery(`📝 ${t('bot.marked_to_be_paid', lang)}`);
+      await ctx.editMessageText(`📝 ${t('bot.marked_to_be_paid', lang)}`);
+    }
   });
 }
 

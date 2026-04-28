@@ -194,6 +194,12 @@ const translations: Record<string, Record<Lang, string>> = {
   'bot.invite_as': { en: 'as', he: 'בתור' },
   'bot.accept': { en: 'Accept', he: 'אשר' },
   'bot.decline': { en: 'Decline', he: 'דחה' },
+  'bot.paid_in_full': { en: 'Paid in full', he: 'שולם במלואו' },
+  'bot.to_be_paid': { en: 'To be paid', he: 'לתשלום' },
+  'bot.payment_question': { en: 'Was this order paid?', he: 'האם ההזמנה שולמה?' },
+  'bot.amount': { en: 'Amount', he: 'סכום' },
+  'bot.payment_recorded': { en: 'Payment recorded', he: 'תשלום נרשם' },
+  'bot.marked_to_be_paid': { en: 'Marked as to be paid', he: 'סומן לתשלום' },
 
   // Balance labels
   'customers.balance_square': { en: 'Settled', he: 'מסולק' },
