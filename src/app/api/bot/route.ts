@@ -15,6 +15,7 @@ import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
 import { notifyMemberJoined, notifyCustomerWhatsApp } from '@/lib/notifications';
+import { ensureOrderCharge } from '@/lib/order-payments';
 
 // ---- Helpers ----
 
@@ -433,6 +434,11 @@ function setupHandlers(bot: import('grammy').Bot) {
       .update(orders)
       .set({ status: newStatus as any, updatedAt: new Date() })
       .where(eq(orders.id, orderId));
+
+    // Record the charge as soon as the order is delivered. Idempotent.
+    if (newStatus === 'delivered') {
+      await ensureOrderCharge(orderId, order.groupId, order.customerId);
+    }
 
     // Send WhatsApp notification when order is ready
     if (newStatus === 'ready') {

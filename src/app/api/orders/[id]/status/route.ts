@@ -6,6 +6,7 @@ import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
 import { notifyOrderReady, notifyCustomerWhatsApp } from '@/lib/notifications';
 import { resolveDeliveryDate } from '@/lib/date-utils';
+import { ensureOrderCharge } from '@/lib/order-payments';
 
 function getOrderId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -56,6 +57,12 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .set({ status: newStatus, updatedAt: new Date() })
     .where(eq(orders.id, orderId))
     .returning();
+
+  // Record the charge as soon as the order is delivered, regardless of how
+  // (or whether) the user follows up via the payment dialog. Idempotent.
+  if (newStatus === 'delivered') {
+    await ensureOrderCharge(orderId, groupId, order.customerId);
+  }
 
   // Auto-create next recurring order when delivered
   if (newStatus === 'delivered' && order.isRecurring) {
