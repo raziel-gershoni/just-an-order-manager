@@ -15,7 +15,7 @@ import { t } from '@/lib/i18n';
 
 export const maxDuration = 60;
 
-export async function GET(request: Request) {
+async function handler(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     console.warn('[cron/weekly-summary] unauthorized request');
@@ -123,3 +123,6 @@ export async function GET(request: Request) {
   console.log('[cron/weekly-summary] done:', stats);
   return NextResponse.json({ ok: true, ...stats });
 }
+
+export const GET = handler;
+export const POST = handler;
