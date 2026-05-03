@@ -383,7 +383,9 @@ export default function SettingsPage() {
               <Card key={bt.id} className="animate-expand">
                 <div className="flex gap-2 mb-3">
                   <Input placeholder={t('settings.name')} value={editBreadName} onChange={(e) => setEditBreadName(e.target.value)} className="flex-1" />
-                  <Input placeholder={t('settings.price')} type="number" value={editBreadPrice} onChange={(e) => setEditBreadPrice(e.target.value)} className="w-24" />
+                  {(!bt.sizes || bt.sizes.length === 0) && (
+                    <Input placeholder={t('settings.price')} type="number" value={editBreadPrice} onChange={(e) => setEditBreadPrice(e.target.value)} className="w-24" />
+                  )}
                 </div>
                 <div className="flex gap-2 items-center">
                   <Button size="sm" onClick={() => saveBreadType(bt.id)}>{t('settings.save')}</Button>
