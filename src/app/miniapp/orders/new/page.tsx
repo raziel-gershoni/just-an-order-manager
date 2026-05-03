@@ -349,7 +349,11 @@ function OrderFormContent() {
                           )}
                           onClick={() => updateItem(idx, { breadSizeId: s.id })}
                         >
-                          {s.name} <span className="tabular-nums opacity-70">₪{s.price}</span>
+                          {s.name}
+                          {s.weightGrams != null && (
+                            <span className="tabular-nums opacity-70"> {s.weightGrams}g</span>
+                          )}
+                          <span className="tabular-nums opacity-70"> ₪{s.price}</span>
                         </button>
                       ))}
                     </div>
