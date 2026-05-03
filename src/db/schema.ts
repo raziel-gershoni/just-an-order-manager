@@ -116,6 +116,19 @@ export const breadTypes = pgTable('bread_types', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+export const breadSizes = pgTable('bread_sizes', {
+  id: serial('id').primaryKey(),
+  breadTypeId: integer('bread_type_id')
+    .notNull()
+    .references(() => breadTypes.id),
+  name: varchar('name', { length: 100 }).notNull(),
+  weightGrams: integer('weight_grams'),
+  price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
   groupId: integer('group_id')
@@ -159,6 +172,7 @@ export const orderItems = pgTable('order_items', {
   breadTypeId: integer('bread_type_id')
     .notNull()
     .references(() => breadTypes.id),
+  breadSizeId: integer('bread_size_id').references(() => breadSizes.id),
   quantity: integer('quantity').notNull().default(1),
   pricePerUnit: decimal('price_per_unit', { precision: 10, scale: 2 }),
 });

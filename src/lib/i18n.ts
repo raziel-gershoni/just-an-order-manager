@@ -125,6 +125,12 @@ const translations: Record<string, Record<Lang, string>> = {
   'settings.delete_failed': { en: 'Cannot delete — used in orders. Disable instead.', he: 'לא ניתן למחוק — בשימוש בהזמנות. השבת במקום.' },
   'settings.deleted': { en: 'Deleted!', he: '!נמחק' },
   'settings.reorder_failed': { en: 'Failed to reorder', he: 'שינוי הסדר נכשל' },
+  'settings.sizes': { en: 'Sizes', he: 'גדלים' },
+  'settings.add_size': { en: 'Add Size', he: 'הוסף גודל' },
+  'settings.size_name': { en: 'Size', he: 'גודל' },
+  'settings.weight': { en: 'Weight (g)', he: '(משקל (גרם' },
+  'settings.no_sizes': { en: 'No sizes yet — add one to enable orders', he: 'אין גדלים — הוסף כדי לאפשר הזמנות' },
+  'form.choose_size': { en: 'Choose size', he: 'בחר גודל' },
 
   // Reminders & recurring
   'reminder.send': { en: 'Send Reminder', he: 'שלח תזכורת' },

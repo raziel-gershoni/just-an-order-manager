@@ -1,8 +1,9 @@
 import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, payments } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes, payments } from '@/db/schema';
 import { eq, and, gte, lte, sql, ne, inArray, or, isNull, notInArray } from 'drizzle-orm';
 import { format, addDays, startOfDay } from 'date-fns';
+import { formatItemLine } from '@/lib/order-display';
 
 async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any }[]) {
   const orderIds = orderRows.map((o) => o.id);
@@ -12,10 +13,12 @@ async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any
     .select({
       orderId: orderItems.orderId,
       breadTypeName: breadTypes.name,
+      sizeName: breadSizes.name,
       quantity: orderItems.quantity,
     })
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+    .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
     .where(inArray(orderItems.orderId, orderIds));
 
   const itemsMap: Record<number, typeof allItems> = {};
@@ -30,7 +33,7 @@ async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any
       ...o,
       items,
       totalQuantity: items.reduce((s, i) => s + i.quantity, 0),
-      itemsSummary: items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', '),
+      itemsSummary: items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName)).join(', '),
     };
   });
 }

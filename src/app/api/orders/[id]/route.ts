@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 
@@ -40,11 +40,14 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       id: orderItems.id,
       breadTypeId: orderItems.breadTypeId,
       breadTypeName: breadTypes.name,
+      breadSizeId: orderItems.breadSizeId,
+      sizeName: breadSizes.name,
       quantity: orderItems.quantity,
       pricePerUnit: orderItems.pricePerUnit,
     })
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+    .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
     .where(eq(orderItems.orderId, order.id));
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
@@ -65,6 +68,7 @@ const updateOrderSchema = z.object({
   isRecurring: z.boolean().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
+    breadSizeId: z.number().int().positive().nullable().optional(),
     quantity: z.number().int().positive(),
   })).min(1).optional(),
 });
@@ -127,9 +131,35 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       .where(eq(breadTypes.groupId, groupId));
     const btMap = Object.fromEntries(allBreadTypes.map((bt) => [bt.id, bt]));
 
+    const typeIds = allBreadTypes.map((bt) => bt.id);
+    const allSizes = typeIds.length
+      ? await db.select().from(breadSizes).where(inArray(breadSizes.breadTypeId, typeIds))
+      : [];
+    const sizeMap = Object.fromEntries(allSizes.map((s) => [s.id, s]));
+    const activeSizesByType: Record<number, typeof allSizes> = {};
+    for (const s of allSizes) {
+      if (!s.isActive) continue;
+      if (!activeSizesByType[s.breadTypeId]) activeSizesByType[s.breadTypeId] = [];
+      activeSizesByType[s.breadTypeId].push(s);
+    }
+
     for (const item of parsed.data.items) {
       if (!btMap[item.breadTypeId]) {
         return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
+      }
+      const typeHasSizes = (activeSizesByType[item.breadTypeId]?.length ?? 0) > 0;
+      if (typeHasSizes && !item.breadSizeId) {
+        return errorResponse(`Size required for bread type ${item.breadTypeId}`, 400);
+      }
+      if (item.breadSizeId) {
+        const size = sizeMap[item.breadSizeId];
+        if (!size) return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
+        if (size.breadTypeId !== item.breadTypeId) {
+          return errorResponse(
+            `Size ${item.breadSizeId} does not belong to type ${item.breadTypeId}`,
+            400
+          );
+        }
       }
     }
 
@@ -139,8 +169,11 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     const itemValues = parsed.data.items.map((item) => ({
       orderId: id,
       breadTypeId: item.breadTypeId,
+      breadSizeId: item.breadSizeId ?? null,
       quantity: item.quantity,
-      pricePerUnit: btMap[item.breadTypeId].price,
+      pricePerUnit: item.breadSizeId
+        ? sizeMap[item.breadSizeId].price
+        : btMap[item.breadTypeId].price,
     }));
     await db.insert(orderItems).values(itemValues);
   }
@@ -171,11 +204,14 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       id: orderItems.id,
       breadTypeId: orderItems.breadTypeId,
       breadTypeName: breadTypes.name,
+      breadSizeId: orderItems.breadSizeId,
+      sizeName: breadSizes.name,
       quantity: orderItems.quantity,
       pricePerUnit: orderItems.pricePerUnit,
     })
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+    .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
     .where(eq(orderItems.orderId, id));
 
   const totalQuantity = updatedItems.reduce((s, i) => s + i.quantity, 0);

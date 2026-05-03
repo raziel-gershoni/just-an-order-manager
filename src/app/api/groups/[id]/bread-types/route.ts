@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes } from '@/db/schema';
-import { eq, asc, sql } from 'drizzle-orm';
+import { breadTypes, breadSizes } from '@/db/schema';
+import { eq, asc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function getGroupId(url: string): number {
@@ -21,7 +21,27 @@ export const GET = withAuth(async (request, auth) => {
     .where(eq(breadTypes.groupId, groupId))
     .orderBy(asc(breadTypes.sortOrder));
 
-  return jsonResponse({ breadTypes: types });
+  const typeIds = types.map((t) => t.id);
+  const sizes = typeIds.length
+    ? await db
+        .select()
+        .from(breadSizes)
+        .where(inArray(breadSizes.breadTypeId, typeIds))
+        .orderBy(asc(breadSizes.sortOrder))
+    : [];
+
+  const sizesByType: Record<number, typeof sizes> = {};
+  for (const s of sizes) {
+    if (!sizesByType[s.breadTypeId]) sizesByType[s.breadTypeId] = [];
+    sizesByType[s.breadTypeId].push(s);
+  }
+
+  const breadTypesWithSizes = types.map((t) => ({
+    ...t,
+    sizes: sizesByType[t.id] || [],
+  }));
+
+  return jsonResponse({ breadTypes: breadTypesWithSizes });
 });
 
 const createBreadTypeSchema = z.object({

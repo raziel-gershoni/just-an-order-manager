@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { groups, orders, orderItems, customers, breadTypes } from '@/db/schema';
+import { groups, orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
 import { eq, and, ne, inArray } from 'drizzle-orm';
 import { format } from 'date-fns';
 import { sendMorningSummary } from '@/lib/notifications';
@@ -56,10 +56,12 @@ async function handler(request: Request) {
         .select({
           orderId: orderItems.orderId,
           breadTypeName: breadTypes.name,
+          sizeName: breadSizes.name,
           quantity: orderItems.quantity,
         })
         .from(orderItems)
         .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+        .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
         .where(inArray(orderItems.orderId, orderIds));
 
       const summaryItems: { customerName: string; breadTypeName: string; quantity: number }[] = [];
@@ -68,7 +70,7 @@ async function handler(request: Request) {
         for (const item of items) {
           summaryItems.push({
             customerName: order.customerName,
-            breadTypeName: item.breadTypeName,
+            breadTypeName: item.sizeName ? `${item.breadTypeName} ${item.sizeName}` : item.breadTypeName,
             quantity: item.quantity,
           });
         }

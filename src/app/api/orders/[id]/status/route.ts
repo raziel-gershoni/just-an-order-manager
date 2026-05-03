@@ -1,7 +1,8 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { formatItemLine } from '@/lib/order-display';
 import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
 import { notifyOrderReady, notifyCustomerWhatsApp } from '@/lib/notifications';
@@ -69,6 +70,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     const items = await db
       .select({
         breadTypeId: orderItems.breadTypeId,
+        breadSizeId: orderItems.breadSizeId,
         quantity: orderItems.quantity,
         pricePerUnit: orderItems.pricePerUnit,
       })
@@ -94,6 +96,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
         items.map((i) => ({
           orderId: nextOrder.id,
           breadTypeId: i.breadTypeId,
+          breadSizeId: i.breadSizeId,
           quantity: i.quantity,
           pricePerUnit: i.pricePerUnit,
         }))
@@ -112,14 +115,16 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     const items = await db
       .select({
         breadTypeName: breadTypes.name,
+        sizeName: breadSizes.name,
         quantity: orderItems.quantity,
       })
       .from(orderItems)
       .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+      .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
       .where(eq(orderItems.orderId, orderId));
 
     if (customer) {
-      const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+      const summary = items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName)).join(', ');
       await notifyOrderReady(groupId, orderId, {
         customerName: customer.name,
         itemsSummary: summary,

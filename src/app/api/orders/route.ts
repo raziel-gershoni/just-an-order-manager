@@ -1,7 +1,8 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
+import { formatItemLine } from '@/lib/order-display';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
@@ -42,24 +43,27 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 
   // Get items for all these orders
   const orderIds = orderRows.map((o) => o.id);
-  let itemsMap: Record<number, { breadTypeName: string; quantity: number; pricePerUnit: string | null }[]> = {};
+  let itemsMap: Record<number, { breadTypeName: string; sizeName: string | null; quantity: number; pricePerUnit: string | null }[]> = {};
 
   if (orderIds.length > 0) {
     const allItems = await db
       .select({
         orderId: orderItems.orderId,
         breadTypeName: breadTypes.name,
+        sizeName: breadSizes.name,
         quantity: orderItems.quantity,
         pricePerUnit: orderItems.pricePerUnit,
       })
       .from(orderItems)
       .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+      .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
       .where(inArray(orderItems.orderId, orderIds));
 
     for (const item of allItems) {
       if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
       itemsMap[item.orderId].push({
         breadTypeName: item.breadTypeName,
+        sizeName: item.sizeName,
         quantity: item.quantity,
         pricePerUnit: item.pricePerUnit,
       });
@@ -72,7 +76,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       ...o,
       items,
       totalQuantity: items.reduce((s, i) => s + i.quantity, 0),
-      itemsSummary: items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', '),
+      itemsSummary: items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName)).join(', '),
     };
   });
 
@@ -81,6 +85,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 
 const itemSchema = z.object({
   breadTypeId: z.number().int().positive(),
+  breadSizeId: z.number().int().positive().nullable().optional(),
   quantity: z.number().int().positive().default(1),
 });
 
@@ -110,16 +115,46 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
 
-  // Get bread types for price snapshot
+  // Get bread types for price snapshot + validation
   const allBreadTypes = await db
     .select()
     .from(breadTypes)
     .where(eq(breadTypes.groupId, groupId));
   const btMap = Object.fromEntries(allBreadTypes.map((bt) => [bt.id, bt]));
 
+  // Get all sizes for these types
+  const typeIds = allBreadTypes.map((bt) => bt.id);
+  const allSizes = typeIds.length
+    ? await db.select().from(breadSizes).where(inArray(breadSizes.breadTypeId, typeIds))
+    : [];
+  const sizeMap = Object.fromEntries(allSizes.map((s) => [s.id, s]));
+  const activeSizesByType: Record<number, typeof allSizes> = {};
+  for (const s of allSizes) {
+    if (!s.isActive) continue;
+    if (!activeSizesByType[s.breadTypeId]) activeSizesByType[s.breadTypeId] = [];
+    activeSizesByType[s.breadTypeId].push(s);
+  }
+
   for (const item of items) {
     if (!btMap[item.breadTypeId]) {
       return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
+    }
+    const typeHasSizes = (activeSizesByType[item.breadTypeId]?.length ?? 0) > 0;
+    if (typeHasSizes && !item.breadSizeId) {
+      return errorResponse(
+        `Size required for bread type ${item.breadTypeId}`,
+        400
+      );
+    }
+    if (item.breadSizeId) {
+      const size = sizeMap[item.breadSizeId];
+      if (!size) return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
+      if (size.breadTypeId !== item.breadTypeId) {
+        return errorResponse(
+          `Size ${item.breadSizeId} does not belong to type ${item.breadTypeId}`,
+          400
+        );
+      }
     }
   }
 
@@ -139,21 +174,28 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     })
     .returning();
 
-  // Create order items
+  // Create order items — price snapshot from size if set, else from type
   const itemValues = items.map((item) => ({
     orderId: order.id,
     breadTypeId: item.breadTypeId,
+    breadSizeId: item.breadSizeId ?? null,
     quantity: item.quantity,
-    pricePerUnit: btMap[item.breadTypeId].price,
+    pricePerUnit: item.breadSizeId
+      ? sizeMap[item.breadSizeId].price
+      : btMap[item.breadTypeId].price,
   }));
 
   await db.insert(orderItems).values(itemValues);
 
   // Notify bakers
-  const notifItems = items.map((item) => ({
-    breadTypeName: btMap[item.breadTypeId].name,
-    quantity: item.quantity,
-  }));
+  const notifItems = items.map((item) => {
+    const typeName = btMap[item.breadTypeId].name;
+    const sizeName = item.breadSizeId ? sizeMap[item.breadSizeId].name : null;
+    return {
+      breadTypeName: sizeName ? `${typeName} ${sizeName}` : typeName,
+      quantity: item.quantity,
+    };
+  });
 
   await notifyNewOrder(groupId, order.id, {
     customerName: customer.name,

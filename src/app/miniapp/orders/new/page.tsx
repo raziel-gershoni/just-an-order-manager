@@ -14,8 +14,9 @@ import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Rep
 import { getInitial } from '@/lib/name-utils';
 
 interface Customer { id: number; name: string; phone?: string | null }
-interface BreadType { id: number; name: string; price: string }
-interface LineItem { breadTypeId: number; quantity: number }
+interface BreadSize { id: number; name: string; weightGrams: number | null; price: string }
+interface BreadType { id: number; name: string; price: string; sizes?: BreadSize[] }
+interface LineItem { breadTypeId: number; breadSizeId: number | null; quantity: number }
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
@@ -77,7 +78,7 @@ function OrderFormContent() {
     ];
 
     if (isEdit) {
-      loads.push(apiFetch<{ order: { customerId: number; customerName: string; deliveryType: string; deliveryDate: string | null; notes: string | null; status: string; items: { breadTypeId: number; quantity: number }[] } }>(`/orders/${editId}`));
+      loads.push(apiFetch<{ order: { customerId: number; customerName: string; deliveryType: string; deliveryDate: string | null; notes: string | null; status: string; items: { breadTypeId: number; breadSizeId: number | null; quantity: number }[] } }>(`/orders/${editId}`));
     }
 
     Promise.all(loads)
@@ -93,8 +94,9 @@ function OrderFormContent() {
           }
           setCustomerId(order.customerId);
           setCustomerName(order.customerName);
-          setItems(order.items.map((i: { breadTypeId: number; quantity: number }) => ({
+          setItems(order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number }) => ({
             breadTypeId: i.breadTypeId,
+            breadSizeId: i.breadSizeId ?? null,
             quantity: i.quantity,
           })));
           setDeliveryType(order.deliveryType as DeliveryType);
@@ -103,7 +105,9 @@ function OrderFormContent() {
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
           setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
         } else if (!isEdit && b.breadTypes.length > 0) {
-          setItems([{ breadTypeId: b.breadTypes[0].id, quantity: 1 }]);
+          const firstType = b.breadTypes[0];
+          const defaultSize = firstType.sizes?.[0];
+          setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, quantity: 1 }]);
         }
       })
       .catch(() => {})
@@ -126,7 +130,9 @@ function OrderFormContent() {
 
   function addItem() {
     if (breadTypes.length === 0) return;
-    setItems((prev) => [...prev, { breadTypeId: breadTypes[0].id, quantity: 1 }]);
+    const firstType = breadTypes[0];
+    const defaultSize = firstType.sizes?.[0];
+    setItems((prev) => [...prev, { breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, quantity: 1 }]);
   }
 
   async function handleCreateCustomer() {
@@ -282,45 +288,75 @@ function OrderFormContent() {
         {/* Line Items */}
         <Card>
           <h3 className="font-semibold mb-3">{t('form.bread_type')}</h3>
-          <div className="space-y-3">
-            {items.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <select
-                  className="flex-1 rounded-lg border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                  value={item.breadTypeId}
-                  onChange={(e) => updateItem(idx, { breadTypeId: Number(e.target.value) })}
-                >
-                  {breadTypes.map((bt) => (
-                    <option key={bt.id} value={bt.id}>
-                      {bt.name} (₪{bt.price})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1">
-                  <button
-                    className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-                    onClick={() => updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <span className="w-8 text-center font-bold tabular-nums">{item.quantity}</span>
-                  <button
-                    className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-                    onClick={() => updateItem(idx, { quantity: item.quantity + 1 })}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
+          <div className="space-y-4">
+            {items.map((item, idx) => {
+              const selectedType = breadTypes.find((bt) => bt.id === item.breadTypeId);
+              const sizes = selectedType?.sizes ?? [];
+              return (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="flex-1 rounded-lg border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                      value={item.breadTypeId}
+                      onChange={(e) => {
+                        const newTypeId = Number(e.target.value);
+                        const newType = breadTypes.find((bt) => bt.id === newTypeId);
+                        const defaultSize = newType?.sizes?.[0];
+                        updateItem(idx, { breadTypeId: newTypeId, breadSizeId: defaultSize?.id ?? null });
+                      }}
+                    >
+                      {breadTypes.map((bt) => (
+                        <option key={bt.id} value={bt.id}>
+                          {bt.name}{bt.sizes && bt.sizes.length > 0 ? '' : ` (₪${bt.price})`}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+                        onClick={() => updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="w-8 text-center font-bold tabular-nums">{item.quantity}</span>
+                      <button
+                        className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+                        onClick={() => updateItem(idx, { quantity: item.quantity + 1 })}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {items.length > 1 && (
+                      <button
+                        className="w-10 h-10 rounded-lg text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
+                        onClick={() => removeItem(idx)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  {sizes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 ps-1">
+                      {sizes.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={cn(
+                            'px-2.5 py-1 rounded-md text-xs font-medium transition-all border',
+                            item.breadSizeId === s.id
+                              ? 'bg-primary/10 border-primary/30 text-primary'
+                              : 'bg-card border-border hover:bg-muted text-muted-foreground'
+                          )}
+                          onClick={() => updateItem(idx, { breadSizeId: s.id })}
+                        >
+                          {s.name} <span className="tabular-nums opacity-70">₪{s.price}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {items.length > 1 && (
-                  <button
-                    className="w-10 h-10 rounded-lg text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
-                    onClick={() => removeItem(idx)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
           <Button variant="ghost" size="sm" className="mt-3" onClick={addItem}>
             <Plus className="h-4 w-4" />

@@ -9,10 +9,11 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Copy, Check, Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
-interface BreadType { id: number; name: string; price: string; isActive: boolean; sortOrder: number }
+interface BreadSize { id: number; breadTypeId: number; name: string; weightGrams: number | null; price: string; isActive: boolean; sortOrder: number }
+interface BreadType { id: number; name: string; price: string; isActive: boolean; sortOrder: number; sizes?: BreadSize[] }
 interface Member { id: number; userId: number; name: string; role: string }
 interface Invite { id: number; inviteCode: string; role: string; status: string }
 
@@ -39,6 +40,16 @@ export default function SettingsPage() {
   const [justToggledId, setJustToggledId] = useState<number | null>(null);
   const [justMovedId, setJustMovedId] = useState<number | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
+
+  const [expandedTypeId, setExpandedTypeId] = useState<number | null>(null);
+  const [editingSizeId, setEditingSizeId] = useState<number | null>(null);
+  const [editSizeName, setEditSizeName] = useState('');
+  const [editSizeWeight, setEditSizeWeight] = useState('');
+  const [editSizePrice, setEditSizePrice] = useState('');
+  const [addSizeForType, setAddSizeForType] = useState<number | null>(null);
+  const [newSizeName, setNewSizeName] = useState('');
+  const [newSizeWeight, setNewSizeWeight] = useState('');
+  const [newSizePrice, setNewSizePrice] = useState('');
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -69,7 +80,7 @@ export default function SettingsPage() {
       method: 'PATCH',
       body: JSON.stringify({ name: editBreadName.trim(), price: editBreadPrice }),
     });
-    setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? breadType : bt)));
+    setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? { ...breadType, sizes: bt.sizes } : bt)));
     setEditingBreadId(null);
   }
 
@@ -91,10 +102,114 @@ export default function SettingsPage() {
     });
     setJustToggledId(id);
     setBreadTypes((prev) =>
-      prev.map((bt) => (bt.id === id ? breadType : bt))
+      prev.map((bt) => (bt.id === id ? { ...breadType, sizes: bt.sizes } : bt))
         .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder || a.id - b.id)
     );
     setTimeout(() => setJustToggledId(null), 400);
+  }
+
+  // ---- Sizes ----
+
+  async function addSize(typeId: number) {
+    if (!newSizeName.trim() || !newSizePrice) return;
+    const { size } = await apiFetch<{ size: BreadSize }>(
+      `/groups/${activeGroupId}/bread-types/${typeId}/sizes`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newSizeName.trim(),
+          weightGrams: newSizeWeight ? Number(newSizeWeight) : null,
+          price: newSizePrice,
+        }),
+      }
+    );
+    setBreadTypes((prev) =>
+      prev.map((bt) => (bt.id === typeId ? { ...bt, sizes: [...(bt.sizes || []), size] } : bt))
+    );
+    setNewSizeName('');
+    setNewSizeWeight('');
+    setNewSizePrice('');
+    setAddSizeForType(null);
+  }
+
+  async function saveSize(typeId: number, sizeId: number) {
+    if (!editSizeName.trim() || !editSizePrice) return;
+    const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${sizeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: editSizeName.trim(),
+        weightGrams: editSizeWeight ? Number(editSizeWeight) : null,
+        price: editSizePrice,
+      }),
+    });
+    setBreadTypes((prev) =>
+      prev.map((bt) =>
+        bt.id === typeId
+          ? { ...bt, sizes: (bt.sizes || []).map((s) => (s.id === sizeId ? size : s)) }
+          : bt
+      )
+    );
+    setEditingSizeId(null);
+  }
+
+  async function deleteSize(typeId: number, sizeId: number) {
+    try {
+      await apiFetch(`/bread-sizes/${sizeId}?hard=true`, { method: 'DELETE' });
+      setBreadTypes((prev) =>
+        prev.map((bt) =>
+          bt.id === typeId ? { ...bt, sizes: (bt.sizes || []).filter((s) => s.id !== sizeId) } : bt
+        )
+      );
+      setEditingSizeId(null);
+      toast.success(t('settings.deleted'));
+    } catch {
+      toast.error(t('settings.delete_failed'));
+    }
+  }
+
+  async function toggleSize(typeId: number, sizeId: number, isActive: boolean) {
+    const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${sizeId}`, {
+      method: isActive ? 'DELETE' : 'PATCH',
+      ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
+    });
+    setBreadTypes((prev) =>
+      prev.map((bt) =>
+        bt.id === typeId
+          ? {
+              ...bt,
+              sizes: (bt.sizes || [])
+                .map((s) => (s.id === sizeId ? size : s))
+                .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder || a.id - b.id),
+            }
+          : bt
+      )
+    );
+  }
+
+  async function moveSize(typeId: number, sizeId: number, direction: 'up' | 'down') {
+    const type = breadTypes.find((bt) => bt.id === typeId);
+    if (!type?.sizes) return;
+    const sorted = [...type.sizes];
+    const idx = sorted.findIndex((s) => s.id === sizeId);
+    if (idx < 0) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sorted.length) return;
+    if (sorted[idx].isActive !== sorted[targetIdx].isActive) return;
+
+    [sorted[idx], sorted[targetIdx]] = [sorted[targetIdx], sorted[idx]];
+    const reordered = sorted.map((s, i) => ({ ...s, sortOrder: i }));
+    setBreadTypes((prev) =>
+      prev.map((bt) => (bt.id === typeId ? { ...bt, sizes: reordered } : bt))
+    );
+
+    try {
+      await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/sizes/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ orderedIds: reordered.map((s) => s.id) }),
+      });
+    } catch {
+      toast.error(t('settings.reorder_failed'));
+    }
   }
 
   async function addBreadType() {
@@ -280,48 +395,155 @@ export default function SettingsPage() {
                 </div>
               </Card>
             ) : (
-              <Card key={bt.id} className={cn('flex justify-between items-center', (justToggledId === bt.id || justMovedId === bt.id) && 'animate-reorder')}>
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col -my-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6"
-                      disabled={savingOrder || breadTypes.findIndex((b) => b.isActive === bt.isActive) === breadTypes.indexOf(bt)}
-                      onClick={() => moveBreadType(bt.id, 'up')}
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
+              <div key={bt.id} className="space-y-1">
+                <Card className={cn('flex justify-between items-center', (justToggledId === bt.id || justMovedId === bt.id) && 'animate-reorder')}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 flex-1 text-start"
+                    onClick={() => setExpandedTypeId(expandedTypeId === bt.id ? null : bt.id)}
+                  >
+                    <div className="flex flex-col -my-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={savingOrder || breadTypes.findIndex((b) => b.isActive === bt.isActive) === breadTypes.indexOf(bt)}
+                        onClick={(e) => { e.stopPropagation(); moveBreadType(bt.id, 'up'); }}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={savingOrder || breadTypes.findLastIndex((b) => b.isActive === bt.isActive) === breadTypes.indexOf(bt)}
+                        onClick={(e) => { e.stopPropagation(); moveBreadType(bt.id, 'down'); }}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <ChevronRight
+                      className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform',
+                        expandedTypeId === bt.id && 'rotate-90'
+                      )}
+                    />
+                    <span className={cn('font-medium', !bt.isActive && 'text-muted-foreground line-through')}>{bt.name}</span>
+                    {bt.sizes && bt.sizes.length > 0 && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        ({bt.sizes.length})
+                      </span>
+                    )}
+                    {!bt.isActive && (
+                      <span className="text-xs text-muted-foreground">({t('settings.inactive')})</span>
+                    )}
+                  </button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" onClick={() => { setEditingBreadId(bt.id); setEditBreadName(bt.name); setEditBreadPrice(bt.price); }}>
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6"
-                      disabled={savingOrder || breadTypes.findLastIndex((b) => b.isActive === bt.isActive) === breadTypes.indexOf(bt)}
-                      onClick={() => moveBreadType(bt.id, 'down')}
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
+                    <Button size="icon" variant="ghost" onClick={() => toggleBreadType(bt.id, bt.isActive)}>
+                      {bt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                     </Button>
                   </div>
-                  <span className={cn('font-medium', !bt.isActive && 'text-muted-foreground line-through')}>{bt.name}</span>
-                  <span className={cn(
-                    'text-xs font-medium px-2 py-0.5 rounded-full tabular-nums',
-                    bt.isActive ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-muted-foreground/50'
-                  )}>
-                    ₪{bt.price}
-                  </span>
-                  {!bt.isActive && (
-                    <span className="text-xs text-muted-foreground">({t('settings.inactive')})</span>
-                  )}
-                </div>
-                <div className="flex gap-1">
-                  <Button size="icon" variant="ghost" onClick={() => { setEditingBreadId(bt.id); setEditBreadName(bt.name); setEditBreadPrice(bt.price); }}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => toggleBreadType(bt.id, bt.isActive)}>
-                    {bt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                  </Button>
-                </div>
-              </Card>
+                </Card>
+
+                {/* Sizes panel */}
+                {expandedTypeId === bt.id && (
+                  <div className="ms-6 space-y-1.5 animate-expand">
+                    {(!bt.sizes || bt.sizes.length === 0) && (
+                      <p className="text-xs text-muted-foreground italic px-3 py-2">
+                        {t('settings.no_sizes')}
+                      </p>
+                    )}
+                    {bt.sizes?.map((s) => (
+                      editingSizeId === s.id ? (
+                        <Card key={s.id} className="animate-expand p-3">
+                          <div className="flex gap-2 mb-2">
+                            <Input placeholder={t('settings.size_name')} value={editSizeName} onChange={(e) => setEditSizeName(e.target.value)} className="flex-1" />
+                            <Input placeholder={t('settings.weight')} type="number" value={editSizeWeight} onChange={(e) => setEditSizeWeight(e.target.value)} className="w-20" />
+                            <Input placeholder={t('settings.price')} type="number" value={editSizePrice} onChange={(e) => setEditSizePrice(e.target.value)} className="w-20" />
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <Button size="sm" onClick={() => saveSize(bt.id, s.id)}>{t('settings.save')}</Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditingSizeId(null)}>{t('payments.cancel')}</Button>
+                            <div className="flex-1" />
+                            <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => deleteSize(bt.id, s.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </Card>
+                      ) : (
+                        <Card key={s.id} className="flex justify-between items-center p-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col -my-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5"
+                                disabled={(bt.sizes ?? []).findIndex((x) => x.isActive === s.isActive) === (bt.sizes ?? []).indexOf(s)}
+                                onClick={() => moveSize(bt.id, s.id, 'up')}
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5"
+                                disabled={(bt.sizes ?? []).findLastIndex((x) => x.isActive === s.isActive) === (bt.sizes ?? []).indexOf(s)}
+                                onClick={() => moveSize(bt.id, s.id, 'down')}
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <span className={cn('text-sm font-medium', !s.isActive && 'text-muted-foreground line-through')}>{s.name}</span>
+                            {s.weightGrams != null && (
+                              <span className="text-xs text-muted-foreground tabular-nums">{s.weightGrams}g</span>
+                            )}
+                            <span className={cn(
+                              'text-xs font-medium px-2 py-0.5 rounded-full tabular-nums',
+                              s.isActive ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-muted-foreground/50'
+                            )}>
+                              ₪{s.price}
+                            </span>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingSizeId(s.id); setEditSizeName(s.name); setEditSizeWeight(s.weightGrams != null ? String(s.weightGrams) : ''); setEditSizePrice(s.price); }}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleSize(bt.id, s.id, s.isActive)}>
+                              {s.isActive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                            </Button>
+                          </div>
+                        </Card>
+                      )
+                    ))}
+                    {addSizeForType === bt.id ? (
+                      <Card className="animate-expand p-3">
+                        <div className="flex gap-2 mb-2">
+                          <Input placeholder={t('settings.size_name')} value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} className="flex-1" />
+                          <Input placeholder={t('settings.weight')} type="number" value={newSizeWeight} onChange={(e) => setNewSizeWeight(e.target.value)} className="w-20" />
+                          <Input placeholder={t('settings.price')} type="number" value={newSizePrice} onChange={(e) => setNewSizePrice(e.target.value)} className="w-20" />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => addSize(bt.id)}>{t('form.add')}</Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setAddSizeForType(null); setNewSizeName(''); setNewSizeWeight(''); setNewSizePrice(''); }}>{t('payments.cancel')}</Button>
+                        </div>
+                      </Card>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs"
+                        onClick={() => setAddSizeForType(bt.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        {t('settings.add_size')}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             )
           )}
         </div>

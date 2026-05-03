@@ -20,6 +20,7 @@ import Link from 'next/link';
 interface OrderItem {
   id: number;
   breadTypeName: string;
+  sizeName?: string | null;
   quantity: number;
   pricePerUnit: string | null;
 }
@@ -243,7 +244,10 @@ export default function OrderDetailPage() {
             {order.items.map((item) => (
               <div key={item.id} className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{item.breadTypeName}</span>
+                  <span className="font-medium">
+                    {item.breadTypeName}
+                    {item.sizeName && <span className="text-muted-foreground"> {item.sizeName}</span>}
+                  </span>
                   <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                     ×{item.quantity}
                   </span>
