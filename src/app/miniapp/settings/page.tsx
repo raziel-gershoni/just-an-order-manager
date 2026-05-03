@@ -458,17 +458,35 @@ export default function SettingsPage() {
                     )}
                     {bt.sizes?.map((s) => (
                       editingSizeId === s.id ? (
-                        <Card key={s.id} className="animate-expand p-3 space-y-2">
-                          <Input placeholder={t('settings.size_name')} value={editSizeName} onChange={(e) => setEditSizeName(e.target.value)} />
-                          <div className="flex gap-2">
-                            <Input placeholder={t('settings.weight')} type="number" value={editSizeWeight} onChange={(e) => setEditSizeWeight(e.target.value)} className="flex-1 min-w-0" />
-                            <Input placeholder={t('settings.price')} type="number" value={editSizePrice} onChange={(e) => setEditSizePrice(e.target.value)} className="flex-1 min-w-0" />
+                        <Card key={s.id} className="animate-expand p-3 space-y-3">
+                          <Input
+                            label={t('settings.size_name')}
+                            value={editSizeName}
+                            onChange={(e) => setEditSizeName(e.target.value)}
+                            placeholder="1kg"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              label={t('settings.weight')}
+                              type="number"
+                              inputMode="numeric"
+                              value={editSizeWeight}
+                              onChange={(e) => setEditSizeWeight(e.target.value)}
+                              placeholder="1000"
+                            />
+                            <Input
+                              label={t('settings.price')}
+                              type="number"
+                              inputMode="decimal"
+                              value={editSizePrice}
+                              onChange={(e) => setEditSizePrice(e.target.value)}
+                              placeholder="35"
+                            />
                           </div>
-                          <div className="flex gap-2 items-center">
-                            <Button size="sm" onClick={() => saveSize(bt.id, s.id)}>{t('settings.save')}</Button>
+                          <div className="flex gap-2 items-center pt-1">
+                            <Button size="sm" className="flex-1" onClick={() => saveSize(bt.id, s.id)}>{t('settings.save')}</Button>
                             <Button size="sm" variant="ghost" onClick={() => setEditingSizeId(null)}>{t('payments.cancel')}</Button>
-                            <div className="flex-1" />
-                            <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => deleteSize(bt.id, s.id)}>
+                            <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteSize(bt.id, s.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -519,14 +537,34 @@ export default function SettingsPage() {
                       )
                     ))}
                     {addSizeForType === bt.id ? (
-                      <Card className="animate-expand p-3 space-y-2">
-                        <Input placeholder={t('settings.size_name')} value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} />
-                        <div className="flex gap-2">
-                          <Input placeholder={t('settings.weight')} type="number" value={newSizeWeight} onChange={(e) => setNewSizeWeight(e.target.value)} className="flex-1 min-w-0" />
-                          <Input placeholder={t('settings.price')} type="number" value={newSizePrice} onChange={(e) => setNewSizePrice(e.target.value)} className="flex-1 min-w-0" />
+                      <Card className="animate-expand p-3 space-y-3">
+                        <Input
+                          label={t('settings.size_name')}
+                          value={newSizeName}
+                          onChange={(e) => setNewSizeName(e.target.value)}
+                          placeholder="1kg"
+                          autoFocus
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            label={t('settings.weight')}
+                            type="number"
+                            inputMode="numeric"
+                            value={newSizeWeight}
+                            onChange={(e) => setNewSizeWeight(e.target.value)}
+                            placeholder="1000"
+                          />
+                          <Input
+                            label={t('settings.price')}
+                            type="number"
+                            inputMode="decimal"
+                            value={newSizePrice}
+                            onChange={(e) => setNewSizePrice(e.target.value)}
+                            placeholder="35"
+                          />
                         </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => addSize(bt.id)}>{t('form.add')}</Button>
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" className="flex-1" onClick={() => addSize(bt.id)}>{t('form.add')}</Button>
                           <Button size="sm" variant="ghost" onClick={() => { setAddSizeForType(null); setNewSizeName(''); setNewSizeWeight(''); setNewSizePrice(''); }}>{t('payments.cancel')}</Button>
                         </div>
                       </Card>

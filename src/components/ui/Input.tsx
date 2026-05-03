@@ -9,7 +9,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export function Input({ label, className, id, ...props }: InputProps) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn('flex flex-col gap-1.5 min-w-0', className)}>
       {label && (
         <label htmlFor={id} className="text-sm font-medium text-muted-foreground">
           {label}
@@ -18,10 +18,9 @@ export function Input({ label, className, id, ...props }: InputProps) {
       <input
         id={id}
         className={cn(
-          'rounded-lg border border-input bg-card px-3 py-2.5 text-base outline-none transition-colors',
+          'w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2.5 text-base outline-none transition-colors',
           'placeholder:text-muted-foreground/50',
-          'focus:border-ring focus:ring-2 focus:ring-ring/20',
-          className
+          'focus:border-ring focus:ring-2 focus:ring-ring/20'
         )}
         {...props}
       />
@@ -36,7 +35,7 @@ export function TextArea({
   ...props
 }: { label?: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn('flex flex-col gap-1.5 min-w-0', className)}>
       {label && (
         <label htmlFor={id} className="text-sm font-medium text-muted-foreground">
           {label}
@@ -45,10 +44,9 @@ export function TextArea({
       <textarea
         id={id}
         className={cn(
-          'rounded-lg border border-input bg-card px-3 py-2.5 text-base outline-none transition-colors',
+          'w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2.5 text-base outline-none transition-colors',
           'placeholder:text-muted-foreground/50',
-          'focus:border-ring focus:ring-2 focus:ring-ring/20',
-          className
+          'focus:border-ring focus:ring-2 focus:ring-ring/20'
         )}
         rows={3}
         {...props}
