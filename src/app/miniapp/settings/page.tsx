@@ -458,11 +458,11 @@ export default function SettingsPage() {
                     )}
                     {bt.sizes?.map((s) => (
                       editingSizeId === s.id ? (
-                        <Card key={s.id} className="animate-expand p-3">
-                          <div className="flex gap-2 mb-2">
-                            <Input placeholder={t('settings.size_name')} value={editSizeName} onChange={(e) => setEditSizeName(e.target.value)} className="flex-1" />
-                            <Input placeholder={t('settings.weight')} type="number" value={editSizeWeight} onChange={(e) => setEditSizeWeight(e.target.value)} className="w-20" />
-                            <Input placeholder={t('settings.price')} type="number" value={editSizePrice} onChange={(e) => setEditSizePrice(e.target.value)} className="w-20" />
+                        <Card key={s.id} className="animate-expand p-3 space-y-2">
+                          <Input placeholder={t('settings.size_name')} value={editSizeName} onChange={(e) => setEditSizeName(e.target.value)} />
+                          <div className="flex gap-2">
+                            <Input placeholder={t('settings.weight')} type="number" value={editSizeWeight} onChange={(e) => setEditSizeWeight(e.target.value)} className="flex-1 min-w-0" />
+                            <Input placeholder={t('settings.price')} type="number" value={editSizePrice} onChange={(e) => setEditSizePrice(e.target.value)} className="flex-1 min-w-0" />
                           </div>
                           <div className="flex gap-2 items-center">
                             <Button size="sm" onClick={() => saveSize(bt.id, s.id)}>{t('settings.save')}</Button>
@@ -519,11 +519,11 @@ export default function SettingsPage() {
                       )
                     ))}
                     {addSizeForType === bt.id ? (
-                      <Card className="animate-expand p-3">
-                        <div className="flex gap-2 mb-2">
-                          <Input placeholder={t('settings.size_name')} value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} className="flex-1" />
-                          <Input placeholder={t('settings.weight')} type="number" value={newSizeWeight} onChange={(e) => setNewSizeWeight(e.target.value)} className="w-20" />
-                          <Input placeholder={t('settings.price')} type="number" value={newSizePrice} onChange={(e) => setNewSizePrice(e.target.value)} className="w-20" />
+                      <Card className="animate-expand p-3 space-y-2">
+                        <Input placeholder={t('settings.size_name')} value={newSizeName} onChange={(e) => setNewSizeName(e.target.value)} />
+                        <div className="flex gap-2">
+                          <Input placeholder={t('settings.weight')} type="number" value={newSizeWeight} onChange={(e) => setNewSizeWeight(e.target.value)} className="flex-1 min-w-0" />
+                          <Input placeholder={t('settings.price')} type="number" value={newSizePrice} onChange={(e) => setNewSizePrice(e.target.value)} className="flex-1 min-w-0" />
                         </div>
                         <div className="flex gap-2">
                           <Button size="sm" onClick={() => addSize(bt.id)}>{t('form.add')}</Button>
