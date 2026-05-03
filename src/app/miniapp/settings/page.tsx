@@ -35,7 +35,10 @@ export default function SettingsPage() {
   const [editBreadPrice, setEditBreadPrice] = useState('');
 
   const [newBreadName, setNewBreadName] = useState('');
-  const [newBreadPrice, setNewBreadPrice] = useState('');
+  const [newTypeSizes, setNewTypeSizes] = useState<{ name: string; weight: string; price: string }[]>([
+    { name: '', weight: '', price: '' },
+  ]);
+  const [addingType, setAddingType] = useState(false);
 
   const [justToggledId, setJustToggledId] = useState<number | null>(null);
   const [justMovedId, setJustMovedId] = useState<number | null>(null);
@@ -212,15 +215,52 @@ export default function SettingsPage() {
     }
   }
 
-  async function addBreadType() {
-    if (!newBreadName || !newBreadPrice || !activeGroupId) return;
-    const { breadType } = await apiFetch<{ breadType: BreadType }>(
-      `/groups/${activeGroupId}/bread-types`,
-      { method: 'POST', body: JSON.stringify({ name: newBreadName, price: newBreadPrice }) }
-    );
-    setBreadTypes((prev) => [...prev, breadType]);
+  function updateNewTypeSize(idx: number, patch: Partial<{ name: string; weight: string; price: string }>) {
+    setNewTypeSizes((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  }
+
+  function addNewTypeSizeRow() {
+    setNewTypeSizes((prev) => [...prev, { name: '', weight: '', price: '' }]);
+  }
+
+  function removeNewTypeSizeRow(idx: number) {
+    setNewTypeSizes((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== idx)));
+  }
+
+  function resetAddTypeForm() {
     setNewBreadName('');
-    setNewBreadPrice('');
+    setNewTypeSizes([{ name: '', weight: '', price: '' }]);
+  }
+
+  async function addBreadType() {
+    if (!newBreadName.trim() || !activeGroupId) return;
+    const validSizes = newTypeSizes.filter((s) => s.name.trim() && s.price);
+    if (validSizes.length === 0) return;
+
+    setAddingType(true);
+    try {
+      const { breadType } = await apiFetch<{ breadType: BreadType }>(
+        `/groups/${activeGroupId}/bread-types`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: newBreadName.trim(),
+            sizes: validSizes.map((s) => ({
+              name: s.name.trim(),
+              weightGrams: s.weight ? Number(s.weight) : null,
+              price: s.price,
+            })),
+          }),
+        }
+      );
+      setBreadTypes((prev) => [...prev, breadType]);
+      setExpandedTypeId(breadType.id);
+      resetAddTypeForm();
+    } catch {
+      toast.error(t('customers.save_failed'));
+    } finally {
+      setAddingType(false);
+    }
   }
 
   async function moveBreadType(id: number, direction: 'up' | 'down') {
@@ -587,16 +627,92 @@ export default function SettingsPage() {
             )
           )}
         </div>
-        <Card className="mt-3">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+        <Card className="mt-3 space-y-4">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <Plus className="h-4 w-4" />
             {t('settings.add_bread')}
           </h3>
-          <div className="flex gap-2">
-            <Input placeholder={t('settings.name')} value={newBreadName} onChange={(e) => setNewBreadName(e.target.value)} className="flex-1" />
-            <Input placeholder={t('settings.price')} type="number" value={newBreadPrice} onChange={(e) => setNewBreadPrice(e.target.value)} className="w-24" />
-            <Button size="sm" onClick={addBreadType}>{t('form.add')}</Button>
+
+          <Input
+            label={t('settings.name')}
+            value={newBreadName}
+            onChange={(e) => setNewBreadName(e.target.value)}
+            placeholder="Sourdough"
+          />
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">
+                {t('settings.sizes')}
+              </span>
+              <span className="text-xs text-muted-foreground/70">
+                {newTypeSizes.filter((s) => s.name.trim() && s.price).length}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {newTypeSizes.map((size, idx) => (
+                <div key={idx} className="rounded-lg border border-dashed border-border bg-muted/30 p-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder={t('settings.size_name')}
+                      value={size.name}
+                      onChange={(e) => updateNewTypeSize(idx, { name: e.target.value })}
+                      className="flex-1"
+                    />
+                    {newTypeSizes.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeNewTypeSizeRow(idx)}
+                        className="h-9 w-9 rounded-lg flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                        aria-label={t('settings.delete')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder={t('settings.weight')}
+                      type="number"
+                      inputMode="numeric"
+                      value={size.weight}
+                      onChange={(e) => updateNewTypeSize(idx, { weight: e.target.value })}
+                    />
+                    <Input
+                      placeholder={t('settings.price')}
+                      type="number"
+                      inputMode="decimal"
+                      value={size.price}
+                      onChange={(e) => updateNewTypeSize(idx, { price: e.target.value })}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={addNewTypeSizeRow}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t('settings.add_size')}
+            </Button>
           </div>
+
+          <Button
+            className="w-full"
+            disabled={
+              !newBreadName.trim() ||
+              newTypeSizes.filter((s) => s.name.trim() && s.price).length === 0
+            }
+            loading={addingType}
+            onClick={addBreadType}
+          >
+            {t('form.add')}
+          </Button>
         </Card>
       </section>
     </div>

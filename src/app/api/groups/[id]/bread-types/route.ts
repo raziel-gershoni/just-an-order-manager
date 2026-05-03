@@ -44,11 +44,18 @@ export const GET = withAuth(async (request, auth) => {
   return jsonResponse({ breadTypes: breadTypesWithSizes });
 });
 
+const sizeSchema = z.object({
+  name: z.string().min(1).max(100),
+  weightGrams: z.number().int().positive().nullable().optional(),
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/),
+});
+
 const createBreadTypeSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(1000).optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/),
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   sortOrder: z.number().int().optional(),
+  sizes: z.array(sizeSchema).optional(),
 });
 
 export const POST = withAuth(async (request, auth) => {
@@ -74,10 +81,27 @@ export const POST = withAuth(async (request, auth) => {
       groupId,
       name: parsed.data.name,
       description: parsed.data.description,
-      price: parsed.data.price,
+      // Type-level price is a legacy fallback; default to 0 when sizes are provided
+      price: parsed.data.price ?? '0',
       sortOrder: parsed.data.sortOrder ?? maxSort + 1,
     })
     .returning();
 
-  return jsonResponse({ breadType }, 201);
+  let sizes: (typeof breadSizes.$inferSelect)[] = [];
+  if (parsed.data.sizes && parsed.data.sizes.length > 0) {
+    sizes = await db
+      .insert(breadSizes)
+      .values(
+        parsed.data.sizes.map((s, idx) => ({
+          breadTypeId: breadType.id,
+          name: s.name,
+          weightGrams: s.weightGrams ?? null,
+          price: s.price,
+          sortOrder: idx,
+        }))
+      )
+      .returning();
+  }
+
+  return jsonResponse({ breadType: { ...breadType, sizes } }, 201);
 });
