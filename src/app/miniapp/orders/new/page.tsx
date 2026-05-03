@@ -288,63 +288,44 @@ function OrderFormContent() {
         {/* Line Items */}
         <Card>
           <h3 className="font-semibold mb-3">{t('form.bread_type')}</h3>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {items.map((item, idx) => {
               const selectedType = breadTypes.find((bt) => bt.id === item.breadTypeId);
               const sizes = selectedType?.sizes ?? [];
               return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="flex-1 rounded-lg border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                      value={item.breadTypeId}
-                      onChange={(e) => {
-                        const newTypeId = Number(e.target.value);
-                        const newType = breadTypes.find((bt) => bt.id === newTypeId);
-                        const defaultSize = newType?.sizes?.[0];
-                        updateItem(idx, { breadTypeId: newTypeId, breadSizeId: defaultSize?.id ?? null });
-                      }}
-                    >
-                      {breadTypes.map((bt) => (
-                        <option key={bt.id} value={bt.id}>
-                          {bt.name}{bt.sizes && bt.sizes.length > 0 ? '' : ` (₪${bt.price})`}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="flex items-center gap-1">
-                      <button
-                        className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-                        onClick={() => updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <span className="w-8 text-center font-bold tabular-nums">{item.quantity}</span>
-                      <button
-                        className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-                        onClick={() => updateItem(idx, { quantity: item.quantity + 1 })}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {items.length > 1 && (
-                      <button
-                        className="w-10 h-10 rounded-lg text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors"
-                        onClick={() => removeItem(idx)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+                <div
+                  key={idx}
+                  className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-2.5"
+                >
+                  {/* Bread type — primary, full width */}
+                  <select
+                    className="w-full rounded-lg border border-input bg-card px-3 py-3 text-base font-medium outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+                    value={item.breadTypeId}
+                    onChange={(e) => {
+                      const newTypeId = Number(e.target.value);
+                      const newType = breadTypes.find((bt) => bt.id === newTypeId);
+                      const defaultSize = newType?.sizes?.[0];
+                      updateItem(idx, { breadTypeId: newTypeId, breadSizeId: defaultSize?.id ?? null });
+                    }}
+                  >
+                    {breadTypes.map((bt) => (
+                      <option key={bt.id} value={bt.id}>
+                        {bt.name}{bt.sizes && bt.sizes.length > 0 ? '' : ` (₪${bt.price})`}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Size chips — secondary */}
                   {sizes.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 ps-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {sizes.map((s) => (
                         <button
                           key={s.id}
                           type="button"
                           className={cn(
-                            'px-2.5 py-1 rounded-md text-xs font-medium transition-all border',
+                            'px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border',
                             item.breadSizeId === s.id
-                              ? 'bg-primary/10 border-primary/30 text-primary'
+                              ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
                               : 'bg-card border-border hover:bg-muted text-muted-foreground'
                           )}
                           onClick={() => updateItem(idx, { breadSizeId: s.id })}
@@ -358,6 +339,42 @@ function OrderFormContent() {
                       ))}
                     </div>
                   )}
+
+                  {/* Stepper + delete — tertiary controls row */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <div className="inline-flex items-center rounded-lg border border-border bg-card p-0.5 shadow-sm">
+                      <button
+                        type="button"
+                        aria-label="decrease"
+                        className="w-10 h-10 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95 transition-all"
+                        onClick={() => updateItem(idx, { quantity: Math.max(1, item.quantity - 1) })}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="w-10 text-center font-bold tabular-nums text-base">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="increase"
+                        className="w-10 h-10 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95 transition-all"
+                        onClick={() => updateItem(idx, { quantity: item.quantity + 1 })}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex-1" />
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label="remove item"
+                        className="w-10 h-10 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-all active:scale-95"
+                        onClick={() => removeItem(idx)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
