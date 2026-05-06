@@ -10,6 +10,7 @@ import {
   orderItems,
   customers,
   breadTypes,
+  breadSizes,
 } from '@/db/schema';
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
@@ -226,17 +227,22 @@ function setupHandlers(bot: import('grammy').Bot) {
     const allItems = await db
       .select({
         orderId: orderItems.orderId,
-        breadTypeName: breadTypes.name,
+        typeName: breadTypes.name,
+        sizeName: breadSizes.name,
+        weightGrams: breadSizes.weightGrams,
         quantity: orderItems.quantity,
       })
       .from(orderItems)
       .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
+      .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
       .where(inArray(orderItems.orderId, orderIds));
 
     const map: Record<number, { breadTypeName: string; quantity: number }[]> = {};
     for (const item of allItems) {
       if (!map[item.orderId]) map[item.orderId] = [];
-      map[item.orderId].push(item);
+      const base = item.sizeName ? `${item.typeName} ${item.sizeName}` : item.typeName;
+      const withWeight = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
+      map[item.orderId].push({ breadTypeName: withWeight, quantity: item.quantity });
     }
     return map;
   }

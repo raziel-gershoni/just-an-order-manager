@@ -1,6 +1,6 @@
 /**
- * Format a single order line for display: "{quantity} {typeName}" or
- * "{quantity} {typeName} {sizeLabel}" when a size is set.
+ * Customer-facing line — name only, no weight.
+ * "{quantity} {typeName}" or "{quantity} {typeName} {sizeLabel}"
  */
 export function formatItemLine(
   quantity: number,
@@ -12,12 +12,16 @@ export function formatItemLine(
 }
 
 /**
- * Join multiple item lines into a comma-separated summary.
+ * Staff-facing line — includes the integer weight when set, useful for
+ * baker production planning. Customer-facing channels MUST NOT use this.
+ * "{quantity} {typeName} {sizeLabel} ({weight}g)"
  */
-export function formatItemsSummary(
-  items: { quantity: number; breadTypeName: string; sizeName?: string | null }[]
+export function formatItemLineForStaff(
+  quantity: number,
+  typeName: string,
+  sizeLabel?: string | null,
+  weightGrams?: number | null
 ): string {
-  return items
-    .map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName))
-    .join(', ');
+  const base = formatItemLine(quantity, typeName, sizeLabel);
+  return weightGrams != null ? `${base} (${weightGrams}g)` : base;
 }

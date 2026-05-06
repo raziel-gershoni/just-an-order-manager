@@ -187,8 +187,8 @@ export const POST = withGroup(async (request, _auth, groupId) => {
 
   await db.insert(orderItems).values(itemValues);
 
-  // Notify bakers
-  const notifItems = items.map((item) => {
+  // Build customer-facing items (name only, no weight) — for WhatsApp
+  const customerItems = items.map((item) => {
     const typeName = btMap[item.breadTypeId].name;
     const sizeName = item.breadSizeId ? sizeMap[item.breadSizeId].name : null;
     return {
@@ -197,16 +197,28 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     };
   });
 
+  // Build staff-facing items (with weight when set) — for Telegram
+  const staffItems = items.map((item) => {
+    const type = btMap[item.breadTypeId];
+    const size = item.breadSizeId ? sizeMap[item.breadSizeId] : null;
+    const label = size ? `${type.name} ${size.name}` : type.name;
+    const withWeight = size?.weightGrams != null ? `${label} (${size.weightGrams}g)` : label;
+    return {
+      breadTypeName: withWeight,
+      quantity: item.quantity,
+    };
+  });
+
   await notifyNewOrder(groupId, order.id, {
     customerName: customer.name,
-    items: notifItems,
+    items: staffItems,
     deliveryDate: resolvedDate,
     notes: notes ?? null,
   });
 
-  // WhatsApp notification to customer
+  // WhatsApp notification to customer — name only, no weight
   if (notifyCustomer !== false) {
-    const itemsSummary = notifItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+    const itemsSummary = customerItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
     await notifyCustomerWhatsApp(customer.phone, 'order_received', [`: ${itemsSummary}`]);
   }
 

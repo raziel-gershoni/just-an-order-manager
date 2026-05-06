@@ -57,6 +57,7 @@ async function handler(request: Request) {
           orderId: orderItems.orderId,
           breadTypeName: breadTypes.name,
           sizeName: breadSizes.name,
+          weightGrams: breadSizes.weightGrams,
           quantity: orderItems.quantity,
         })
         .from(orderItems)
@@ -68,9 +69,11 @@ async function handler(request: Request) {
       for (const order of todayOrders) {
         const items = allItems.filter((i) => i.orderId === order.id);
         for (const item of items) {
+          const base = item.sizeName ? `${item.breadTypeName} ${item.sizeName}` : item.breadTypeName;
+          const withWeight = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
           summaryItems.push({
             customerName: order.customerName,
-            breadTypeName: item.sizeName ? `${item.breadTypeName} ${item.sizeName}` : item.breadTypeName,
+            breadTypeName: withWeight,
             quantity: item.quantity,
           });
         }
