@@ -10,6 +10,7 @@ import {
   varchar,
   boolean,
   uniqueIndex,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // ---- Enums ----
@@ -110,7 +111,6 @@ export const breadTypes = pgTable('bread_types', {
     .references(() => groups.id),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  price: decimal('price', { precision: 10, scale: 2 }).notNull(),
   isActive: boolean('is_active').notNull().default(true),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -118,16 +118,34 @@ export const breadTypes = pgTable('bread_types', {
 
 export const breadSizes = pgTable('bread_sizes', {
   id: serial('id').primaryKey(),
-  breadTypeId: integer('bread_type_id')
+  groupId: integer('group_id')
     .notNull()
-    .references(() => breadTypes.id),
+    .references(() => groups.id),
   name: varchar('name', { length: 100 }).notNull(),
   weightGrams: integer('weight_grams'),
   price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+  isDefault: boolean('is_default').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
+
+export const breadTypeSizes = pgTable(
+  'bread_type_sizes',
+  {
+    breadTypeId: integer('bread_type_id')
+      .notNull()
+      .references(() => breadTypes.id),
+    breadSizeId: integer('bread_size_id')
+      .notNull()
+      .references(() => breadSizes.id),
+    priceOverride: decimal('price_override', { precision: 10, scale: 2 }),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.breadTypeId, table.breadSizeId] }),
+  ]
+);
 
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),

@@ -15,7 +15,7 @@ import { getInitial } from '@/lib/name-utils';
 
 interface Customer { id: number; name: string; phone?: string | null }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string }
-interface BreadType { id: number; name: string; price: string; sizes?: BreadSize[] }
+interface BreadType { id: number; name: string; enabledSizes?: BreadSize[] }
 interface LineItem { breadTypeId: number; breadSizeId: number | null; quantity: number }
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
@@ -106,7 +106,7 @@ function OrderFormContent() {
           setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
         } else if (!isEdit && b.breadTypes.length > 0) {
           const firstType = b.breadTypes[0];
-          const defaultSize = firstType.sizes?.[0];
+          const defaultSize = firstType.enabledSizes?.[0];
           setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, quantity: 1 }]);
         }
       })
@@ -131,7 +131,7 @@ function OrderFormContent() {
   function addItem() {
     if (breadTypes.length === 0) return;
     const firstType = breadTypes[0];
-    const defaultSize = firstType.sizes?.[0];
+    const defaultSize = firstType.enabledSizes?.[0];
     setItems((prev) => [...prev, { breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, quantity: 1 }]);
   }
 
@@ -291,7 +291,7 @@ function OrderFormContent() {
           <div className="space-y-3">
             {items.map((item, idx) => {
               const selectedType = breadTypes.find((bt) => bt.id === item.breadTypeId);
-              const sizes = selectedType?.sizes ?? [];
+              const sizes = selectedType?.enabledSizes ?? [];
               return (
                 <div
                   key={idx}
@@ -304,19 +304,19 @@ function OrderFormContent() {
                     onChange={(e) => {
                       const newTypeId = Number(e.target.value);
                       const newType = breadTypes.find((bt) => bt.id === newTypeId);
-                      const defaultSize = newType?.sizes?.[0];
+                      const defaultSize = newType?.enabledSizes?.[0];
                       updateItem(idx, { breadTypeId: newTypeId, breadSizeId: defaultSize?.id ?? null });
                     }}
                   >
                     {breadTypes.map((bt) => (
                       <option key={bt.id} value={bt.id}>
-                        {bt.name}{bt.sizes && bt.sizes.length > 0 ? '' : ` (₪${bt.price})`}
+                        {bt.name}
                       </option>
                     ))}
                   </select>
 
                   {/* Size chips — secondary */}
-                  {sizes.length > 0 && (
+                  {sizes.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {sizes.map((s) => (
                         <button
@@ -337,6 +337,10 @@ function OrderFormContent() {
                           <span className="tabular-nums opacity-70"> ₪{s.price}</span>
                         </button>
                       ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-destructive/80 px-1 py-1.5">
+                      {t('form.no_sizes_for_type')}
                     </div>
                   )}
 
@@ -472,7 +476,7 @@ function OrderFormContent() {
         <Button
           className="w-full"
           size="lg"
-          disabled={!customerId || items.length === 0}
+          disabled={!customerId || items.length === 0 || items.some((i) => !i.breadSizeId)}
           loading={submitting}
           onClick={handleSubmit}
         >

@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes, breadSizes } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function parsePath(url: string): { groupId: number; typeId: number } {
@@ -14,23 +14,24 @@ function parsePath(url: string): { groupId: number; typeId: number } {
   };
 }
 
-const createSizeSchema = z.object({
-  name: z.string().min(1).max(100),
-  weightGrams: z.number().int().positive().nullable().optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/),
-  sortOrder: z.number().int().optional(),
+const setSchema = z.object({
+  enabled: z.array(
+    z.object({
+      breadSizeId: z.number().int().positive(),
+      priceOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+    })
+  ),
 });
 
-export const POST = withAuth(async (request, auth) => {
+export const PUT = withAuth(async (request, auth) => {
   const { groupId, typeId } = parsePath(request.url);
 
   const membership = auth.memberships.find((m) => m.groupId === groupId);
   if (!membership) return errorResponse('Not a member', 403);
   if (membership.role === 'baker') {
-    return errorResponse('Bakers cannot manage bread sizes', 403);
+    return errorResponse('Bakers cannot manage bread types', 403);
   }
 
-  // Verify the bread type belongs to this group
   const [breadType] = await db
     .select()
     .from(breadTypes)
@@ -39,24 +40,34 @@ export const POST = withAuth(async (request, auth) => {
   if (!breadType) return errorResponse('Bread type not found', 404);
 
   const body = await request.json();
-  const parsed = createSizeSchema.safeParse(body);
+  const parsed = setSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const [{ maxSort }] = await db
-    .select({ maxSort: sql<number>`coalesce(max(${breadSizes.sortOrder}), -1)` })
-    .from(breadSizes)
-    .where(eq(breadSizes.breadTypeId, typeId));
+  // Verify all referenced sizes belong to this group
+  const requestedIds = parsed.data.enabled.map((e) => e.breadSizeId);
+  if (requestedIds.length > 0) {
+    const valid = await db
+      .select({ id: breadSizes.id })
+      .from(breadSizes)
+      .where(and(inArray(breadSizes.id, requestedIds), eq(breadSizes.groupId, groupId)));
+    if (valid.length !== requestedIds.length) {
+      return errorResponse('One or more sizes do not belong to this group', 400);
+    }
+  }
 
-  const [size] = await db
-    .insert(breadSizes)
-    .values({
-      breadTypeId: typeId,
-      name: parsed.data.name,
-      weightGrams: parsed.data.weightGrams ?? null,
-      price: parsed.data.price,
-      sortOrder: parsed.data.sortOrder ?? maxSort + 1,
-    })
-    .returning();
+  // Clean slate: delete all junction rows for this type, then re-insert
+  await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, typeId));
 
-  return jsonResponse({ size }, 201);
+  if (parsed.data.enabled.length > 0) {
+    await db.insert(breadTypeSizes).values(
+      parsed.data.enabled.map((e, idx) => ({
+        breadTypeId: typeId,
+        breadSizeId: e.breadSizeId,
+        priceOverride: e.priceOverride ?? null,
+        sortOrder: idx,
+      }))
+    );
+  }
+
+  return jsonResponse({ success: true, count: parsed.data.enabled.length });
 });

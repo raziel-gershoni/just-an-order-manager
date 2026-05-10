@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes, breadSizes } from '@/db/schema';
+import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 
 export const GET = withGroup(async (_request, _auth, groupId) => {
@@ -11,29 +11,44 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     .orderBy(asc(breadTypes.sortOrder));
 
   const typeIds = types.map((t) => t.id);
-  const sizes = typeIds.length
+  const links = typeIds.length
     ? await db
-        .select()
-        .from(breadSizes)
+        .select({
+          breadTypeId: breadTypeSizes.breadTypeId,
+          breadSizeId: breadSizes.id,
+          name: breadSizes.name,
+          weightGrams: breadSizes.weightGrams,
+          price: breadSizes.price,
+          priceOverride: breadTypeSizes.priceOverride,
+          sortOrder: breadTypeSizes.sortOrder,
+        })
+        .from(breadTypeSizes)
+        .innerJoin(breadSizes, eq(breadTypeSizes.breadSizeId, breadSizes.id))
         .where(
           and(
-            inArray(breadSizes.breadTypeId, typeIds),
+            inArray(breadTypeSizes.breadTypeId, typeIds),
             eq(breadSizes.isActive, true)
           )
         )
-        .orderBy(asc(breadSizes.sortOrder))
+        .orderBy(asc(breadTypeSizes.sortOrder))
     : [];
 
-  const sizesByType: Record<number, typeof sizes> = {};
-  for (const s of sizes) {
-    if (!sizesByType[s.breadTypeId]) sizesByType[s.breadTypeId] = [];
-    sizesByType[s.breadTypeId].push(s);
+  const enabledByType: Record<number, typeof links> = {};
+  for (const link of links) {
+    if (!enabledByType[link.breadTypeId]) enabledByType[link.breadTypeId] = [];
+    enabledByType[link.breadTypeId].push(link);
   }
 
-  const breadTypesWithSizes = types.map((t) => ({
+  const result = types.map((t) => ({
     ...t,
-    sizes: sizesByType[t.id] || [],
+    enabledSizes: (enabledByType[t.id] ?? []).map((l) => ({
+      id: l.breadSizeId,
+      name: l.name,
+      weightGrams: l.weightGrams,
+      // Effective price = override if set, else global default
+      price: l.priceOverride ?? l.price,
+    })),
   }));
 
-  return jsonResponse({ breadTypes: breadTypesWithSizes });
+  return jsonResponse({ breadTypes: result });
 });

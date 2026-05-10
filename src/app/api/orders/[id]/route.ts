@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
@@ -68,7 +68,7 @@ const updateOrderSchema = z.object({
   isRecurring: z.boolean().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
-    breadSizeId: z.number().int().positive().nullable().optional(),
+    breadSizeId: z.number().int().positive(),
     quantity: z.number().int().positive(),
   })).min(1).optional(),
 });
@@ -125,56 +125,57 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
 
   // Update items if provided
   if (parsed.data.items) {
-    const allBreadTypes = await db
-      .select()
+    const validTypes = await db
+      .select({ id: breadTypes.id })
       .from(breadTypes)
       .where(eq(breadTypes.groupId, groupId));
-    const btMap = Object.fromEntries(allBreadTypes.map((bt) => [bt.id, bt]));
+    const validTypeIds = new Set(validTypes.map((t) => t.id));
 
-    const typeIds = allBreadTypes.map((bt) => bt.id);
-    const allSizes = typeIds.length
-      ? await db.select().from(breadSizes).where(inArray(breadSizes.breadTypeId, typeIds))
-      : [];
-    const sizeMap = Object.fromEntries(allSizes.map((s) => [s.id, s]));
-    const activeSizesByType: Record<number, typeof allSizes> = {};
-    for (const s of allSizes) {
-      if (!s.isActive) continue;
-      if (!activeSizesByType[s.breadTypeId]) activeSizesByType[s.breadTypeId] = [];
-      activeSizesByType[s.breadTypeId].push(s);
-    }
+    const sizeIds = parsed.data.items.map((i) => i.breadSizeId);
+    const sizesInGroup = await db
+      .select()
+      .from(breadSizes)
+      .where(and(inArray(breadSizes.id, sizeIds), eq(breadSizes.groupId, groupId)));
+    const sizeMap = Object.fromEntries(sizesInGroup.map((s) => [s.id, s]));
 
+    const typeIds = parsed.data.items.map((i) => i.breadTypeId);
+    const links = await db
+      .select()
+      .from(breadTypeSizes)
+      .where(
+        and(
+          inArray(breadTypeSizes.breadTypeId, typeIds),
+          inArray(breadTypeSizes.breadSizeId, sizeIds)
+        )
+      );
+    const linkMap = new Map(links.map((l) => [`${l.breadTypeId}:${l.breadSizeId}`, l]));
+
+    const itemValues: typeof orderItems.$inferInsert[] = [];
     for (const item of parsed.data.items) {
-      if (!btMap[item.breadTypeId]) {
+      if (!validTypeIds.has(item.breadTypeId)) {
         return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
       }
-      const typeHasSizes = (activeSizesByType[item.breadTypeId]?.length ?? 0) > 0;
-      if (typeHasSizes && !item.breadSizeId) {
-        return errorResponse(`Size required for bread type ${item.breadTypeId}`, 400);
+      const size = sizeMap[item.breadSizeId];
+      if (!size) {
+        return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
       }
-      if (item.breadSizeId) {
-        const size = sizeMap[item.breadSizeId];
-        if (!size) return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
-        if (size.breadTypeId !== item.breadTypeId) {
-          return errorResponse(
-            `Size ${item.breadSizeId} does not belong to type ${item.breadTypeId}`,
-            400
-          );
-        }
+      const link = linkMap.get(`${item.breadTypeId}:${item.breadSizeId}`);
+      if (!link) {
+        return errorResponse(
+          `Size ${item.breadSizeId} not enabled for type ${item.breadTypeId}`,
+          400
+        );
       }
+      itemValues.push({
+        orderId: id,
+        breadTypeId: item.breadTypeId,
+        breadSizeId: item.breadSizeId,
+        quantity: item.quantity,
+        pricePerUnit: link.priceOverride ?? size.price,
+      });
     }
 
-    // Delete existing items and insert new ones
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
-
-    const itemValues = parsed.data.items.map((item) => ({
-      orderId: id,
-      breadTypeId: item.breadTypeId,
-      breadSizeId: item.breadSizeId ?? null,
-      quantity: item.quantity,
-      pricePerUnit: item.breadSizeId
-        ? sizeMap[item.breadSizeId].price
-        : btMap[item.breadTypeId].price,
-    }));
     await db.insert(orderItems).values(itemValues);
   }
 

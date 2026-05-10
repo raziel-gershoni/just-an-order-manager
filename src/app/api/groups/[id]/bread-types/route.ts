@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes, breadSizes } from '@/db/schema';
-import { eq, asc, sql, inArray } from 'drizzle-orm';
+import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function getGroupId(url: string): number {
@@ -22,40 +22,50 @@ export const GET = withAuth(async (request, auth) => {
     .orderBy(asc(breadTypes.sortOrder));
 
   const typeIds = types.map((t) => t.id);
-  const sizes = typeIds.length
+  const links = typeIds.length
     ? await db
-        .select()
-        .from(breadSizes)
-        .where(inArray(breadSizes.breadTypeId, typeIds))
-        .orderBy(asc(breadSizes.sortOrder))
+        .select({
+          breadTypeId: breadTypeSizes.breadTypeId,
+          breadSizeId: breadSizes.id,
+          name: breadSizes.name,
+          weightGrams: breadSizes.weightGrams,
+          price: breadSizes.price,
+          isDefault: breadSizes.isDefault,
+          isActive: breadSizes.isActive,
+          sortOrder: breadSizes.sortOrder,
+          priceOverride: breadTypeSizes.priceOverride,
+          junctionSortOrder: breadTypeSizes.sortOrder,
+        })
+        .from(breadTypeSizes)
+        .innerJoin(breadSizes, eq(breadTypeSizes.breadSizeId, breadSizes.id))
+        .where(inArray(breadTypeSizes.breadTypeId, typeIds))
+        .orderBy(asc(breadTypeSizes.sortOrder), asc(breadSizes.sortOrder))
     : [];
 
-  const sizesByType: Record<number, typeof sizes> = {};
-  for (const s of sizes) {
-    if (!sizesByType[s.breadTypeId]) sizesByType[s.breadTypeId] = [];
-    sizesByType[s.breadTypeId].push(s);
+  const enabledByType: Record<number, typeof links> = {};
+  for (const link of links) {
+    if (!enabledByType[link.breadTypeId]) enabledByType[link.breadTypeId] = [];
+    enabledByType[link.breadTypeId].push(link);
   }
 
   const breadTypesWithSizes = types.map((t) => ({
     ...t,
-    sizes: sizesByType[t.id] || [],
+    enabledSizes: (enabledByType[t.id] ?? []).map((l) => ({
+      id: l.breadSizeId,
+      name: l.name,
+      weightGrams: l.weightGrams,
+      price: l.price,
+      priceOverride: l.priceOverride,
+      isActive: l.isActive,
+    })),
   }));
 
   return jsonResponse({ breadTypes: breadTypesWithSizes });
 });
 
-const sizeSchema = z.object({
-  name: z.string().min(1).max(100),
-  weightGrams: z.number().int().positive().nullable().optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/),
-});
-
 const createBreadTypeSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(1000).optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-  sortOrder: z.number().int().optional(),
-  sizes: z.array(sizeSchema).optional(),
 });
 
 export const POST = withAuth(async (request, auth) => {
@@ -81,27 +91,46 @@ export const POST = withAuth(async (request, auth) => {
       groupId,
       name: parsed.data.name,
       description: parsed.data.description,
-      // Type-level price is a legacy fallback; default to 0 when sizes are provided
-      price: parsed.data.price ?? '0',
-      sortOrder: parsed.data.sortOrder ?? maxSort + 1,
+      sortOrder: maxSort + 1,
     })
     .returning();
 
-  let sizes: (typeof breadSizes.$inferSelect)[] = [];
-  if (parsed.data.sizes && parsed.data.sizes.length > 0) {
-    sizes = await db
-      .insert(breadSizes)
-      .values(
-        parsed.data.sizes.map((s, idx) => ({
-          breadTypeId: breadType.id,
-          name: s.name,
-          weightGrams: s.weightGrams ?? null,
-          price: s.price,
-          sortOrder: idx,
-        }))
+  // Auto-enable any default global sizes for this fresh type
+  const defaults = await db
+    .select()
+    .from(breadSizes)
+    .where(
+      and(
+        eq(breadSizes.groupId, groupId),
+        eq(breadSizes.isDefault, true),
+        eq(breadSizes.isActive, true)
       )
-      .returning();
+    );
+
+  if (defaults.length > 0) {
+    await db.insert(breadTypeSizes).values(
+      defaults.map((s, idx) => ({
+        breadTypeId: breadType.id,
+        breadSizeId: s.id,
+        sortOrder: idx,
+      }))
+    );
   }
 
-  return jsonResponse({ breadType: { ...breadType, sizes } }, 201);
+  return jsonResponse(
+    {
+      breadType: {
+        ...breadType,
+        enabledSizes: defaults.map((s) => ({
+          id: s.id,
+          name: s.name,
+          weightGrams: s.weightGrams,
+          price: s.price,
+          priceOverride: null,
+          isActive: s.isActive,
+        })),
+      },
+    },
+    201
+  );
 });

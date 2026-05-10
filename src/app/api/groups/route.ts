@@ -29,12 +29,10 @@ export const POST = withAuth(async (request, auth) => {
     role: 'owner',
   });
 
-  // Create default bread type
-  const defaultPrice = process.env.DEFAULT_BREAD_PRICE || '35';
+  // Create a default bread type (sizes are added later via the catalog UI)
   await db.insert(breadTypes).values({
     groupId: group.id,
     name: defaultBreadType || 'Sourdough',
-    price: defaultPrice,
     sortOrder: 0,
   });
 

@@ -1,13 +1,12 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes } from '@/db/schema';
+import { breadTypes, breadTypeSizes } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 const updateBreadTypeSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(1000).optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
@@ -67,7 +66,8 @@ export const DELETE = withAuth(async (request, auth) => {
   const hard = url.searchParams.get('hard') === 'true';
 
   if (hard) {
-    // Hard delete — will fail if orders reference this bread type
+    // Clear junction rows first so the bread_type_sizes FK doesn't block
+    await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, breadTypeId));
     try {
       await db.delete(breadTypes).where(eq(breadTypes.id, breadTypeId));
       return jsonResponse({ deleted: true });

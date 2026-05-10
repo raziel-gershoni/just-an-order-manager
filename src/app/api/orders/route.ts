@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
 import { formatItemLine } from '@/lib/order-display';
 import { z } from 'zod/v4';
@@ -85,7 +85,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 
 const itemSchema = z.object({
   breadTypeId: z.number().int().positive(),
-  breadSizeId: z.number().int().positive().nullable().optional(),
+  breadSizeId: z.number().int().positive(),
   quantity: z.number().int().positive().default(1),
 });
 
@@ -115,47 +115,56 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
 
-  // Get bread types for price snapshot + validation
+  // Validate every (type, size) pair against the junction; resolve effective price
   const allBreadTypes = await db
-    .select()
+    .select({ id: breadTypes.id, name: breadTypes.name })
     .from(breadTypes)
     .where(eq(breadTypes.groupId, groupId));
   const btMap = Object.fromEntries(allBreadTypes.map((bt) => [bt.id, bt]));
 
-  // Get all sizes for these types
-  const typeIds = allBreadTypes.map((bt) => bt.id);
-  const allSizes = typeIds.length
-    ? await db.select().from(breadSizes).where(inArray(breadSizes.breadTypeId, typeIds))
-    : [];
-  const sizeMap = Object.fromEntries(allSizes.map((s) => [s.id, s]));
-  const activeSizesByType: Record<number, typeof allSizes> = {};
-  for (const s of allSizes) {
-    if (!s.isActive) continue;
-    if (!activeSizesByType[s.breadTypeId]) activeSizesByType[s.breadTypeId] = [];
-    activeSizesByType[s.breadTypeId].push(s);
-  }
+  const sizeIds = items.map((i) => i.breadSizeId);
+  const sizesInGroup = await db
+    .select()
+    .from(breadSizes)
+    .where(and(inArray(breadSizes.id, sizeIds), eq(breadSizes.groupId, groupId)));
+  const sizeMap = Object.fromEntries(sizesInGroup.map((s) => [s.id, s]));
 
+  const typeIds = items.map((i) => i.breadTypeId);
+  const links = await db
+    .select()
+    .from(breadTypeSizes)
+    .where(
+      and(
+        inArray(breadTypeSizes.breadTypeId, typeIds),
+        inArray(breadTypeSizes.breadSizeId, sizeIds)
+      )
+    );
+  const linkMap = new Map(links.map((l) => [`${l.breadTypeId}:${l.breadSizeId}`, l]));
+
+  const itemValues: typeof orderItems.$inferInsert[] = [];
   for (const item of items) {
     if (!btMap[item.breadTypeId]) {
       return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
     }
-    const typeHasSizes = (activeSizesByType[item.breadTypeId]?.length ?? 0) > 0;
-    if (typeHasSizes && !item.breadSizeId) {
+    const size = sizeMap[item.breadSizeId];
+    if (!size) {
+      return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
+    }
+    const link = linkMap.get(`${item.breadTypeId}:${item.breadSizeId}`);
+    if (!link) {
       return errorResponse(
-        `Size required for bread type ${item.breadTypeId}`,
+        `Size ${item.breadSizeId} not enabled for type ${item.breadTypeId}`,
         400
       );
     }
-    if (item.breadSizeId) {
-      const size = sizeMap[item.breadSizeId];
-      if (!size) return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
-      if (size.breadTypeId !== item.breadTypeId) {
-        return errorResponse(
-          `Size ${item.breadSizeId} does not belong to type ${item.breadTypeId}`,
-          400
-        );
-      }
-    }
+    const pricePerUnit = link.priceOverride ?? size.price;
+    itemValues.push({
+      orderId: 0, // placeholder, filled after order insert
+      breadTypeId: item.breadTypeId,
+      breadSizeId: item.breadSizeId,
+      quantity: item.quantity,
+      pricePerUnit,
+    });
   }
 
   const resolvedDate = resolveDeliveryDate(deliveryType, deliveryDate);
@@ -174,16 +183,8 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     })
     .returning();
 
-  // Create order items — price snapshot from size if set, else from type
-  const itemValues = items.map((item) => ({
-    orderId: order.id,
-    breadTypeId: item.breadTypeId,
-    breadSizeId: item.breadSizeId ?? null,
-    quantity: item.quantity,
-    pricePerUnit: item.breadSizeId
-      ? sizeMap[item.breadSizeId].price
-      : btMap[item.breadTypeId].price,
-  }));
+  // Stamp the orderId on each item now that we have it
+  for (const iv of itemValues) iv.orderId = order.id;
 
   await db.insert(orderItems).values(itemValues);
 
