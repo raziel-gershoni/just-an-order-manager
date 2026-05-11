@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { customers } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { customers, customerPhones } from '@/db/schema';
+import { eq, and, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function getCustomerId(url: string): number {
@@ -18,12 +18,18 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     .limit(1);
 
   if (!customer) return errorResponse('Customer not found', 404);
-  return jsonResponse({ customer });
+
+  const phones = await db
+    .select({ id: customerPhones.id, phone: customerPhones.phone, sortOrder: customerPhones.sortOrder })
+    .from(customerPhones)
+    .where(eq(customerPhones.customerId, id))
+    .orderBy(asc(customerPhones.sortOrder));
+
+  return jsonResponse({ customer: { ...customer, phones } });
 });
 
 const updateCustomerSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  phone: z.string().max(50).optional(),
   address: z.string().max(500).optional(),
   city: z.string().max(255).optional(),
   telegramChatId: z.string().max(50).optional(),

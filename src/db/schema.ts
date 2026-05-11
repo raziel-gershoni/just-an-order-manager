@@ -153,7 +153,6 @@ export const customers = pgTable('customers', {
     .notNull()
     .references(() => groups.id),
   name: varchar('name', { length: 255 }).notNull(),
-  phone: varchar('phone', { length: 50 }),
   address: varchar('address', { length: 500 }),
   city: varchar('city', { length: 255 }),
   telegramChatId: varchar('telegram_chat_id', { length: 50 }),
@@ -161,6 +160,16 @@ export const customers = pgTable('customers', {
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const customerPhones = pgTable('customer_phones', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id),
+  phone: varchar('phone', { length: 50 }).notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 export const orders = pgTable('orders', {

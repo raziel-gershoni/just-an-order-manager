@@ -22,6 +22,7 @@ import {
   calculateOrderTotal,
   getCustomerBalance,
 } from '@/lib/order-payments';
+import { getCustomerPhones } from '@/lib/customer-phones';
 
 // ---- Helpers ----
 
@@ -453,14 +454,8 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     // Send WhatsApp notification when order is ready
     if (newStatus === 'ready') {
-      const [customer] = await db
-        .select({ phone: customers.phone })
-        .from(customers)
-        .where(eq(customers.id, order.customerId))
-        .limit(1);
-      if (customer) {
-        await notifyCustomerWhatsApp(customer.phone);
-      }
+      const phones = await getCustomerPhones(order.customerId);
+      await notifyCustomerWhatsApp(phones);
     }
 
     await ctx.answerCallbackQuery(`${t(`status.${newStatus}`, lang)} ✅`);

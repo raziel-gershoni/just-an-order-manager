@@ -6,6 +6,7 @@ import { formatItemLineForStaff } from '@/lib/order-display';
 import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
 import { notifyOrderReady, notifyCustomerWhatsApp } from '@/lib/notifications';
+import { getCustomerPhones } from '@/lib/customer-phones';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { ensureOrderCharge } from '@/lib/order-payments';
 
@@ -132,20 +133,17 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
         customerName: customer.name,
         itemsSummary: summary,
       });
-      if (shouldNotify) await notifyCustomerWhatsApp(customer.phone);
+      if (shouldNotify) {
+        const phones = await getCustomerPhones(order.customerId);
+        await notifyCustomerWhatsApp(phones);
+      }
     }
   }
 
   // Notify customer on cancel
   if (newStatus === 'cancelled' && shouldNotify) {
-    const [customer] = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.id, order.customerId))
-      .limit(1);
-    if (customer?.phone) {
-      await notifyCustomerWhatsApp(customer.phone, 'order_cancelled');
-    }
+    const phones = await getCustomerPhones(order.customerId);
+    await notifyCustomerWhatsApp(phones, 'order_cancelled');
   }
 
   return jsonResponse({ order: updated });

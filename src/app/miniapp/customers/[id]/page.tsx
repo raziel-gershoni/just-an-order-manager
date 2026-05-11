@@ -13,16 +13,22 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, MessageCircle, Repeat } from 'lucide-react';
+import { Plus, Banknote, Pencil, MessageCircle, Repeat, Trash2, Check, X } from 'lucide-react';
 import Link from 'next/link';
+
+interface CustomerPhone {
+  id: number;
+  phone: string;
+  sortOrder: number;
+}
 
 interface Customer {
   id: number;
   name: string;
-  phone: string | null;
   address: string | null;
   city: string | null;
   notes: string | null;
+  phones: CustomerPhone[];
 }
 interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; isRecurring?: boolean; totalQuantity: number; itemsSummary: string }
 interface Payment { id: number; amount: string; type: string; description: string | null; createdAt: string }
@@ -42,12 +48,17 @@ export default function CustomerDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editCity, setEditCity] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
+
+  // Phone management state
+  const [editingPhoneId, setEditingPhoneId] = useState<number | null>(null);
+  const [editPhoneValue, setEditPhoneValue] = useState('');
+  const [newPhoneValue, setNewPhoneValue] = useState('');
+  const [showAddPhone, setShowAddPhone] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -69,7 +80,6 @@ export default function CustomerDetailPage() {
   function startEditing() {
     if (!customer) return;
     setEditName(customer.name);
-    setEditPhone(customer.phone || '');
     setEditAddress(customer.address || '');
     setEditCity(customer.city || '');
     setEditNotes(customer.notes || '');
@@ -80,26 +90,69 @@ export default function CustomerDetailPage() {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      const { customer: updated } = await apiFetch<{ customer: Customer }>(
+      const { customer: updated } = await apiFetch<{ customer: Omit<Customer, 'phones'> }>(
         `/customers/${id}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
             name: editName.trim(),
-            phone: editPhone || undefined,
             address: editAddress || undefined,
             city: editCity || undefined,
             notes: editNotes || undefined,
           }),
         }
       );
-      setCustomer(updated);
+      setCustomer((prev) => prev ? { ...prev, ...updated } : prev);
       setEditing(false);
       toast.success(t('customers.saved'));
     } catch {
       toast.error(t('customers.save_failed'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addPhone() {
+    if (!newPhoneValue.trim() || !customer) return;
+    try {
+      const { phone } = await apiFetch<{ phone: CustomerPhone }>(
+        `/customers/${id}/phones`,
+        { method: 'POST', body: JSON.stringify({ phone: newPhoneValue.trim() }) }
+      );
+      setCustomer((prev) => prev ? { ...prev, phones: [...prev.phones, phone] } : prev);
+      setNewPhoneValue('');
+      setShowAddPhone(false);
+    } catch {
+      toast.error(t('customers.save_failed'));
+    }
+  }
+
+  async function savePhone(phoneId: number) {
+    if (!editPhoneValue.trim()) return;
+    try {
+      const { phone } = await apiFetch<{ phone: CustomerPhone }>(
+        `/customer-phones/${phoneId}`,
+        { method: 'PATCH', body: JSON.stringify({ phone: editPhoneValue.trim() }) }
+      );
+      setCustomer((prev) => prev ? {
+        ...prev,
+        phones: prev.phones.map((p) => p.id === phoneId ? phone : p),
+      } : prev);
+      setEditingPhoneId(null);
+    } catch {
+      toast.error(t('customers.save_failed'));
+    }
+  }
+
+  async function deletePhone(phoneId: number) {
+    try {
+      await apiFetch(`/customer-phones/${phoneId}`, { method: 'DELETE' });
+      setCustomer((prev) => prev ? {
+        ...prev,
+        phones: prev.phones.filter((p) => p.id !== phoneId),
+      } : prev);
+    } catch {
+      toast.error(t('customers.save_failed'));
     }
   }
 
@@ -170,7 +223,7 @@ export default function CustomerDetailPage() {
         </div>
 
         {/* Reminder button */}
-        {customer.phone && (
+        {customer.phones.length > 0 && (
           <button
             disabled={sendingReminder}
             onClick={async () => {
@@ -195,12 +248,75 @@ export default function CustomerDetailPage() {
           </button>
         )}
 
-        {/* Info / Edit */}
+        {/* Phones — manage inline (always visible, independent of edit drawer) */}
+        <Card className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">{t('customers.phones')}</span>
+          </div>
+          {customer.phones.length === 0 && !showAddPhone && (
+            <p className="text-xs text-muted-foreground italic">{t('customers.no_phones')}</p>
+          )}
+          {customer.phones.map((p) => (
+            editingPhoneId === p.id ? (
+              <div key={p.id} className="flex items-center gap-2">
+                <Input
+                  type="tel"
+                  value={editPhoneValue}
+                  onChange={(e) => setEditPhoneValue(e.target.value)}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => savePhone(p.id)}>
+                  <Check className="h-4 w-4 text-emerald-600" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditingPhoneId(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="tabular-nums">{p.phone}</span>
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => deletePhone(p.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )
+          ))}
+          {showAddPhone ? (
+            <div className="flex items-center gap-2">
+              <Input
+                type="tel"
+                value={newPhoneValue}
+                onChange={(e) => setNewPhoneValue(e.target.value)}
+                placeholder="050-1234567"
+                className="flex-1"
+                autoFocus
+              />
+              <Button size="icon" variant="ghost" className="h-9 w-9" disabled={!newPhoneValue.trim()} onClick={addPhone}>
+                <Check className="h-4 w-4 text-emerald-600" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setShowAddPhone(false); setNewPhoneValue(''); }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAddPhone(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              {t('customers.add_phone')}
+            </Button>
+          )}
+        </Card>
+
+        {/* Info / Edit — name, address, city, notes only (phones managed above) */}
         <Card>
           {editing ? (
             <div className="space-y-3">
               <Input label={t('form.customer_name')} value={editName} onChange={(e) => setEditName(e.target.value)} />
-              <Input label={t('customers.phone')} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} type="tel" />
               <Input label={t('customers.address')} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
               <Input label={t('customers.city')} value={editCity} onChange={(e) => setEditCity(e.target.value)} />
               <TextArea label={t('notify.notes')} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
@@ -223,12 +339,6 @@ export default function CustomerDetailPage() {
                 </Button>
               </div>
               <div className="space-y-2">
-                {customer.phone && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t('customers.phone')}</span>
-                    <span>{customer.phone}</span>
-                  </div>
-                )}
                 {customer.address && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{t('customers.address')}</span>
@@ -247,7 +357,7 @@ export default function CustomerDetailPage() {
                     <p className="mt-1">{customer.notes}</p>
                   </div>
                 )}
-                {!customer.phone && !customer.address && !customer.city && !customer.notes && (
+                {!customer.address && !customer.city && !customer.notes && (
                   <p className="text-sm text-muted-foreground">{t('customers.empty_hint')}</p>
                 )}
               </div>

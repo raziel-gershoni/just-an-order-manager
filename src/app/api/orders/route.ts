@@ -6,6 +6,7 @@ import { formatItemLine } from '@/lib/order-display';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
+import { getCustomerPhones } from '@/lib/customer-phones';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -217,10 +218,11 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     notes: notes ?? null,
   });
 
-  // WhatsApp notification to customer — name only, no weight
+  // WhatsApp notification to customer — name only, no weight, sent to all phones
   if (notifyCustomer !== false) {
+    const phones = await getCustomerPhones(customer.id);
     const itemsSummary = customerItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
-    await notifyCustomerWhatsApp(customer.phone, 'order_received', [`: ${itemsSummary}`]);
+    await notifyCustomerWhatsApp(phones, 'order_received', [`: ${itemsSummary}`]);
   }
 
   return jsonResponse({ order, items: itemValues }, 201);

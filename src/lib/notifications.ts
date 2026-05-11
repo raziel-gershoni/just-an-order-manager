@@ -105,14 +105,21 @@ export async function notifyOrderReady(
   );
 }
 
+/**
+ * Send a WhatsApp template to all phones a customer has registered.
+ * Each phone gets one independent send via Promise.allSettled — one failure
+ * doesn't block the others.
+ */
 export async function notifyCustomerWhatsApp(
-  customerPhone: string | null,
+  customerPhones: string[] | null,
   templateName?: string,
   params?: string[]
 ) {
-  if (!customerPhone) return;
+  if (!customerPhones || customerPhones.length === 0) return;
   const template = templateName || process.env.WHATSAPP_TEMPLATE_NAME || 'order_ready';
-  await sendWhatsAppTemplate(customerPhone, template, 'he', params);
+  await Promise.allSettled(
+    customerPhones.map((p) => sendWhatsAppTemplate(p, template, 'he', params))
+  );
 }
 
 export async function notifyPrepayment(

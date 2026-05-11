@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { customers } from '@/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { customers, customerPhones } from '@/db/schema';
+import { eq, and, inArray, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 
@@ -25,7 +25,23 @@ export const POST = withGroup(async (request, auth, groupId) => {
     conditions.push(inArray(customers.id, parsed.data.customerIds));
   }
 
-  const targets = await db.select().from(customers).where(and(...conditions));
+  const targets = await db.select({ id: customers.id }).from(customers).where(and(...conditions));
+  const targetIds = targets.map((t) => t.id);
+
+  const phones = targetIds.length
+    ? await db
+        .select({ customerId: customerPhones.customerId, phone: customerPhones.phone })
+        .from(customerPhones)
+        .where(inArray(customerPhones.customerId, targetIds))
+        .orderBy(asc(customerPhones.sortOrder))
+    : [];
+
+  const phonesByCustomer = new Map<number, string[]>();
+  for (const p of phones) {
+    const arr = phonesByCustomer.get(p.customerId) ?? [];
+    arr.push(p.phone);
+    phonesByCustomer.set(p.customerId, arr);
+  }
 
   const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE || 'order_reminder';
 
@@ -33,15 +49,20 @@ export const POST = withGroup(async (request, auth, groupId) => {
   let failed = 0;
   let skipped = 0;
 
+  // For each customer, send a reminder to every phone they have. A customer with
+  // no phones counts as one skipped customer (matches previous semantics).
   const results = await Promise.allSettled(
     targets.map(async (c) => {
-      if (!c.phone) {
+      const customerPhonesList = phonesByCustomer.get(c.id) ?? [];
+      if (customerPhonesList.length === 0) {
         skipped++;
         return;
       }
-      const ok = await sendWhatsAppTemplate(c.phone, templateName, 'he');
-      if (ok) sent++;
-      else failed++;
+      for (const phone of customerPhonesList) {
+        const ok = await sendWhatsAppTemplate(phone, templateName, 'he');
+        if (ok) sent++;
+        else failed++;
+      }
     })
   );
 

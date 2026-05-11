@@ -36,6 +36,13 @@
       "when": 1778256000000,
       "tag": "0004_global_sizes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778688000000,
+      "tag": "0005_customer_phones",
+      "breakpoints": true
     }
   ]
 }

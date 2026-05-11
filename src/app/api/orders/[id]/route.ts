@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 
@@ -23,7 +23,6 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       updatedAt: orders.updatedAt,
       customerName: customers.name,
       customerId: customers.id,
-      customerPhone: customers.phone,
       totalOverride: orders.totalOverride,
       paid: orders.paid,
       isRecurring: orders.isRecurring,
@@ -57,7 +56,16 @@ export const GET = withGroup(async (request, _auth, groupId) => {
   );
   const totalPrice = order.totalOverride ? Number(order.totalOverride) : calculatedTotal;
 
-  return jsonResponse({ order: { ...order, items, totalQuantity, totalPrice, calculatedTotal } });
+  // Count of customer phones — used by the order UI to decide whether to
+  // show the "notify customer" checkbox on status changes.
+  const [{ phoneCount }] = await db
+    .select({ phoneCount: sql<number>`COUNT(*)::int` })
+    .from(customerPhones)
+    .where(eq(customerPhones.customerId, order.customerId));
+
+  return jsonResponse({
+    order: { ...order, items, totalQuantity, totalPrice, calculatedTotal, customerPhoneCount: phoneCount },
+  });
 });
 
 const updateOrderSchema = z.object({

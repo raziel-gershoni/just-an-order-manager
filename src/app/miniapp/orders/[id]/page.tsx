@@ -36,7 +36,7 @@ interface OrderDetail {
   createdAt: string;
   customerName: string;
   customerId: number;
-  customerPhone: string | null;
+  customerPhoneCount: number;
   items: OrderItem[];
   totalQuantity: number;
   totalPrice: number;
@@ -320,7 +320,7 @@ export default function OrderDetailPage() {
         )}
 
         {/* Notify customer toggle (only when an action would send WA) */}
-        {!showDeliveryPay && order.customerPhone && (nonDeliverActions.includes('ready') || nonDeliverActions.includes('cancelled')) && (
+        {!showDeliveryPay && order.customerPhoneCount > 0 && (nonDeliverActions.includes('ready') || nonDeliverActions.includes('cancelled')) && (
           <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-muted/50 transition-colors -my-1">
             <input
               type="checkbox"
