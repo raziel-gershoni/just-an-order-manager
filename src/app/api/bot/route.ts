@@ -11,6 +11,8 @@ import {
   customers,
   breadTypes,
   breadSizes,
+  breadAdditions,
+  orderItemAdditions,
 } from '@/db/schema';
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
@@ -227,6 +229,7 @@ function setupHandlers(bot: import('grammy').Bot) {
     if (orderIds.length === 0) return {};
     const allItems = await db
       .select({
+        id: orderItems.id,
         orderId: orderItems.orderId,
         typeName: breadTypes.name,
         sizeName: breadSizes.name,
@@ -238,12 +241,28 @@ function setupHandlers(bot: import('grammy').Bot) {
       .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
       .where(inArray(orderItems.orderId, orderIds));
 
+    const itemIds = allItems.map((i) => i.id);
+    const additionLinks = itemIds.length
+      ? await db
+          .select({ orderItemId: orderItemAdditions.orderItemId, name: breadAdditions.name })
+          .from(orderItemAdditions)
+          .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
+          .where(inArray(orderItemAdditions.orderItemId, itemIds))
+      : [];
+    const additionsByItem: Record<number, string[]> = {};
+    for (const a of additionLinks) {
+      if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
+      additionsByItem[a.orderItemId].push(a.name);
+    }
+
     const map: Record<number, { breadTypeName: string; quantity: number }[]> = {};
     for (const item of allItems) {
       if (!map[item.orderId]) map[item.orderId] = [];
       const base = item.sizeName ? `${item.typeName} ${item.sizeName}` : item.typeName;
-      const withWeight = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
-      map[item.orderId].push({ breadTypeName: withWeight, quantity: item.quantity });
+      let label = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
+      const adds = additionsByItem[item.id] ?? [];
+      if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
+      map[item.orderId].push({ breadTypeName: label, quantity: item.quantity });
     }
     return map;
   }

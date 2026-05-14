@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes, payments } from '@/db/schema';
-import { eq, and, gte, lte, sql, ne, inArray, or, isNull, notInArray } from 'drizzle-orm';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions, payments } from '@/db/schema';
+import { eq, and, asc, gte, lte, sql, ne, inArray, or, isNull, notInArray } from 'drizzle-orm';
 import { format, addDays, startOfDay } from 'date-fns';
 import { formatItemLine } from '@/lib/order-display';
 
@@ -11,6 +11,7 @@ async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any
 
   const allItems = await db
     .select({
+      id: orderItems.id,
       orderId: orderItems.orderId,
       breadTypeName: breadTypes.name,
       sizeName: breadSizes.name,
@@ -21,10 +22,26 @@ async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
     .where(inArray(orderItems.orderId, orderIds));
 
-  const itemsMap: Record<number, typeof allItems> = {};
+  const itemIds = allItems.map((i) => i.id);
+  const additionLinks = itemIds.length
+    ? await db
+        .select({ orderItemId: orderItemAdditions.orderItemId, name: breadAdditions.name })
+        .from(orderItemAdditions)
+        .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
+        .where(inArray(orderItemAdditions.orderItemId, itemIds))
+        .orderBy(asc(breadAdditions.sortOrder))
+    : [];
+  const additionsByItem: Record<number, string[]> = {};
+  for (const a of additionLinks) {
+    if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
+    additionsByItem[a.orderItemId].push(a.name);
+  }
+
+  type ItemWithAdditions = typeof allItems[number] & { additions: string[] };
+  const itemsMap: Record<number, ItemWithAdditions[]> = {};
   for (const item of allItems) {
     if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
-    itemsMap[item.orderId].push(item);
+    itemsMap[item.orderId].push({ ...item, additions: additionsByItem[item.id] ?? [] });
   }
 
   return orderRows.map((o) => {
@@ -33,7 +50,7 @@ async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any
       ...o,
       items,
       totalQuantity: items.reduce((s, i) => s + i.quantity, 0),
-      itemsSummary: items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName)).join(', '),
+      itemsSummary: items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName, i.additions)).join(', '),
     };
   });
 }

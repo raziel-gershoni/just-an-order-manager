@@ -21,6 +21,7 @@ interface OrderItem {
   id: number;
   breadTypeName: string;
   sizeName?: string | null;
+  additions?: { id: number; name: string }[];
   quantity: number;
   pricePerUnit: string | null;
 }
@@ -247,6 +248,9 @@ export default function OrderDetailPage() {
                   <span className="font-medium">
                     {item.breadTypeName}
                     {item.sizeName && <span className="text-muted-foreground"> {item.sizeName}</span>}
+                    {item.additions && item.additions.length > 0 && (
+                      <span className="text-muted-foreground"> (עם {item.additions.map((a) => a.name).join(', ')})</span>
+                    )}
                   </span>
                   <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                     ×{item.quantity}

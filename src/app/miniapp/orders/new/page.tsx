@@ -15,8 +15,9 @@ import { getInitial } from '@/lib/name-utils';
 
 interface Customer { id: number; name: string; phone?: string | null }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string }
-interface BreadType { id: number; name: string; enabledSizes?: BreadSize[] }
-interface LineItem { breadTypeId: number; breadSizeId: number | null; quantity: number }
+interface BreadAddition { id: number; name: string }
+interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enabledAdditions?: BreadAddition[] }
+interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAdditionIds: number[]; quantity: number }
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
@@ -94,9 +95,10 @@ function OrderFormContent() {
           }
           setCustomerId(order.customerId);
           setCustomerName(order.customerName);
-          setItems(order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number }) => ({
+          setItems(order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[] }) => ({
             breadTypeId: i.breadTypeId,
             breadSizeId: i.breadSizeId ?? null,
+            breadAdditionIds: (i.additions ?? []).map((a) => a.id),
             quantity: i.quantity,
           })));
           setDeliveryType(order.deliveryType as DeliveryType);
@@ -107,7 +109,7 @@ function OrderFormContent() {
         } else if (!isEdit && b.breadTypes.length > 0) {
           const firstType = b.breadTypes[0];
           const defaultSize = firstType.enabledSizes?.[0];
-          setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, quantity: 1 }]);
+          setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [], quantity: 1 }]);
         }
       })
       .catch(() => {})
@@ -132,7 +134,7 @@ function OrderFormContent() {
     if (breadTypes.length === 0) return;
     const firstType = breadTypes[0];
     const defaultSize = firstType.enabledSizes?.[0];
-    setItems((prev) => [...prev, { breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, quantity: 1 }]);
+    setItems((prev) => [...prev, { breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [], quantity: 1 }]);
   }
 
   async function handleCreateCustomer() {
@@ -305,7 +307,7 @@ function OrderFormContent() {
                       const newTypeId = Number(e.target.value);
                       const newType = breadTypes.find((bt) => bt.id === newTypeId);
                       const defaultSize = newType?.enabledSizes?.[0];
-                      updateItem(idx, { breadTypeId: newTypeId, breadSizeId: defaultSize?.id ?? null });
+                      updateItem(idx, { breadTypeId: newTypeId, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [] });
                     }}
                   >
                     {breadTypes.map((bt) => (
@@ -341,6 +343,38 @@ function OrderFormContent() {
                   ) : (
                     <div className="text-xs text-destructive/80 px-1 py-1.5">
                       {t('form.no_sizes_for_type')}
+                    </div>
+                  )}
+
+                  {/* Additions — multi-select chips */}
+                  {(selectedType?.enabledAdditions?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1.5 px-1">{t('form.additions')}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedType!.enabledAdditions!.map((a) => {
+                          const selected = item.breadAdditionIds.includes(a.id);
+                          return (
+                            <button
+                              key={a.id}
+                              type="button"
+                              className={cn(
+                                'px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border',
+                                selected
+                                  ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
+                                  : 'bg-card border-border hover:bg-muted text-muted-foreground'
+                              )}
+                              onClick={() => {
+                                const next = selected
+                                  ? item.breadAdditionIds.filter((id) => id !== a.id)
+                                  : [...item.breadAdditionIds, a.id];
+                                updateItem(idx, { breadAdditionIds: next });
+                              }}
+                            >
+                              {a.name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 

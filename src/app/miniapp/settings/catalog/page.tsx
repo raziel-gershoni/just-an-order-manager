@@ -34,6 +34,8 @@ interface EnabledSize {
   isActive: boolean;
 }
 
+interface EnabledAddition { id: number; name: string; isActive: boolean }
+
 interface BreadType {
   id: number;
   name: string;
@@ -41,6 +43,7 @@ interface BreadType {
   isActive: boolean;
   sortOrder: number;
   enabledSizes: EnabledSize[];
+  enabledAdditions: EnabledAddition[];
 }
 
 interface TypeDetailSize {
@@ -53,6 +56,21 @@ interface TypeDetailSize {
   priceOverride: string | null;
 }
 
+interface TypeDetailAddition {
+  id: number;
+  name: string;
+  isDefault: boolean;
+  enabled: boolean;
+}
+
+interface BreadAddition {
+  id: number;
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export default function CatalogPage() {
   const { apiFetch } = useApi();
   const { activeGroupId } = useGroup();
@@ -60,6 +78,7 @@ export default function CatalogPage() {
   const toast = useToast();
 
   const [sizes, setSizes] = useState<BreadSize[]>([]);
+  const [additions, setAdditions] = useState<BreadAddition[]>([]);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -75,9 +94,18 @@ export default function CatalogPage() {
   const [newSizeDefault, setNewSizeDefault] = useState(false);
   const [savingSizeOrder, setSavingSizeOrder] = useState(false);
 
+  // ---- Additions catalog state ----
+  const [editingAdditionId, setEditingAdditionId] = useState<number | null>(null);
+  const [editAdditionName, setEditAdditionName] = useState('');
+  const [showAddAddition, setShowAddAddition] = useState(false);
+  const [newAdditionName, setNewAdditionName] = useState('');
+  const [newAdditionDefault, setNewAdditionDefault] = useState(false);
+  const [savingAdditionOrder, setSavingAdditionOrder] = useState(false);
+
   // ---- Bread types state ----
   const [expandedTypeId, setExpandedTypeId] = useState<number | null>(null);
   const [typeDetailSizes, setTypeDetailSizes] = useState<TypeDetailSize[]>([]);
+  const [typeDetailAdditions, setTypeDetailAdditions] = useState<TypeDetailAddition[]>([]);
   const [typeNameDraft, setTypeNameDraft] = useState('');
   const [savingType, setSavingType] = useState(false);
   const [showAddType, setShowAddType] = useState(false);
@@ -89,10 +117,12 @@ export default function CatalogPage() {
     Promise.all([
       apiFetch<{ breadTypes: BreadType[] }>(`/groups/${activeGroupId}/bread-types`),
       apiFetch<{ sizes: BreadSize[] }>(`/groups/${activeGroupId}/bread-sizes`),
+      apiFetch<{ additions: BreadAddition[] }>(`/groups/${activeGroupId}/bread-additions`),
     ])
-      .then(([typesResp, sizesResp]) => {
+      .then(([typesResp, sizesResp, additionsResp]) => {
         setBreadTypes(typesResp.breadTypes);
         setSizes(sizesResp.sizes);
+        setAdditions(additionsResp.additions);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -182,6 +212,82 @@ export default function CatalogPage() {
     }
   }
 
+  // ============ ADDITIONS CATALOG ============
+
+  async function addAddition() {
+    if (!newAdditionName.trim() || !activeGroupId) return;
+    const { addition } = await apiFetch<{ addition: BreadAddition }>(
+      `/groups/${activeGroupId}/bread-additions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newAdditionName.trim(),
+          isDefault: newAdditionDefault,
+        }),
+      }
+    );
+    setAdditions((prev) => [...prev, addition]);
+    setNewAdditionName('');
+    setNewAdditionDefault(false);
+    setShowAddAddition(false);
+  }
+
+  async function saveAddition(id: number) {
+    if (!editAdditionName.trim()) return;
+    const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: editAdditionName.trim() }),
+    });
+    setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+    setEditingAdditionId(null);
+  }
+
+  async function toggleAdditionDefault(id: number, current: boolean) {
+    const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isDefault: !current }),
+    });
+    setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+  }
+
+  async function toggleAdditionActive(id: number, isActive: boolean) {
+    const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
+      method: isActive ? 'DELETE' : 'PATCH',
+      ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
+    });
+    setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+  }
+
+  async function deleteAddition(id: number) {
+    try {
+      await apiFetch(`/bread-additions/${id}?hard=true`, { method: 'DELETE' });
+      setAdditions((prev) => prev.filter((a) => a.id !== id));
+      setEditingAdditionId(null);
+    } catch {
+      toast.error(t('settings.delete_failed'));
+    }
+  }
+
+  async function moveAddition(id: number, dir: 'up' | 'down') {
+    const idx = additions.findIndex((a) => a.id === id);
+    const target = dir === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || target < 0 || target >= additions.length) return;
+    const next = [...additions];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setAdditions(next);
+    setSavingAdditionOrder(true);
+    try {
+      await apiFetch(`/groups/${activeGroupId}/bread-additions/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ orderedIds: next.map((a) => a.id) }),
+      });
+    } catch {
+      toast.error(t('settings.reorder_failed'));
+    } finally {
+      setSavingAdditionOrder(false);
+    }
+  }
+
   // ============ BREAD TYPES ============
 
   async function expandType(typeId: number) {
@@ -193,10 +299,17 @@ export default function CatalogPage() {
     const type = breadTypes.find((t) => t.id === typeId);
     if (type) setTypeNameDraft(type.name);
 
-    const { breadType } = await apiFetch<{ breadType: { sizes: TypeDetailSize[] } }>(
+    const { breadType } = await apiFetch<{ breadType: { sizes: TypeDetailSize[]; additions: TypeDetailAddition[] } }>(
       `/groups/${activeGroupId}/bread-types/${typeId}`
     );
     setTypeDetailSizes(breadType.sizes);
+    setTypeDetailAdditions(breadType.additions);
+  }
+
+  function toggleAdditionEnabledForType(additionId: number) {
+    setTypeDetailAdditions((prev) =>
+      prev.map((a) => (a.id === additionId ? { ...a, enabled: !a.enabled } : a))
+    );
   }
 
   function toggleEnabled(sizeId: number) {
@@ -231,7 +344,7 @@ export default function CatalogPage() {
       }
 
       // Save enabled sizes
-      const enabled = typeDetailSizes
+      const enabledSizes = typeDetailSizes
         .filter((s) => s.enabled)
         .map((s) => ({
           breadSizeId: s.id,
@@ -239,10 +352,17 @@ export default function CatalogPage() {
         }));
       await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/sizes`, {
         method: 'PUT',
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify({ enabled: enabledSizes }),
       });
 
-      // Update local breadTypes.enabledSizes for the count display
+      // Save enabled additions
+      const enabledAdditions = typeDetailAdditions.filter((a) => a.enabled).map((a) => a.id);
+      await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/additions`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: enabledAdditions }),
+      });
+
+      // Update local breadTypes for count display
       setBreadTypes((prev) =>
         prev.map((t) =>
           t.id === typeId
@@ -258,6 +378,9 @@ export default function CatalogPage() {
                     priceOverride: s.priceOverride,
                     isActive: true,
                   })),
+                enabledAdditions: typeDetailAdditions
+                  .filter((a) => a.enabled)
+                  .map((a) => ({ id: a.id, name: a.name, isActive: true })),
               }
             : t
         )
@@ -291,10 +414,11 @@ export default function CatalogPage() {
       setBreadTypes((prev) => [...prev, breadType]);
       setExpandedTypeId(breadType.id);
       // Pre-load detail (it has the auto-enabled defaults)
-      const { breadType: detail } = await apiFetch<{ breadType: { sizes: TypeDetailSize[] } }>(
+      const { breadType: detail } = await apiFetch<{ breadType: { sizes: TypeDetailSize[]; additions: TypeDetailAddition[] } }>(
         `/groups/${activeGroupId}/bread-types/${breadType.id}`
       );
       setTypeDetailSizes(detail.sizes);
+      setTypeDetailAdditions(detail.additions);
       setTypeNameDraft(breadType.name);
       setNewTypeName('');
       setShowAddType(false);
@@ -491,6 +615,129 @@ export default function CatalogPage() {
           )}
         </section>
 
+        {/* ADDITIONS CATALOG */}
+        <section>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+            {t('settings.additions')}
+          </h2>
+
+          <div className="space-y-2">
+            {additions.length === 0 && (
+              <Card className="text-sm text-muted-foreground italic text-center py-6">—</Card>
+            )}
+            {additions.map((a, idx) =>
+              editingAdditionId === a.id ? (
+                <Card key={a.id} className="animate-expand p-3 space-y-3">
+                  <Input
+                    label={t('settings.name')}
+                    value={editAdditionName}
+                    onChange={(e) => setEditAdditionName(e.target.value)}
+                  />
+                  <div className="flex gap-2 items-center pt-1">
+                    <Button size="sm" className="flex-1" onClick={() => saveAddition(a.id)}>{t('settings.save')}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingAdditionId(null)}>{t('payments.cancel')}</Button>
+                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteAddition(a.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </Card>
+              ) : (
+                <Card key={a.id} className="flex justify-between items-center">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex flex-col -my-1 shrink-0">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={savingAdditionOrder || idx === 0}
+                        onClick={() => moveAddition(a.id, 'up')}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={savingAdditionOrder || idx === additions.length - 1}
+                        onClick={() => moveAddition(a.id, 'down')}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <span className={cn('font-medium', !a.isActive && 'text-muted-foreground line-through')}>
+                      {a.name}
+                    </span>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => toggleAdditionDefault(a.id, a.isDefault)}
+                      aria-label={t('settings.is_default')}
+                      title={t('settings.is_default_hint')}
+                    >
+                      <Star
+                        className={cn(
+                          'h-3.5 w-3.5',
+                          a.isDefault ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/40'
+                        )}
+                      />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => {
+                      setEditingAdditionId(a.id);
+                      setEditAdditionName(a.name);
+                    }}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => toggleAdditionActive(a.id, a.isActive)}>
+                      {a.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                </Card>
+              )
+            )}
+          </div>
+
+          {showAddAddition ? (
+            <Card className="mt-3 p-3 space-y-3 animate-expand">
+              <Input
+                label={t('settings.name')}
+                value={newAdditionName}
+                onChange={(e) => setNewAdditionName(e.target.value)}
+                placeholder="פשטן"
+              />
+              <label className="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-muted/50 transition-colors -my-1">
+                <input
+                  type="checkbox"
+                  checked={newAdditionDefault}
+                  onChange={(e) => setNewAdditionDefault(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 text-sm font-medium">
+                    <Star className="h-3.5 w-3.5" />
+                    {t('settings.is_default')}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {t('settings.is_default_hint')}
+                  </div>
+                </div>
+              </label>
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1" onClick={addAddition}>{t('form.add')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setShowAddAddition(false); setNewAdditionName(''); setNewAdditionDefault(false); }}>
+                  {t('payments.cancel')}
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <Button variant="ghost" size="sm" className="mt-3" onClick={() => setShowAddAddition(true)}>
+              <Plus className="h-4 w-4" />
+              {t('settings.add_addition')}
+            </Button>
+          )}
+        </section>
+
         {/* BREAD TYPES */}
         <section>
           <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
@@ -583,6 +830,36 @@ export default function CatalogPage() {
                         ))}
                       </div>
                     </div>
+
+                    {/* Additions matrix */}
+                    {typeDetailAdditions.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-muted-foreground mb-2">
+                          {t('settings.enabled_additions')}
+                        </div>
+                        <div className="space-y-1.5">
+                          {typeDetailAdditions.map((a) => (
+                            <label
+                              key={a.id}
+                              className={cn(
+                                'flex items-center gap-2.5 cursor-pointer rounded-lg border p-2.5 transition-colors',
+                                a.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={a.enabled}
+                                onChange={() => toggleAdditionEnabledForType(a.id)}
+                                className="h-4 w-4 accent-primary cursor-pointer"
+                              />
+                              <span className={cn('text-sm font-medium flex-1', !a.enabled && 'text-muted-foreground')}>
+                                {a.name}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex gap-2 items-center pt-1">
                       <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(bt.id)}>

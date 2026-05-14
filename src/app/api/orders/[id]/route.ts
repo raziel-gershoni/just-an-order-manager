@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions } from '@/db/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
@@ -34,7 +34,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 
   if (!order) return errorResponse('Order not found', 404);
 
-  const items = await db
+  const itemRows = await db
     .select({
       id: orderItems.id,
       breadTypeId: orderItems.breadTypeId,
@@ -48,6 +48,32 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
     .where(eq(orderItems.orderId, order.id));
+
+  // Fetch additions per item
+  const itemIds = itemRows.map((i) => i.id);
+  const additionLinks = itemIds.length
+    ? await db
+        .select({
+          orderItemId: orderItemAdditions.orderItemId,
+          breadAdditionId: breadAdditions.id,
+          name: breadAdditions.name,
+          sortOrder: breadAdditions.sortOrder,
+        })
+        .from(orderItemAdditions)
+        .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
+        .where(inArray(orderItemAdditions.orderItemId, itemIds))
+    : [];
+
+  const additionsByItem: Record<number, { id: number; name: string }[]> = {};
+  for (const a of additionLinks) {
+    if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
+    additionsByItem[a.orderItemId].push({ id: a.breadAdditionId, name: a.name });
+  }
+
+  const items = itemRows.map((i) => ({
+    ...i,
+    additions: additionsByItem[i.id] ?? [],
+  }));
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
   const calculatedTotal = items.reduce(
@@ -77,6 +103,7 @@ const updateOrderSchema = z.object({
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
     breadSizeId: z.number().int().positive(),
+    breadAdditionIds: z.array(z.number().int().positive()).optional(),
     quantity: z.number().int().positive(),
   })).min(1).optional(),
 });
@@ -158,6 +185,31 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       );
     const linkMap = new Map(links.map((l) => [`${l.breadTypeId}:${l.breadSizeId}`, l]));
 
+    // Validate additions per item
+    const allAdditionIds = parsed.data.items.flatMap((i) => i.breadAdditionIds ?? []);
+    const additionRows = allAdditionIds.length
+      ? await db
+          .select()
+          .from(breadAdditions)
+          .where(and(inArray(breadAdditions.id, allAdditionIds), eq(breadAdditions.groupId, groupId)))
+      : [];
+    const additionMap = new Map(additionRows.map((a) => [a.id, a]));
+
+    const additionTypeLinks = allAdditionIds.length
+      ? await db
+          .select()
+          .from(breadTypeAdditions)
+          .where(
+            and(
+              inArray(breadTypeAdditions.breadTypeId, typeIds),
+              inArray(breadTypeAdditions.breadAdditionId, allAdditionIds)
+            )
+          )
+      : [];
+    const additionLinkSet = new Set(
+      additionTypeLinks.map((l) => `${l.breadTypeId}:${l.breadAdditionId}`)
+    );
+
     const itemValues: typeof orderItems.$inferInsert[] = [];
     for (const item of parsed.data.items) {
       if (!validTypeIds.has(item.breadTypeId)) {
@@ -174,6 +226,17 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
           400
         );
       }
+      for (const aid of item.breadAdditionIds ?? []) {
+        if (!additionMap.has(aid)) {
+          return errorResponse(`Bread addition ${aid} not found`, 404);
+        }
+        if (!additionLinkSet.has(`${item.breadTypeId}:${aid}`)) {
+          return errorResponse(
+            `Addition ${aid} not enabled for type ${item.breadTypeId}`,
+            400
+          );
+        }
+      }
       itemValues.push({
         orderId: id,
         breadTypeId: item.breadTypeId,
@@ -183,8 +246,30 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       });
     }
 
+    // Clear old item->addition junction rows first (FK to order_items would block delete)
+    const oldItems = await db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, id));
+    if (oldItems.length > 0) {
+      await db.delete(orderItemAdditions).where(
+        inArray(orderItemAdditions.orderItemId, oldItems.map((i) => i.id))
+      );
+    }
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
-    await db.insert(orderItems).values(itemValues);
+    const insertedItems = await db.insert(orderItems).values(itemValues).returning();
+
+    // Persist new additions per inserted item
+    const additionInserts: { orderItemId: number; breadAdditionId: number }[] = [];
+    for (let i = 0; i < parsed.data.items.length; i++) {
+      const ids = parsed.data.items[i].breadAdditionIds ?? [];
+      for (const aid of ids) {
+        additionInserts.push({ orderItemId: insertedItems[i].id, breadAdditionId: aid });
+      }
+    }
+    if (additionInserts.length > 0) {
+      await db.insert(orderItemAdditions).values(additionInserts);
+    }
   }
 
   // Return full order with items (matching GET format)
@@ -208,7 +293,7 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .where(eq(orders.id, id))
     .limit(1);
 
-  const updatedItems = await db
+  const updatedItemRows = await db
     .select({
       id: orderItems.id,
       breadTypeId: orderItems.breadTypeId,
@@ -222,6 +307,29 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
     .where(eq(orderItems.orderId, id));
+
+  const updatedItemIds = updatedItemRows.map((i) => i.id);
+  const updatedAdditionLinks = updatedItemIds.length
+    ? await db
+        .select({
+          orderItemId: orderItemAdditions.orderItemId,
+          breadAdditionId: breadAdditions.id,
+          name: breadAdditions.name,
+        })
+        .from(orderItemAdditions)
+        .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
+        .where(inArray(orderItemAdditions.orderItemId, updatedItemIds))
+    : [];
+  const updatedAdditionsByItem: Record<number, { id: number; name: string }[]> = {};
+  for (const a of updatedAdditionLinks) {
+    if (!updatedAdditionsByItem[a.orderItemId]) updatedAdditionsByItem[a.orderItemId] = [];
+    updatedAdditionsByItem[a.orderItemId].push({ id: a.breadAdditionId, name: a.name });
+  }
+
+  const updatedItems = updatedItemRows.map((i) => ({
+    ...i,
+    additions: updatedAdditionsByItem[i.id] ?? [],
+  }));
 
   const totalQuantity = updatedItems.reduce((s, i) => s + i.quantity, 0);
   const calculatedTotal = updatedItems.reduce(

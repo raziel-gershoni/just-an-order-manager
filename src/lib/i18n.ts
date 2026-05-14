@@ -141,6 +141,10 @@ const translations: Record<string, Record<Lang, string>> = {
   'settings.add_global_size': { en: 'Add Size', he: 'הוסף גודל' },
   'settings.size_name': { en: 'Name', he: 'שם' },
   'form.no_sizes_for_type': { en: 'No sizes available — configure this type in settings', he: 'אין גדלים זמינים — הגדר/י סוג זה בהגדרות' },
+  'settings.additions': { en: 'Additions', he: 'תוספות' },
+  'settings.add_addition': { en: 'Add Addition', he: 'הוסף תוספת' },
+  'settings.enabled_additions': { en: 'Additions for this type', he: 'תוספות לסוג זה' },
+  'form.additions': { en: 'Additions', he: 'תוספות' },
 
   // Reminders & recurring
   'reminder.send': { en: 'Send Reminder', he: 'שלח תזכורת' },

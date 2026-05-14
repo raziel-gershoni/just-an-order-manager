@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
 import { formatItemLine } from '@/lib/order-display';
 import { z } from 'zod/v4';
@@ -44,11 +44,13 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 
   // Get items for all these orders
   const orderIds = orderRows.map((o) => o.id);
-  let itemsMap: Record<number, { breadTypeName: string; sizeName: string | null; quantity: number; pricePerUnit: string | null }[]> = {};
+  type ItemRow = { id: number; orderId: number; breadTypeName: string; sizeName: string | null; quantity: number; pricePerUnit: string | null; additions: string[] };
+  const itemsMap: Record<number, ItemRow[]> = {};
 
   if (orderIds.length > 0) {
     const allItems = await db
       .select({
+        id: orderItems.id,
         orderId: orderItems.orderId,
         breadTypeName: breadTypes.name,
         sizeName: breadSizes.name,
@@ -60,13 +62,37 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
       .where(inArray(orderItems.orderId, orderIds));
 
+    // Fetch additions for these item ids; group by orderItemId
+    const itemIds = allItems.map((i) => i.id);
+    const additionLinks = itemIds.length
+      ? await db
+          .select({
+            orderItemId: orderItemAdditions.orderItemId,
+            name: breadAdditions.name,
+            sortOrder: breadAdditions.sortOrder,
+          })
+          .from(orderItemAdditions)
+          .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
+          .where(inArray(orderItemAdditions.orderItemId, itemIds))
+          .orderBy(asc(breadAdditions.sortOrder))
+      : [];
+
+    const additionsByItem: Record<number, string[]> = {};
+    for (const a of additionLinks) {
+      if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
+      additionsByItem[a.orderItemId].push(a.name);
+    }
+
     for (const item of allItems) {
       if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
       itemsMap[item.orderId].push({
+        id: item.id,
+        orderId: item.orderId,
         breadTypeName: item.breadTypeName,
         sizeName: item.sizeName,
         quantity: item.quantity,
         pricePerUnit: item.pricePerUnit,
+        additions: additionsByItem[item.id] ?? [],
       });
     }
   }
@@ -77,7 +103,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       ...o,
       items,
       totalQuantity: items.reduce((s, i) => s + i.quantity, 0),
-      itemsSummary: items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName)).join(', '),
+      itemsSummary: items.map((i) => formatItemLine(i.quantity, i.breadTypeName, i.sizeName, i.additions)).join(', '),
     };
   });
 
@@ -87,6 +113,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 const itemSchema = z.object({
   breadTypeId: z.number().int().positive(),
   breadSizeId: z.number().int().positive(),
+  breadAdditionIds: z.array(z.number().int().positive()).optional(),
   quantity: z.number().int().positive().default(1),
 });
 
@@ -142,6 +169,31 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     );
   const linkMap = new Map(links.map((l) => [`${l.breadTypeId}:${l.breadSizeId}`, l]));
 
+  // Validate additions per item: must belong to the group AND be enabled on the type
+  const allAdditionIds = items.flatMap((i) => i.breadAdditionIds ?? []);
+  const additionRows = allAdditionIds.length
+    ? await db
+        .select()
+        .from(breadAdditions)
+        .where(and(inArray(breadAdditions.id, allAdditionIds), eq(breadAdditions.groupId, groupId)))
+    : [];
+  const additionMap = new Map(additionRows.map((a) => [a.id, a]));
+
+  const additionTypeLinks = allAdditionIds.length
+    ? await db
+        .select()
+        .from(breadTypeAdditions)
+        .where(
+          and(
+            inArray(breadTypeAdditions.breadTypeId, typeIds),
+            inArray(breadTypeAdditions.breadAdditionId, allAdditionIds)
+          )
+        )
+    : [];
+  const additionLinkSet = new Set(
+    additionTypeLinks.map((l) => `${l.breadTypeId}:${l.breadAdditionId}`)
+  );
+
   const itemValues: typeof orderItems.$inferInsert[] = [];
   for (const item of items) {
     if (!btMap[item.breadTypeId]) {
@@ -157,6 +209,17 @@ export const POST = withGroup(async (request, _auth, groupId) => {
         `Size ${item.breadSizeId} not enabled for type ${item.breadTypeId}`,
         400
       );
+    }
+    for (const addId of item.breadAdditionIds ?? []) {
+      if (!additionMap.has(addId)) {
+        return errorResponse(`Bread addition ${addId} not found`, 404);
+      }
+      if (!additionLinkSet.has(`${item.breadTypeId}:${addId}`)) {
+        return errorResponse(
+          `Addition ${addId} not enabled for type ${item.breadTypeId}`,
+          400
+        );
+      }
     }
     const pricePerUnit = link.priceOverride ?? size.price;
     itemValues.push({
@@ -187,26 +250,41 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   // Stamp the orderId on each item now that we have it
   for (const iv of itemValues) iv.orderId = order.id;
 
-  await db.insert(orderItems).values(itemValues);
+  const insertedItems = await db.insert(orderItems).values(itemValues).returning();
 
-  // Build customer-facing items (name only, no weight) — for WhatsApp
+  // Persist additions per inserted item
+  const additionInserts: { orderItemId: number; breadAdditionId: number }[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const ids = items[i].breadAdditionIds ?? [];
+    for (const aid of ids) {
+      additionInserts.push({ orderItemId: insertedItems[i].id, breadAdditionId: aid });
+    }
+  }
+  if (additionInserts.length > 0) {
+    await db.insert(orderItemAdditions).values(additionInserts);
+  }
+
+  // Build customer-facing items (name + size + additions, no weight) — for WhatsApp
   const customerItems = items.map((item) => {
     const typeName = btMap[item.breadTypeId].name;
-    const sizeName = item.breadSizeId ? sizeMap[item.breadSizeId].name : null;
+    const sizeName = sizeMap[item.breadSizeId].name;
+    const adds = (item.breadAdditionIds ?? []).map((id) => additionMap.get(id)?.name).filter(Boolean) as string[];
     return {
-      breadTypeName: sizeName ? `${typeName} ${sizeName}` : typeName,
+      breadTypeName: formatItemLine(1, typeName, sizeName, adds).slice(2),
       quantity: item.quantity,
     };
   });
 
-  // Build staff-facing items (with weight when set) — for Telegram
+  // Build staff-facing items (with weight + additions) — for Telegram
   const staffItems = items.map((item) => {
     const type = btMap[item.breadTypeId];
-    const size = item.breadSizeId ? sizeMap[item.breadSizeId] : null;
-    const label = size ? `${type.name} ${size.name}` : type.name;
-    const withWeight = size?.weightGrams != null ? `${label} (${size.weightGrams}g)` : label;
+    const size = sizeMap[item.breadSizeId];
+    let label = `${type.name} ${size.name}`;
+    if (size.weightGrams != null) label = `${label} (${size.weightGrams}g)`;
+    const adds = (item.breadAdditionIds ?? []).map((id) => additionMap.get(id)?.name).filter(Boolean) as string[];
+    if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
     return {
-      breadTypeName: withWeight,
+      breadTypeName: label,
       quantity: item.quantity,
     };
   });

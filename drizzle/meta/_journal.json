@@ -43,6 +43,13 @@
       "when": 1778688000000,
       "tag": "0005_customer_phones",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778947200000,
+      "tag": "0006_additions",
+      "breakpoints": true
     }
   ]
 }

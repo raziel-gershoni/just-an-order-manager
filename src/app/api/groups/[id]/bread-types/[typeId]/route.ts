@@ -1,6 +1,6 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions } from '@/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 
 function parsePath(url: string): { groupId: number; typeId: number } {
@@ -52,5 +52,26 @@ export const GET = withAuth(async (request, auth) => {
     };
   });
 
-  return jsonResponse({ breadType: { ...breadType, sizes } });
+  // Same shape for additions
+  const allAdditions = await db
+    .select()
+    .from(breadAdditions)
+    .where(and(eq(breadAdditions.groupId, groupId), eq(breadAdditions.isActive, true)))
+    .orderBy(asc(breadAdditions.sortOrder));
+
+  const enabledAdditionLinks = await db
+    .select()
+    .from(breadTypeAdditions)
+    .where(eq(breadTypeAdditions.breadTypeId, typeId));
+
+  const enabledAdditionsMap = new Map(enabledAdditionLinks.map((l) => [l.breadAdditionId, l]));
+
+  const additions = allAdditions.map((a) => ({
+    id: a.id,
+    name: a.name,
+    isDefault: a.isDefault,
+    enabled: enabledAdditionsMap.has(a.id),
+  }));
+
+  return jsonResponse({ breadType: { ...breadType, sizes, additions } });
 });

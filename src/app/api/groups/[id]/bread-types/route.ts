@@ -1,6 +1,6 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
+import { breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions } from '@/db/schema';
 import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
@@ -48,6 +48,28 @@ export const GET = withAuth(async (request, auth) => {
     enabledByType[link.breadTypeId].push(link);
   }
 
+  // Additions opt-in per type
+  const additionLinks = typeIds.length
+    ? await db
+        .select({
+          breadTypeId: breadTypeAdditions.breadTypeId,
+          breadAdditionId: breadAdditions.id,
+          name: breadAdditions.name,
+          isActive: breadAdditions.isActive,
+          junctionSortOrder: breadTypeAdditions.sortOrder,
+        })
+        .from(breadTypeAdditions)
+        .innerJoin(breadAdditions, eq(breadTypeAdditions.breadAdditionId, breadAdditions.id))
+        .where(inArray(breadTypeAdditions.breadTypeId, typeIds))
+        .orderBy(asc(breadTypeAdditions.sortOrder), asc(breadAdditions.sortOrder))
+    : [];
+
+  const additionsByType: Record<number, typeof additionLinks> = {};
+  for (const l of additionLinks) {
+    if (!additionsByType[l.breadTypeId]) additionsByType[l.breadTypeId] = [];
+    additionsByType[l.breadTypeId].push(l);
+  }
+
   const breadTypesWithSizes = types.map((t) => ({
     ...t,
     enabledSizes: (enabledByType[t.id] ?? []).map((l) => ({
@@ -56,6 +78,11 @@ export const GET = withAuth(async (request, auth) => {
       weightGrams: l.weightGrams,
       price: l.price,
       priceOverride: l.priceOverride,
+      isActive: l.isActive,
+    })),
+    enabledAdditions: (additionsByType[t.id] ?? []).map((l) => ({
+      id: l.breadAdditionId,
+      name: l.name,
       isActive: l.isActive,
     })),
   }));
@@ -96,7 +123,7 @@ export const POST = withAuth(async (request, auth) => {
     .returning();
 
   // Auto-enable any default global sizes for this fresh type
-  const defaults = await db
+  const sizeDefaults = await db
     .select()
     .from(breadSizes)
     .where(
@@ -107,11 +134,33 @@ export const POST = withAuth(async (request, auth) => {
       )
     );
 
-  if (defaults.length > 0) {
+  if (sizeDefaults.length > 0) {
     await db.insert(breadTypeSizes).values(
-      defaults.map((s, idx) => ({
+      sizeDefaults.map((s, idx) => ({
         breadTypeId: breadType.id,
         breadSizeId: s.id,
+        sortOrder: idx,
+      }))
+    );
+  }
+
+  // Auto-enable any default global additions for this fresh type
+  const additionDefaults = await db
+    .select()
+    .from(breadAdditions)
+    .where(
+      and(
+        eq(breadAdditions.groupId, groupId),
+        eq(breadAdditions.isDefault, true),
+        eq(breadAdditions.isActive, true)
+      )
+    );
+
+  if (additionDefaults.length > 0) {
+    await db.insert(breadTypeAdditions).values(
+      additionDefaults.map((a, idx) => ({
+        breadTypeId: breadType.id,
+        breadAdditionId: a.id,
         sortOrder: idx,
       }))
     );
@@ -121,13 +170,18 @@ export const POST = withAuth(async (request, auth) => {
     {
       breadType: {
         ...breadType,
-        enabledSizes: defaults.map((s) => ({
+        enabledSizes: sizeDefaults.map((s) => ({
           id: s.id,
           name: s.name,
           weightGrams: s.weightGrams,
           price: s.price,
           priceOverride: null,
           isActive: s.isActive,
+        })),
+        enabledAdditions: additionDefaults.map((a) => ({
+          id: a.id,
+          name: a.name,
+          isActive: a.isActive,
         })),
       },
     },

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { groups, orders, orderItems, customers, breadTypes, breadSizes } from '@/db/schema';
-import { eq, and, ne, inArray } from 'drizzle-orm';
+import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
+import { eq, and, asc, ne, inArray } from 'drizzle-orm';
 import { format } from 'date-fns';
 import { sendMorningSummary } from '@/lib/notifications';
 
@@ -54,6 +54,7 @@ async function handler(request: Request) {
       const orderIds = todayOrders.map((o) => o.id);
       const allItems = await db
         .select({
+          id: orderItems.id,
           orderId: orderItems.orderId,
           breadTypeName: breadTypes.name,
           sizeName: breadSizes.name,
@@ -65,15 +66,32 @@ async function handler(request: Request) {
         .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
         .where(inArray(orderItems.orderId, orderIds));
 
+      const itemIds = allItems.map((i) => i.id);
+      const additionLinks = itemIds.length
+        ? await db
+            .select({ orderItemId: orderItemAdditions.orderItemId, name: breadAdditions.name })
+            .from(orderItemAdditions)
+            .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
+            .where(inArray(orderItemAdditions.orderItemId, itemIds))
+            .orderBy(asc(breadAdditions.sortOrder))
+        : [];
+      const additionsByItem: Record<number, string[]> = {};
+      for (const a of additionLinks) {
+        if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
+        additionsByItem[a.orderItemId].push(a.name);
+      }
+
       const summaryItems: { customerName: string; breadTypeName: string; quantity: number }[] = [];
       for (const order of todayOrders) {
         const items = allItems.filter((i) => i.orderId === order.id);
         for (const item of items) {
           const base = item.sizeName ? `${item.breadTypeName} ${item.sizeName}` : item.breadTypeName;
-          const withWeight = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
+          let label = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
+          const adds = additionsByItem[item.id] ?? [];
+          if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
           summaryItems.push({
             customerName: order.customerName,
-            breadTypeName: withWeight,
+            breadTypeName: label,
             quantity: item.quantity,
           });
         }

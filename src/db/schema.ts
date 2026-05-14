@@ -147,6 +147,32 @@ export const breadTypeSizes = pgTable(
   ]
 );
 
+export const breadAdditions = pgTable('bread_additions', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id').notNull().references(() => groups.id),
+  name: varchar('name', { length: 100 }).notNull(),
+  isDefault: boolean('is_default').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const breadTypeAdditions = pgTable(
+  'bread_type_additions',
+  {
+    breadTypeId: integer('bread_type_id')
+      .notNull()
+      .references(() => breadTypes.id),
+    breadAdditionId: integer('bread_addition_id')
+      .notNull()
+      .references(() => breadAdditions.id),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.breadTypeId, table.breadAdditionId] }),
+  ]
+);
+
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
   groupId: integer('group_id')
@@ -203,6 +229,21 @@ export const orderItems = pgTable('order_items', {
   quantity: integer('quantity').notNull().default(1),
   pricePerUnit: decimal('price_per_unit', { precision: 10, scale: 2 }),
 });
+
+export const orderItemAdditions = pgTable(
+  'order_item_additions',
+  {
+    orderItemId: integer('order_item_id')
+      .notNull()
+      .references(() => orderItems.id),
+    breadAdditionId: integer('bread_addition_id')
+      .notNull()
+      .references(() => breadAdditions.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.orderItemId, table.breadAdditionId] }),
+  ]
+);
 
 export const payments = pgTable('payments', {
   id: serial('id').primaryKey(),
