@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
-interface Customer { id: number; name: string; phone?: string | null }
+interface Customer { id: number; name: string; phones?: { id: number; phone: string }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string }
 interface BreadAddition { id: number; name: string }
 interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enabledAdditions?: BreadAddition[] }
@@ -493,8 +493,8 @@ function OrderFormContent() {
           />
         </Card>
 
-        {/* Notify customer (only on create, only if customer has phone) */}
-        {!isEdit && selectedCustomer && 'phone' in selectedCustomer && (selectedCustomer as Customer).phone && (
+        {/* Notify customer (only on create, only if customer has at least one phone) */}
+        {!isEdit && selectedCustomer && (selectedCustomer as Customer).phones && ((selectedCustomer as Customer).phones?.length ?? 0) > 0 && (
           <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
             <input
               type="checkbox"
