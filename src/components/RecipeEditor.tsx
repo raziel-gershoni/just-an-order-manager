@@ -29,6 +29,10 @@ interface EditorRow {
   kind: IngredientKind;
   grams: string;
   sortOrder: number;
+  /** % of the finished loaf weight at seed time. Used to auto-rescale grams when ref weight changes (only if !dirty). Undefined for rows added by hand. */
+  originalPctOfFinished?: number;
+  /** True once the user has manually typed in this row's grams field — auto-rescale skips dirty rows. */
+  dirty: boolean;
 }
 
 const KIND_OPTIONS: IngredientKind[] = ['flour', 'water', 'salt', 'starter', 'other'];
@@ -38,11 +42,16 @@ function defaultTemplate(referenceWeight: number): EditorRow[] {
   // Ratio: 1g flour produces ~1.4286g of finished bread (1000/700 from the canonical example)
   // So flour = referenceWeight × 0.7 / 1 (approximate; baker tweaks)
   const flour = Math.round(referenceWeight * 0.7);
+  const seed = (g: number) => ({
+    grams: String(g),
+    originalPctOfFinished: referenceWeight > 0 ? (g / referenceWeight) * 100 : undefined,
+    dirty: false,
+  });
   return [
-    { name: 'קמח', kind: 'flour', grams: String(flour), sortOrder: 0 },
-    { name: 'מים', kind: 'water', grams: String(Math.round(flour * 0.7)), sortOrder: 1 },
-    { name: 'מלח', kind: 'salt', grams: String(Math.round(flour * 0.02)), sortOrder: 2 },
-    { name: 'מחמצת', kind: 'starter', grams: String(Math.round(flour * 0.2)), sortOrder: 3 },
+    { name: 'קמח', kind: 'flour', sortOrder: 0, ...seed(flour) },
+    { name: 'מים', kind: 'water', sortOrder: 1, ...seed(Math.round(flour * 0.7)) },
+    { name: 'מלח', kind: 'salt', sortOrder: 2, ...seed(Math.round(flour * 0.02)) },
+    { name: 'מחמצת', kind: 'starter', sortOrder: 3, ...seed(Math.round(flour * 0.2)) },
   ];
 }
 
@@ -125,6 +134,8 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
           kind: i.kind,
           grams: String(Math.round((i.pctOfFinished * weight) / 100)),
           sortOrder: i.sortOrder,
+          originalPctOfFinished: i.pctOfFinished,
+          dirty: false,
         }))
     );
     setEditing(true);
@@ -133,7 +144,7 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
   function addRow() {
     setRows((prev) => [
       ...prev,
-      { name: '', kind: 'other', grams: '', sortOrder: prev.length },
+      { name: '', kind: 'other', grams: '', sortOrder: prev.length, dirty: true },
     ]);
   }
 
@@ -142,7 +153,28 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
   }
 
   function updateRow(idx: number, patch: Partial<EditorRow>) {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== idx) return r;
+        // Typing in the grams field locks the row from auto-rescale
+        const dirty = r.dirty || patch.grams !== undefined;
+        return { ...r, ...patch, dirty };
+      })
+    );
+  }
+
+  /** Update reference weight; rescale all non-dirty rows that have an original percentage to a new gram value. */
+  function changeRefWeight(value: string) {
+    setRefWeight(value);
+    const newW = Number(value);
+    if (!newW || newW <= 0) return;
+    setRows((prev) =>
+      prev.map((r) =>
+        !r.dirty && r.originalPctOfFinished != null
+          ? { ...r, grams: String(Math.round((r.originalPctOfFinished * newW) / 100)) }
+          : r
+      )
+    );
   }
 
   const previewPcts = useMemo(() => pctOfFlourFromRows(rows), [rows]);
@@ -227,7 +259,7 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
           type="number"
           inputMode="numeric"
           value={refWeight}
-          onChange={(e) => setRefWeight(e.target.value)}
+          onChange={(e) => changeRefWeight(e.target.value)}
         />
 
         <div className="space-y-2">
