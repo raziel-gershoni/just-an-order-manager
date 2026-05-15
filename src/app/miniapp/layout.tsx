@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Toaster, toast as sonnerToast } from 'sonner';
 import { TelegramProvider, useTelegram } from '@/components/providers/TelegramProvider';
-import { GroupCtx } from '@/hooks/useGroup';
+import { GroupCtx, type GroupRole } from '@/hooks/useGroup';
 import { ToastCtx, type Toast } from '@/hooks/useToast';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { LangCtx } from '@/hooks/useLang';
@@ -11,6 +11,7 @@ import { t, type Lang } from '@/lib/i18n';
 
 function AppProviders({ children }: { children: ReactNode }) {
   const [activeGroupId, setActiveGroupId] = useState<number | null>(null);
+  const [activeGroupRole, setActiveGroupRole] = useState<GroupRole | null>(null);
   const [lang, setLang] = useState<Lang>('he');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const { initDataRaw, ready } = useTelegram();
@@ -51,6 +52,7 @@ function AppProviders({ children }: { children: ReactNode }) {
         }
         if (data.groups?.length > 0) {
           setActiveGroupId(data.groups[0].id);
+          setActiveGroupRole(data.groups[0].role ?? null);
         }
       })
       .catch(() => {});
@@ -61,7 +63,7 @@ function AppProviders({ children }: { children: ReactNode }) {
   return (
     <LangCtx.Provider value={lang}>
       <ToastCtx.Provider value={{ toasts, showToast, dismissToast }}>
-        <GroupCtx.Provider value={{ activeGroupId, setActiveGroupId }}>
+        <GroupCtx.Provider value={{ activeGroupId, activeGroupRole, setActiveGroupId, setActiveGroupRole }}>
           <div
             dir={dir}
             className="min-h-screen bg-background text-foreground"

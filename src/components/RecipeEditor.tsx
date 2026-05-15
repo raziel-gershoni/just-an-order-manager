@@ -8,8 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Plus, Trash2, Pencil, Calculator } from 'lucide-react';
-
-type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'other';
+import { groupByKind, type IngredientKind } from '@/lib/recipe';
 
 interface StoredIngredient {
   name: string;
@@ -322,17 +321,15 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
   }
 
   // STATE B: recipe configured — manager view
-  const sortedBakers = recipe.bakersPercents.slice().sort((a, b) => a.sortOrder - b.sortOrder);
   const dispW = Number(displayWeight) || 0;
-  const grams = sortedBakers.map((i) => ({
-    name: i.name,
-    grams: (i.pctOfFinished * dispW) / 100,
-    pctOfFlour: i.pctOfFlour,
-  }));
-  const totalFlourG = sortedBakers
+  const grouped = groupByKind(recipe.bakersPercents);
+  const totalFlourG = recipe.bakersPercents
     .filter((i) => i.kind === 'flour')
     .reduce((sum, i) => sum + (i.pctOfFinished * dispW) / 100, 0);
-  const totalDoughG = sortedBakers.reduce((sum, i) => sum + (i.pctOfFinished * dispW) / 100, 0);
+  const totalDoughG = recipe.bakersPercents.reduce(
+    (sum, i) => sum + (i.pctOfFinished * dispW) / 100,
+    0
+  );
 
   return (
     <div className="border-t border-border pt-3 space-y-2">
@@ -353,12 +350,21 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
         </div>
       </div>
 
-      {/* Baker's percentages list */}
-      <div className="space-y-1">
-        {sortedBakers.map((i, idx) => (
-          <div key={idx} className="text-sm flex justify-between gap-2">
-            <span>{i.name}</span>
-            <span className="text-muted-foreground tabular-nums">{i.pctOfFlour.toFixed(0)}%</span>
+      {/* Baker's percentages list, grouped by kind */}
+      <div className="space-y-2">
+        {grouped.map((g) => (
+          <div key={g.kind} className="space-y-0.5">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+              {t(`settings.kind_${g.kind}`)}
+            </div>
+            {g.items.map((i, idx) => (
+              <div key={idx} className="text-sm flex justify-between gap-2">
+                <span>{i.name}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {i.pctOfFlour.toFixed(0)}%
+                </span>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -388,13 +394,20 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
               />
               <span className="text-xs text-muted-foreground">ג</span>
             </div>
-            <div className="space-y-0.5 text-xs bg-muted/40 rounded-md p-2">
-              {grams.map((g, idx) => (
-                <div key={idx} className="flex justify-between gap-2">
-                  <span>{g.name}</span>
-                  <span className="text-muted-foreground tabular-nums">
-                    {Math.round(g.grams)}ג
-                  </span>
+            <div className="space-y-2 text-xs bg-muted/40 rounded-md p-2">
+              {grouped.map((g) => (
+                <div key={g.kind} className="space-y-0.5">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                    {t(`settings.kind_${g.kind}`)}
+                  </div>
+                  {g.items.map((i, idx) => (
+                    <div key={idx} className="flex justify-between gap-2">
+                      <span>{i.name}</span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {Math.round((i.pctOfFinished * dispW) / 100)}ג
+                      </span>
+                    </div>
+                  ))}
                 </div>
               ))}
               <div className="pt-1 mt-1 border-t border-border/40 text-muted-foreground tabular-nums flex flex-wrap gap-x-3">

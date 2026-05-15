@@ -14,6 +14,7 @@ import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat } from 'lucide-react';
+import { groupByKind } from '@/lib/recipe';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -304,13 +305,20 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                   {isExpanded && item.recipe && (
-                    <div className="text-xs bg-muted/40 rounded-md p-2 ms-2 space-y-0.5">
-                      {item.recipe.ingredients.map((ing, idx) => (
-                        <div key={idx} className="flex justify-between gap-2">
-                          <span>{ing.name}</span>
-                          <span className="text-muted-foreground tabular-nums">
-                            {Math.round(ing.grams)}ג
-                          </span>
+                    <div className="text-xs bg-muted/40 rounded-md p-2 ms-2 space-y-2">
+                      {groupByKind(item.recipe.ingredients).map((g) => (
+                        <div key={g.kind} className="space-y-0.5">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                            {t(`settings.kind_${g.kind}`)}
+                          </div>
+                          {g.items.map((ing, idx) => (
+                            <div key={idx} className="flex justify-between gap-2">
+                              <span>{ing.name}</span>
+                              <span className="text-muted-foreground tabular-nums">
+                                {Math.round(ing.grams)}ג
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       ))}
                       <div className="pt-1 mt-1 border-t border-border/40 text-muted-foreground tabular-nums flex flex-wrap gap-x-3">

@@ -74,9 +74,16 @@ interface BreadAddition {
 
 export default function CatalogPage() {
   const { apiFetch } = useApi();
-  const { activeGroupId } = useGroup();
+  const { activeGroupId, activeGroupRole } = useGroup();
   const t = useT();
   const toast = useToast();
+  const isBaker = activeGroupRole === 'baker';
+
+  // Top-level section collapse state — bread types open by default,
+  // catalogs collapsed (managers expand them when curating).
+  const [sizesSectionOpen, setSizesSectionOpen] = useState(false);
+  const [additionsSectionOpen, setAdditionsSectionOpen] = useState(false);
+  const [breadTypesSectionOpen, setBreadTypesSectionOpen] = useState(true);
 
   const [sizes, setSizes] = useState<BreadSize[]>([]);
   const [additions, setAdditions] = useState<BreadAddition[]>([]);
@@ -445,13 +452,30 @@ export default function CatalogPage() {
   return (
     <>
       <PageHeader title={t('settings.catalog')} />
-      <div className="p-5 space-y-6 animate-fade-in">
-        {/* SIZES CATALOG */}
+      <div className="p-5 space-y-4 animate-fade-in">
+        {/* SIZES CATALOG (managers only) */}
+        {!isBaker && (
         <section>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-            {t('settings.global_sizes')}
-          </h2>
+          <button
+            type="button"
+            onClick={() => setSizesSectionOpen((v) => !v)}
+            className="w-full flex items-center justify-between mb-2 group"
+          >
+            <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+              <ChevronRight
+                className={cn(
+                  'h-3.5 w-3.5 transition-transform',
+                  sizesSectionOpen && 'rotate-90'
+                )}
+              />
+              {t('settings.global_sizes')}
+              <span className="text-xs font-normal normal-case opacity-60 tabular-nums">
+                · {sizes.length}
+              </span>
+            </h2>
+          </button>
 
+          {sizesSectionOpen && (<>
           <div className="space-y-2">
             {sizes.length === 0 && (
               <Card className="text-sm text-muted-foreground italic text-center py-6">
@@ -614,14 +638,33 @@ export default function CatalogPage() {
               {t('settings.add_global_size')}
             </Button>
           )}
+          </>)}
         </section>
+        )}
 
-        {/* ADDITIONS CATALOG */}
+        {/* ADDITIONS CATALOG (managers only) */}
+        {!isBaker && (
         <section>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-            {t('settings.additions')}
-          </h2>
+          <button
+            type="button"
+            onClick={() => setAdditionsSectionOpen((v) => !v)}
+            className="w-full flex items-center justify-between mb-2 group"
+          >
+            <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+              <ChevronRight
+                className={cn(
+                  'h-3.5 w-3.5 transition-transform',
+                  additionsSectionOpen && 'rotate-90'
+                )}
+              />
+              {t('settings.additions')}
+              <span className="text-xs font-normal normal-case opacity-60 tabular-nums">
+                · {additions.length}
+              </span>
+            </h2>
+          </button>
 
+          {additionsSectionOpen && (<>
           <div className="space-y-2">
             {additions.length === 0 && (
               <Card className="text-sm text-muted-foreground italic text-center py-6">—</Card>
@@ -737,14 +780,32 @@ export default function CatalogPage() {
               {t('settings.add_addition')}
             </Button>
           )}
+          </>)}
         </section>
+        )}
 
         {/* BREAD TYPES */}
         <section>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-            {t('settings.bread_types')}
-          </h2>
+          <button
+            type="button"
+            onClick={() => setBreadTypesSectionOpen((v) => !v)}
+            className="w-full flex items-center justify-between mb-2 group"
+          >
+            <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+              <ChevronRight
+                className={cn(
+                  'h-3.5 w-3.5 transition-transform',
+                  breadTypesSectionOpen && 'rotate-90'
+                )}
+              />
+              {t('settings.bread_types')}
+              <span className="text-xs font-normal normal-case opacity-60 tabular-nums">
+                · {breadTypes.length}
+              </span>
+            </h2>
+          </button>
 
+          {breadTypesSectionOpen && (<>
           <div className="space-y-2">
             {breadTypes.map((bt) => (
               <div key={bt.id} className="space-y-1">
@@ -771,98 +832,18 @@ export default function CatalogPage() {
 
                 {expandedTypeId === bt.id && (
                   <Card className="animate-expand p-3 space-y-3 ms-3">
-                    <Input
-                      label={t('settings.name')}
-                      value={typeNameDraft}
-                      onChange={(e) => setTypeNameDraft(e.target.value)}
-                    />
-
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground mb-2">
-                        {t('settings.enabled_sizes')}
-                      </div>
-                      {typeDetailSizes.length === 0 && (
-                        <p className="text-xs text-muted-foreground italic px-2 py-3">
-                          {t('settings.no_enabled_sizes')}
-                        </p>
-                      )}
-                      <div className="space-y-1.5">
-                        {typeDetailSizes.map((s) => (
-                          <div
-                            key={s.id}
-                            className={cn(
-                              'rounded-lg border p-2.5 transition-colors',
-                              s.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
-                            )}
-                          >
-                            <label className="flex items-center gap-2.5 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={s.enabled}
-                                onChange={() => toggleEnabled(s.id)}
-                                className="h-4 w-4 accent-primary cursor-pointer"
-                              />
-                              <span className={cn('text-sm font-medium flex-1', !s.enabled && 'text-muted-foreground')}>
-                                {s.name}
-                                {s.weightGrams != null && (
-                                  <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">{s.weightGrams}g</span>
-                                )}
-                              </span>
-                              <span className="text-xs text-muted-foreground tabular-nums">
-                                ₪{s.price}
-                              </span>
-                            </label>
-                            {s.enabled && (
-                              <div className="mt-2 flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground shrink-0">
-                                  {t('settings.price_override')}
-                                </span>
-                                <Input
-                                  type="number"
-                                  inputMode="decimal"
-                                  value={s.priceOverride ?? ''}
-                                  onChange={(e) => updateOverride(s.id, e.target.value)}
-                                  placeholder={`₪${s.price}`}
-                                  className="flex-1 max-w-32"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Additions matrix */}
-                    {typeDetailAdditions.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-2">
-                          {t('settings.enabled_additions')}
-                        </div>
-                        <div className="space-y-1.5">
-                          {typeDetailAdditions.map((a) => (
-                            <label
-                              key={a.id}
-                              className={cn(
-                                'flex items-center gap-2.5 cursor-pointer rounded-lg border p-2.5 transition-colors',
-                                a.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={a.enabled}
-                                onChange={() => toggleAdditionEnabledForType(a.id)}
-                                className="h-4 w-4 accent-primary cursor-pointer"
-                              />
-                              <span className={cn('text-sm font-medium flex-1', !a.enabled && 'text-muted-foreground')}>
-                                {a.name}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
+                    {/* Name (managers edit, bakers see read-only) */}
+                    {isBaker ? (
+                      <div className="text-base font-semibold">{bt.name}</div>
+                    ) : (
+                      <Input
+                        label={t('settings.name')}
+                        value={typeNameDraft}
+                        onChange={(e) => setTypeNameDraft(e.target.value)}
+                      />
                     )}
 
-                    {/* Recipe */}
+                    {/* Recipe — surfaced near the top (primary use case) */}
                     <RecipeEditor
                       breadTypeId={bt.id}
                       defaultReferenceWeight={
@@ -870,48 +851,185 @@ export default function CatalogPage() {
                       }
                     />
 
-                    <div className="flex gap-2 items-center pt-1">
-                      <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(bt.id)}>
-                        {t('settings.save')}
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:bg-destructive/10 h-8 w-8"
-                        onClick={() => deleteType(bt.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {/* Sizes */}
+                    {isBaker ? (
+                      typeDetailSizes.some((s) => s.enabled) && (
+                        <div className="border-t border-border pt-3">
+                          <div className="text-sm font-medium text-muted-foreground mb-1.5">
+                            {t('settings.enabled_sizes')}
+                          </div>
+                          <div className="text-sm space-y-0.5">
+                            {typeDetailSizes
+                              .filter((s) => s.enabled)
+                              .map((s) => (
+                                <div key={s.id} className="flex justify-between gap-2">
+                                  <span>
+                                    {s.name}
+                                    {s.weightGrams != null && (
+                                      <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">
+                                        {s.weightGrams}g
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground tabular-nums">
+                                    ₪{s.priceOverride ?? s.price}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <div className="border-t border-border pt-3">
+                        <div className="text-sm font-medium text-muted-foreground mb-2">
+                          {t('settings.enabled_sizes')}
+                        </div>
+                        {typeDetailSizes.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic px-2 py-3">
+                            {t('settings.no_enabled_sizes')}
+                          </p>
+                        )}
+                        <div className="space-y-1.5">
+                          {typeDetailSizes.map((s) => (
+                            <div
+                              key={s.id}
+                              className={cn(
+                                'rounded-lg border p-2.5 transition-colors',
+                                s.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
+                              )}
+                            >
+                              <label className="flex items-center gap-2.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={s.enabled}
+                                  onChange={() => toggleEnabled(s.id)}
+                                  className="h-4 w-4 accent-primary cursor-pointer"
+                                />
+                                <span className={cn('text-sm font-medium flex-1', !s.enabled && 'text-muted-foreground')}>
+                                  {s.name}
+                                  {s.weightGrams != null && (
+                                    <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">{s.weightGrams}g</span>
+                                  )}
+                                </span>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                  ₪{s.price}
+                                </span>
+                              </label>
+                              {s.enabled && (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {t('settings.price_override')}
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    value={s.priceOverride ?? ''}
+                                    onChange={(e) => updateOverride(s.id, e.target.value)}
+                                    placeholder={`₪${s.price}`}
+                                    className="flex-1 max-w-32"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Additions */}
+                    {isBaker ? (
+                      typeDetailAdditions.some((a) => a.enabled) && (
+                        <div className="border-t border-border pt-3">
+                          <div className="text-sm font-medium text-muted-foreground mb-1.5">
+                            {t('settings.enabled_additions')}
+                          </div>
+                          <div className="text-sm">
+                            {typeDetailAdditions
+                              .filter((a) => a.enabled)
+                              .map((a) => a.name)
+                              .join(' · ')}
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      typeDetailAdditions.length > 0 && (
+                        <div className="border-t border-border pt-3">
+                          <div className="text-sm font-medium text-muted-foreground mb-2">
+                            {t('settings.enabled_additions')}
+                          </div>
+                          <div className="space-y-1.5">
+                            {typeDetailAdditions.map((a) => (
+                              <label
+                                key={a.id}
+                                className={cn(
+                                  'flex items-center gap-2.5 cursor-pointer rounded-lg border p-2.5 transition-colors',
+                                  a.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={a.enabled}
+                                  onChange={() => toggleAdditionEnabledForType(a.id)}
+                                  className="h-4 w-4 accent-primary cursor-pointer"
+                                />
+                                <span className={cn('text-sm font-medium flex-1', !a.enabled && 'text-muted-foreground')}>
+                                  {a.name}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    )}
+
+                    {/* Save / Delete (managers only) */}
+                    {!isBaker && (
+                      <div className="flex gap-2 items-center pt-1">
+                        <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(bt.id)}>
+                          {t('settings.save')}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10 h-8 w-8"
+                          onClick={() => deleteType(bt.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </Card>
                 )}
               </div>
             ))}
           </div>
 
-          {showAddType ? (
-            <Card className="mt-3 p-3 space-y-3 animate-expand">
-              <Input
-                label={t('settings.name')}
-                value={newTypeName}
-                onChange={(e) => setNewTypeName(e.target.value)}
-                placeholder="חיטה לבן"
-              />
-              <div className="flex gap-2">
-                <Button size="sm" className="flex-1" loading={addingType} disabled={!newTypeName.trim()} onClick={addType}>
-                  {t('form.add')}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setShowAddType(false); setNewTypeName(''); }}>
-                  {t('payments.cancel')}
-                </Button>
-              </div>
-            </Card>
-          ) : (
-            <Button variant="ghost" size="sm" className="mt-3" onClick={() => setShowAddType(true)}>
-              <Plus className="h-4 w-4" />
-              {t('settings.add_bread')}
-            </Button>
+          {!isBaker && (
+            showAddType ? (
+              <Card className="mt-3 p-3 space-y-3 animate-expand">
+                <Input
+                  label={t('settings.name')}
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  placeholder="חיטה לבן"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1" loading={addingType} disabled={!newTypeName.trim()} onClick={addType}>
+                    {t('form.add')}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setShowAddType(false); setNewTypeName(''); }}>
+                    {t('payments.cancel')}
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <Button variant="ghost" size="sm" className="mt-3" onClick={() => setShowAddType(true)}>
+                <Plus className="h-4 w-4" />
+                {t('settings.add_bread')}
+              </Button>
+            )
           )}
+          </>)}
         </section>
       </div>
     </>

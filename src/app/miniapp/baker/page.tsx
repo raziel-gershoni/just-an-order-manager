@@ -10,8 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ChevronLeft, ChevronRight, ChefHat, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { format, addDays, parseISO } from 'date-fns';
-
-type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'other';
+import { groupByKind, type IngredientKind } from '@/lib/recipe';
 
 interface ScaledIngredient {
   name: string;
@@ -146,14 +145,21 @@ export default function BakerPage() {
 
               {typ.hasRecipe && typ.recipe ? (
                 <>
-                  <div className="border-t border-border pt-3 space-y-1">
-                    {typ.recipe.ingredients.map((i, idx) => (
-                      <div key={idx} className="text-sm flex justify-between gap-3">
-                        <span>{i.name}</span>
-                        <span className="text-muted-foreground tabular-nums">
-                          {formatGrams(i.grams)}
-                          <span className="text-xs ms-1 opacity-60">({i.pctOfFlour.toFixed(0)}%)</span>
-                        </span>
+                  <div className="border-t border-border pt-3 space-y-2">
+                    {groupByKind(typ.recipe.ingredients).map((g) => (
+                      <div key={g.kind} className="space-y-0.5">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                          {t(`settings.kind_${g.kind}`)}
+                        </div>
+                        {g.items.map((i, idx) => (
+                          <div key={idx} className="text-sm flex justify-between gap-3">
+                            <span>{i.name}</span>
+                            <span className="text-muted-foreground tabular-nums">
+                              {formatGrams(i.grams)}
+                              <span className="text-xs ms-1 opacity-60">({i.pctOfFlour.toFixed(0)}%)</span>
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>

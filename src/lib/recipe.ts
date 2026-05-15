@@ -1,5 +1,29 @@
 export type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'other';
 
+/** Canonical display order for ingredient kinds (dry → main hydration → leavening → seasoning → extras). */
+export const KIND_DISPLAY_ORDER: IngredientKind[] = ['flour', 'water', 'starter', 'salt', 'other'];
+
+/**
+ * Bucket ingredients by `kind` in canonical order. Returns one entry per kind
+ * that has at least one ingredient, preserving the input's sortOrder within each bucket.
+ */
+export function groupByKind<T extends { kind: IngredientKind; sortOrder: number }>(
+  items: T[]
+): { kind: IngredientKind; items: T[] }[] {
+  const buckets = new Map<IngredientKind, T[]>();
+  for (const it of items) {
+    if (!buckets.has(it.kind)) buckets.set(it.kind, []);
+    buckets.get(it.kind)!.push(it);
+  }
+  for (const arr of buckets.values()) {
+    arr.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  return KIND_DISPLAY_ORDER.filter((k) => buckets.has(k)).map((k) => ({
+    kind: k,
+    items: buckets.get(k)!,
+  }));
+}
+
 export type RecipeIngredient = {
   name: string;
   kind: IngredientKind;
