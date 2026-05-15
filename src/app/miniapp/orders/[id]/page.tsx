@@ -13,17 +13,33 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle, Repeat } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
+interface ScaledIngredient {
+  name: string;
+  kind: 'flour' | 'water' | 'salt' | 'starter' | 'other';
+  grams: number;
+  pctOfFlour: number;
+  sortOrder: number;
+}
+interface ScaledRecipe {
+  ingredients: ScaledIngredient[];
+  totalFlourGrams: number;
+  totalDoughGrams: number;
+  finishedGrams: number;
+}
 interface OrderItem {
   id: number;
   breadTypeName: string;
   sizeName?: string | null;
+  sizeWeightGrams?: number | null;
   additions?: { id: number; name: string }[];
   quantity: number;
   pricePerUnit: string | null;
+  hasRecipe?: boolean;
+  recipe?: ScaledRecipe | null;
 }
 
 interface OrderDetail {
@@ -60,6 +76,7 @@ export default function OrderDetailPage() {
   const toast = useToast();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedRecipes, setExpandedRecipes] = useState<Set<number>>(new Set());
 
   const [showPriceEdit, setShowPriceEdit] = useState(false);
   const [priceInput, setPriceInput] = useState('');
@@ -242,27 +259,69 @@ export default function OrderDetailPage() {
         <Card>
           <h3 className="font-semibold mb-3">{t('form.bread_type')}</h3>
           <div className="space-y-2.5">
-            {order.items.map((item) => (
-              <div key={item.id} className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">
-                    {item.breadTypeName}
-                    {item.sizeName && <span className="text-muted-foreground"> {item.sizeName}</span>}
-                    {item.additions && item.additions.length > 0 && (
-                      <span className="text-muted-foreground"> (עם {item.additions.map((a) => a.name).join(', ')})</span>
+            {order.items.map((item) => {
+              const isExpanded = expandedRecipes.has(item.id);
+              return (
+                <div key={item.id} className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {item.breadTypeName}
+                        {item.sizeName && <span className="text-muted-foreground"> {item.sizeName}</span>}
+                        {item.additions && item.additions.length > 0 && (
+                          <span className="text-muted-foreground"> (עם {item.additions.map((a) => a.name).join(', ')})</span>
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        ×{item.quantity}
+                      </span>
+                      {item.hasRecipe && item.recipe && (
+                        <button
+                          type="button"
+                          aria-label={t('baker.show_recipe')}
+                          title={t('baker.show_recipe')}
+                          onClick={() =>
+                            setExpandedRecipes((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(item.id)) next.delete(item.id);
+                              else next.add(item.id);
+                              return next;
+                            })
+                          }
+                          className={cn(
+                            'text-muted-foreground hover:text-primary transition-colors',
+                            isExpanded && 'text-primary'
+                          )}
+                        >
+                          <ChefHat className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {item.pricePerUnit && (
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        ₪{(Number(item.pricePerUnit) * item.quantity).toFixed(0)}
+                      </span>
                     )}
-                  </span>
-                  <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                    ×{item.quantity}
-                  </span>
+                  </div>
+                  {isExpanded && item.recipe && (
+                    <div className="text-xs bg-muted/40 rounded-md p-2 ms-2 space-y-0.5">
+                      {item.recipe.ingredients.map((ing, idx) => (
+                        <div key={idx} className="flex justify-between gap-2">
+                          <span>{ing.name}</span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {Math.round(ing.grams)}ג
+                          </span>
+                        </div>
+                      ))}
+                      <div className="pt-1 mt-1 border-t border-border/40 text-muted-foreground tabular-nums flex flex-wrap gap-x-3">
+                        <span>{t('settings.finished_weight')}: {Math.round(item.recipe.finishedGrams)}ג</span>
+                        <span>{t('settings.dough_total')}: {Math.round(item.recipe.totalDoughGrams)}ג</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {item.pricePerUnit && (
-                  <span className="text-sm text-muted-foreground tabular-nums">
-                    ₪{(Number(item.pricePerUnit) * item.quantity).toFixed(0)}
-                  </span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
           {order.calculatedTotal > 0 && (
             <div className="mt-4 pt-3 border-t border-border">

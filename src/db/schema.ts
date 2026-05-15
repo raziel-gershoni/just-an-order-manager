@@ -5,6 +5,7 @@ import {
   text,
   integer,
   decimal,
+  numeric,
   timestamp,
   date,
   varchar,
@@ -50,6 +51,14 @@ export const paymentTypeEnum = pgEnum('payment_type', [
   'payment',
   'charge',
   'adjustment',
+]);
+
+export const ingredientKindEnum = pgEnum('ingredient_kind', [
+  'flour',
+  'water',
+  'salt',
+  'starter',
+  'other',
 ]);
 
 // ---- Tables ----
@@ -172,6 +181,24 @@ export const breadTypeAdditions = pgTable(
     primaryKey({ columns: [table.breadTypeId, table.breadAdditionId] }),
   ]
 );
+
+export const breadRecipes = pgTable('bread_recipes', {
+  breadTypeId: integer('bread_type_id')
+    .primaryKey()
+    .references(() => breadTypes.id, { onDelete: 'cascade' }),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const breadRecipeIngredients = pgTable('bread_recipe_ingredients', {
+  id: serial('id').primaryKey(),
+  breadTypeId: integer('bread_type_id')
+    .notNull()
+    .references(() => breadRecipes.breadTypeId, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  kind: ingredientKindEnum('kind').notNull(),
+  pctOfFinished: numeric('pct_of_finished', { precision: 7, scale: 4 }).notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
 
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),

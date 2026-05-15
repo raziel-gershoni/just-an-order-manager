@@ -164,7 +164,8 @@ export async function notifyMemberJoined(
 
 export async function sendMorningSummary(
   groupId: number,
-  orders: { customerName: string; breadTypeName: string; quantity: number }[]
+  orders: { customerName: string; breadTypeName: string; quantity: number }[],
+  recipeBlock?: string
 ) {
   if (orders.length === 0) return;
 
@@ -198,6 +199,10 @@ export async function sendMorningSummary(
     lines.push(
       `<b>${t('notify.total_today', lang)}:</b> ${totalLoaves} ${t('notify.loaves', lang)}`
     );
+
+    if (recipeBlock) {
+      lines.push('', recipeBlock);
+    }
 
     return lines.join('\n');
   });

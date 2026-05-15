@@ -14,6 +14,7 @@ import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight,
   Star,
 } from 'lucide-react';
+import { RecipeEditor } from '@/components/RecipeEditor';
 
 interface BreadSize {
   id: number;
@@ -860,6 +861,14 @@ export default function CatalogPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Recipe */}
+                    <RecipeEditor
+                      breadTypeId={bt.id}
+                      defaultReferenceWeight={
+                        typeDetailSizes.find((s) => s.enabled && s.weightGrams != null)?.weightGrams ?? null
+                      }
+                    />
 
                     <div className="flex gap-2 items-center pt-1">
                       <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(bt.id)}>

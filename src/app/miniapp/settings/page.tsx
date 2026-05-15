@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, ChevronRight, ChevronLeft, Wheat } from 'lucide-react';
+import { Copy, Check, ChevronRight, ChevronLeft, Wheat, ChefHat } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 
@@ -123,6 +123,26 @@ export default function SettingsPage() {
                 <div className="font-medium">{t('settings.manage_catalog')}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {t('settings.bread_types')} · {t('settings.global_sizes')}
+                </div>
+              </div>
+            </div>
+            <Chevron className="h-4 w-4 text-muted-foreground/40" />
+          </Card>
+        </Link>
+      </section>
+
+      {/* Baker page link */}
+      <section>
+        <Link href="/miniapp/baker">
+          <Card className="flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer bg-primary/5 border-primary/20">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <ChefHat className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="font-medium">{t('baker.title')}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {t('baker.recipe_block_title')}
                 </div>
               </div>
             </div>

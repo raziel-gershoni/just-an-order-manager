@@ -1,9 +1,10 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions } from '@/db/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients } from '@/db/schema';
+import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
+import { scaleRecipe, type Recipe, type ScaledRecipe } from '@/lib/recipe';
 
 function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
@@ -41,6 +42,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       breadTypeName: breadTypes.name,
       breadSizeId: orderItems.breadSizeId,
       sizeName: breadSizes.name,
+      sizeWeightGrams: breadSizes.weightGrams,
       quantity: orderItems.quantity,
       pricePerUnit: orderItems.pricePerUnit,
     })
@@ -70,10 +72,47 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     additionsByItem[a.orderItemId].push({ id: a.breadAdditionId, name: a.name });
   }
 
-  const items = itemRows.map((i) => ({
-    ...i,
-    additions: additionsByItem[i.id] ?? [],
-  }));
+  // Fetch recipes for involved bread types and scale per item (per-loaf, qty=1)
+  const involvedTypeIds = Array.from(new Set(itemRows.map((i) => i.breadTypeId)));
+  const recipeRows = involvedTypeIds.length
+    ? await db
+        .select()
+        .from(breadRecipes)
+        .where(inArray(breadRecipes.breadTypeId, involvedTypeIds))
+    : [];
+  const ingredientRows = recipeRows.length
+    ? await db
+        .select()
+        .from(breadRecipeIngredients)
+        .where(inArray(breadRecipeIngredients.breadTypeId, involvedTypeIds))
+        .orderBy(asc(breadRecipeIngredients.sortOrder))
+    : [];
+  const recipeByType = new Map<number, Recipe>();
+  for (const r of recipeRows) recipeByType.set(r.breadTypeId, { ingredients: [] });
+  for (const i of ingredientRows) {
+    const r = recipeByType.get(i.breadTypeId);
+    if (!r) continue;
+    r.ingredients.push({
+      name: i.name,
+      kind: i.kind,
+      pctOfFinished: Number(i.pctOfFinished),
+      sortOrder: i.sortOrder,
+    });
+  }
+
+  const items = itemRows.map((i) => {
+    let recipe: ScaledRecipe | null = null;
+    const r = recipeByType.get(i.breadTypeId);
+    if (r && r.ingredients.length > 0 && i.sizeWeightGrams != null) {
+      recipe = scaleRecipe(r, i.sizeWeightGrams);
+    }
+    return {
+      ...i,
+      additions: additionsByItem[i.id] ?? [],
+      hasRecipe: recipe != null,
+      recipe,
+    };
+  });
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
   const calculatedTotal = items.reduce(
