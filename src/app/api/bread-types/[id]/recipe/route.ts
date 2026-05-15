@@ -13,22 +13,23 @@ function getBreadTypeId(url: string): number {
 
 async function authorize(
   breadTypeId: number,
-  auth: { memberships: { groupId: number; role: string }[] }
+  auth: { memberships: { groupId: number; role: string }[] },
+  opts: { allowBaker: boolean }
 ): Promise<{ groupId: number } | Response> {
   const [row] = await db.select().from(breadTypes).where(eq(breadTypes.id, breadTypeId)).limit(1);
   if (!row) return errorResponse('Bread type not found', 404);
 
   const membership = auth.memberships.find((m) => m.groupId === row.groupId);
   if (!membership) return errorResponse('Not a member', 403);
-  if (membership.role === 'baker') {
-    return errorResponse('Bakers cannot manage recipes', 403);
+  if (!opts.allowBaker && membership.role === 'baker') {
+    return errorResponse('Only managers can delete recipes', 403);
   }
   return { groupId: row.groupId };
 }
 
 export const GET = withAuth(async (request, auth) => {
   const breadTypeId = getBreadTypeId(request.url);
-  const authResult = await authorize(breadTypeId, auth);
+  const authResult = await authorize(breadTypeId, auth, { allowBaker: true });
   if (authResult instanceof Response) return authResult;
 
   const [recipeRow] = await db
@@ -85,7 +86,7 @@ const putSchema = z.object({
 
 export const PUT = withAuth(async (request, auth) => {
   const breadTypeId = getBreadTypeId(request.url);
-  const authResult = await authorize(breadTypeId, auth);
+  const authResult = await authorize(breadTypeId, auth, { allowBaker: true });
   if (authResult instanceof Response) return authResult;
 
   const body = await request.json();
@@ -146,7 +147,7 @@ export const PUT = withAuth(async (request, auth) => {
 
 export const DELETE = withAuth(async (request, auth) => {
   const breadTypeId = getBreadTypeId(request.url);
-  const authResult = await authorize(breadTypeId, auth);
+  const authResult = await authorize(breadTypeId, auth, { allowBaker: false });
   if (authResult instanceof Response) return authResult;
 
   await db.delete(breadRecipeIngredients).where(eq(breadRecipeIngredients.breadTypeId, breadTypeId));
