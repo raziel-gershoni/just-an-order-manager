@@ -77,6 +77,9 @@ export const groups = pgTable('groups', {
   createdBy: integer('created_by')
     .notNull()
     .references(() => users.id),
+  additionsSurcharge: decimal('additions_surcharge', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

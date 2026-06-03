@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients } from '@/db/schema';
+import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients, groups } from '@/db/schema';
 import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
@@ -249,6 +249,13 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
       additionTypeLinks.map((l) => `${l.breadTypeId}:${l.breadAdditionId}`)
     );
 
+    const [grp] = await db
+      .select({ surcharge: groups.additionsSurcharge })
+      .from(groups)
+      .where(eq(groups.id, groupId))
+      .limit(1);
+    const surcharge = Number(grp?.surcharge ?? 0);
+
     const itemValues: typeof orderItems.$inferInsert[] = [];
     for (const item of parsed.data.items) {
       if (!validTypeIds.has(item.breadTypeId)) {
@@ -276,12 +283,14 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
           );
         }
       }
+      const base = Number(link.priceOverride ?? size.price);
+      const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
       itemValues.push({
         orderId: id,
         breadTypeId: item.breadTypeId,
         breadSizeId: item.breadSizeId,
         quantity: item.quantity,
-        pricePerUnit: link.priceOverride ?? size.price,
+        pricePerUnit: (base + (hasAdditions ? surcharge : 0)).toFixed(2),
       });
     }
 

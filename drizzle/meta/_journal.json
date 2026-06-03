@@ -57,6 +57,13 @@
       "when": 1779206400000,
       "tag": "0007_recipes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780000000000,
+      "tag": "0008_additions_surcharge",
+      "breakpoints": true
     }
   ]
 }

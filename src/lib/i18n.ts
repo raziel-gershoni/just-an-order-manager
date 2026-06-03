@@ -144,6 +144,9 @@ const translations: Record<string, Record<Lang, string>> = {
   'settings.additions': { en: 'Additions', he: 'תוספות' },
   'settings.add_addition': { en: 'Add Addition', he: 'הוסף תוספת' },
   'settings.enabled_additions': { en: 'Additions for this type', he: 'תוספות לסוג זה' },
+  'settings.additions_surcharge': { en: 'Surcharge when additions added', he: 'תוספת מחיר כאשר נבחרת תוספת' },
+  'settings.additions_surcharge_hint': { en: 'Added once per unit, regardless of how many additions', he: 'מתווסף פעם אחת לכל יחידה, ללא קשר למספר התוספות' },
+  'settings.additions_surcharge_saved': { en: 'Surcharge saved', he: 'תוספת המחיר נשמרה' },
   'form.additions': { en: 'Additions', he: 'תוספות' },
 
   // Recipes (in-dough ingredients)

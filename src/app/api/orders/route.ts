@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions, groups } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
 import { formatItemLine } from '@/lib/order-display';
 import { z } from 'zod/v4';
@@ -194,6 +194,13 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     additionTypeLinks.map((l) => `${l.breadTypeId}:${l.breadAdditionId}`)
   );
 
+  const [grp] = await db
+    .select({ surcharge: groups.additionsSurcharge })
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .limit(1);
+  const surcharge = Number(grp?.surcharge ?? 0);
+
   const itemValues: typeof orderItems.$inferInsert[] = [];
   for (const item of items) {
     if (!btMap[item.breadTypeId]) {
@@ -221,7 +228,9 @@ export const POST = withGroup(async (request, _auth, groupId) => {
         );
       }
     }
-    const pricePerUnit = link.priceOverride ?? size.price;
+    const base = Number(link.priceOverride ?? size.price);
+    const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
+    const pricePerUnit = (base + (hasAdditions ? surcharge : 0)).toFixed(2);
     itemValues.push({
       orderId: 0, // placeholder, filled after order insert
       breadTypeId: item.breadTypeId,

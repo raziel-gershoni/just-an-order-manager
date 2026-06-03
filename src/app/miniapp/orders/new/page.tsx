@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
+import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
@@ -43,6 +44,7 @@ const deliveryIcons: Record<DeliveryType, typeof Calendar> = {
 
 function OrderFormContent() {
   const { apiFetch } = useApi();
+  const { activeGroupId } = useGroup();
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useT();
@@ -54,6 +56,7 @@ function OrderFormContent() {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
+  const [additionsSurcharge, setAdditionsSurcharge] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -78,14 +81,21 @@ function OrderFormContent() {
       apiFetch<{ breadTypes: BreadType[] }>('/bread-types'),
     ];
 
+    if (activeGroupId) {
+      loads.push(apiFetch<{ group: { additionsSurcharge: string } }>(`/groups/${activeGroupId}`));
+    } else {
+      loads.push(Promise.resolve({ group: { additionsSurcharge: '0' } }));
+    }
+
     if (isEdit) {
       loads.push(apiFetch<{ order: { customerId: number; customerName: string; deliveryType: string; deliveryDate: string | null; notes: string | null; status: string; items: { breadTypeId: number; breadSizeId: number | null; quantity: number }[] } }>(`/orders/${editId}`));
     }
 
     Promise.all(loads)
-      .then(([c, b, o]: any[]) => {
+      .then(([c, b, g, o]: any[]) => {
         setCustomers(c.customers);
         setBreadTypes(b.breadTypes);
+        setAdditionsSurcharge(Number(g?.group?.additionsSurcharge ?? 0));
 
         if (isEdit && o?.order) {
           const order = o.order;
@@ -349,7 +359,12 @@ function OrderFormContent() {
                   {/* Additions — multi-select chips */}
                   {(selectedType?.enabledAdditions?.length ?? 0) > 0 && (
                     <div>
-                      <div className="text-xs text-muted-foreground mb-1.5 px-1">{t('form.additions')}</div>
+                      <div className="text-xs text-muted-foreground mb-1.5 px-1 flex items-center gap-1.5">
+                        <span>{t('form.additions')}</span>
+                        {additionsSurcharge > 0 && item.breadAdditionIds.length > 0 && (
+                          <span className="text-primary tabular-nums">+₪{additionsSurcharge}</span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {selectedType!.enabledAdditions!.map((a) => {
                           const selected = item.breadAdditionIds.includes(a.id);

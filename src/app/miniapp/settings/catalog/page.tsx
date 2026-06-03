@@ -109,6 +109,8 @@ export default function CatalogPage() {
   const [newAdditionName, setNewAdditionName] = useState('');
   const [newAdditionDefault, setNewAdditionDefault] = useState(false);
   const [savingAdditionOrder, setSavingAdditionOrder] = useState(false);
+  const [additionsSurcharge, setAdditionsSurcharge] = useState('');
+  const [savingSurcharge, setSavingSurcharge] = useState(false);
 
   // ---- Bread types state ----
   const [expandedTypeId, setExpandedTypeId] = useState<number | null>(null);
@@ -126,15 +128,39 @@ export default function CatalogPage() {
       apiFetch<{ breadTypes: BreadType[] }>(`/groups/${activeGroupId}/bread-types`),
       apiFetch<{ sizes: BreadSize[] }>(`/groups/${activeGroupId}/bread-sizes`),
       apiFetch<{ additions: BreadAddition[] }>(`/groups/${activeGroupId}/bread-additions`),
+      apiFetch<{ group: { additionsSurcharge: string } }>(`/groups/${activeGroupId}`),
     ])
-      .then(([typesResp, sizesResp, additionsResp]) => {
+      .then(([typesResp, sizesResp, additionsResp, groupResp]) => {
         setBreadTypes(typesResp.breadTypes);
         setSizes(sizesResp.sizes);
         setAdditions(additionsResp.additions);
+        setAdditionsSurcharge(String(Number(groupResp.group.additionsSurcharge ?? 0)));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [activeGroupId]);
+
+  async function saveAdditionsSurcharge(value: string) {
+    if (!activeGroupId) return;
+    const v = value.trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(v)) {
+      toast.error(t('settings.delete_failed'));
+      return;
+    }
+    setSavingSurcharge(true);
+    try {
+      await apiFetch(`/groups/${activeGroupId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ additionsSurcharge: v }),
+      });
+      setAdditionsSurcharge(String(Number(v)));
+      toast.success(t('settings.additions_surcharge_saved'));
+    } catch {
+      toast.error(t('settings.delete_failed'));
+    } finally {
+      setSavingSurcharge(false);
+    }
+  }
 
   // ============ SIZES CATALOG ============
 
@@ -665,6 +691,32 @@ export default function CatalogPage() {
           </button>
 
           {additionsSectionOpen && (<>
+          <Card className="mb-3 p-3 space-y-2">
+            <label className="text-sm font-medium">
+              {t('settings.additions_surcharge')}
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-sm shrink-0">₪</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={additionsSurcharge}
+                onChange={(e) => setAdditionsSurcharge(e.target.value)}
+                placeholder="0"
+                className="flex-1"
+              />
+              <Button
+                size="sm"
+                onClick={() => saveAdditionsSurcharge(additionsSurcharge)}
+                loading={savingSurcharge}
+              >
+                {t('settings.save')}
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {t('settings.additions_surcharge_hint')}
+            </div>
+          </Card>
           <div className="space-y-2">
             {additions.length === 0 && (
               <Card className="text-sm text-muted-foreground italic text-center py-6">—</Card>
