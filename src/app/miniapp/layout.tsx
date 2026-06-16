@@ -58,7 +58,7 @@ function AppProviders({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, [ready, initDataRaw]);
 
-  const dir = lang === 'he' ? 'rtl' : 'ltr';
+  const dir = 'rtl';
 
   return (
     <LangCtx.Provider value={lang}>
