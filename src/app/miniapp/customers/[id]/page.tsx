@@ -186,19 +186,19 @@ export default function CustomerDetailPage() {
         {/* Balance */}
         <Card className={cn(
           'text-center',
-          balanceNum < 0 ? 'border-destructive/20 bg-destructive/3' : 'border-emerald-200 bg-emerald-50/50'
+          balanceNum < 0 ? 'border-destructive/20 bg-destructive/3' : 'border-success/30 bg-success/10'
         )}>
           <span className="text-sm text-muted-foreground">{t('customers.balance')}</span>
           {balanceNum === 0 ? (
-            <div className="text-2xl font-bold text-emerald-600 mt-1">
+            <div className="text-2xl font-bold text-success mt-1">
               {t('customers.balance_square')}
             </div>
           ) : (
             <>
-              <div className={cn('text-3xl font-bold tabular-nums mt-1', balanceNum < 0 ? 'text-destructive' : 'text-emerald-600')}>
+              <div className={cn('text-3xl font-bold tabular-nums mt-1', balanceNum < 0 ? 'text-destructive' : 'text-success')}>
                 ₪{Math.abs(balanceNum).toFixed(0)}
               </div>
-              <span className={cn('text-sm', balanceNum < 0 ? 'text-destructive/70' : 'text-emerald-600/70')}>
+              <span className={cn('text-sm', balanceNum < 0 ? 'text-destructive/70' : 'text-success/70')}>
                 {balanceNum > 0 ? t('customers.balance_credit') : t('customers.balance_debt')}
               </span>
             </>
@@ -240,7 +240,7 @@ export default function CustomerDetailPage() {
                   autoFocus
                 />
                 <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => savePhone(p.id)}>
-                  <Check className="h-4 w-4 text-emerald-600" />
+                  <Check className="h-4 w-4 text-success" />
                 </Button>
                 <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditingPhoneId(null)}>
                   <X className="h-4 w-4" />
@@ -271,7 +271,7 @@ export default function CustomerDetailPage() {
                 autoFocus
               />
               <Button size="icon" variant="ghost" className="h-9 w-9" disabled={!newPhoneValue.trim()} onClick={addPhone}>
-                <Check className="h-4 w-4 text-emerald-600" />
+                <Check className="h-4 w-4 text-success" />
               </Button>
               <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setShowAddPhone(false); setNewPhoneValue(''); }}>
                 <X className="h-4 w-4" />
@@ -383,7 +383,7 @@ export default function CustomerDetailPage() {
                       <span className="text-muted-foreground ms-2">{p.description}</span>
                     )}
                   </div>
-                  <span className={cn('font-medium tabular-nums', Number(p.amount) >= 0 ? 'text-emerald-600' : 'text-destructive')}>
+                  <span className={cn('font-medium tabular-nums', Number(p.amount) >= 0 ? 'text-success' : 'text-destructive')}>
                     {Number(p.amount) >= 0 ? '+' : ''}₪{Math.abs(Number(p.amount)).toFixed(0)}
                   </span>
                 </div>

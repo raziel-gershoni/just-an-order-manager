@@ -106,7 +106,7 @@ function PaymentsContent() {
             className={cn(
               'flex-1 py-2.5 rounded-md text-sm font-medium transition-all',
               type === 'payment'
-                ? 'bg-emerald-500 text-white shadow-sm'
+                ? 'bg-success text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => setType('payment')}
@@ -136,7 +136,7 @@ function PaymentsContent() {
                   {getInitial(selectedCustomer.name)}
                 </div>
                 <span className="font-medium">{selectedCustomer.name}</span>
-                <Check className="h-4 w-4 text-emerald-500" />
+                <Check className="h-4 w-4 text-success" />
               </div>
               <Button variant="ghost" size="sm" onClick={() => setCustomerId(null)}>
                 {t('form.change')}

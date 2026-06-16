@@ -480,12 +480,12 @@ export default function OrderDetailPage() {
 
         {/* Paid confirmation */}
         {order.status === 'delivered' && order.paid && balance !== null && (
-          <Card className="border-emerald-200 bg-emerald-50/50">
+          <Card className="border-success/30 bg-success/10">
             <div className="text-center text-sm">
               {balance === 0 ? (
-                <span className="text-emerald-700 font-medium">{t('customers.balance_square')}</span>
+                <span className="text-success font-medium">{t('customers.balance_square')}</span>
               ) : balance > 0 ? (
-                <span className="text-emerald-700">{t('customers.balance_credit')}: ₪{balance.toFixed(0)}</span>
+                <span className="text-success">{t('customers.balance_credit')}: ₪{balance.toFixed(0)}</span>
               ) : (
                 <span className="text-destructive">{t('customers.balance_debt')}: ₪{Math.abs(balance).toFixed(0)}</span>
               )}
@@ -532,7 +532,7 @@ function PaymentOptions({
       {balance !== null && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">{t('customers.balance')}</span>
-          <span className={cn('font-medium tabular-nums', balance >= 0 ? 'text-emerald-600' : 'text-destructive')}>
+          <span className={cn('font-medium tabular-nums', balance >= 0 ? 'text-success' : 'text-destructive')}>
             ₪{balance.toFixed(0)}
           </span>
         </div>

@@ -246,7 +246,7 @@ function OrderFormContent() {
                   {getInitial(selectedCustomer?.name ?? '')}
                 </div>
                 <span className="font-medium">{selectedCustomer?.name}</span>
-                <Check className="h-4 w-4 text-emerald-500" />
+                <Check className="h-4 w-4 text-success" />
               </div>
               <Button variant="ghost" size="sm" onClick={() => setCustomerId(null)}>
                 {t('form.change')}
