@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Assistant, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// DOCKET type system: Assistant (Hebrew body), Space Grotesk (Latin display),
+// JetBrains Mono (data: prices, grams, ticket numbers).
+const assistant = Assistant({
+  variable: "--font-assistant",
+  subsets: ["hebrew", "latin"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
 });
 
@@ -27,7 +34,7 @@ export default function RootLayout({
     <html
       lang="he"
       dir="rtl"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${assistant.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Script
