@@ -8,7 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, ChevronRight, ChevronLeft, Wheat, ChefHat } from 'lucide-react';
+import { Copy, Check, ChevronRight, ChevronLeft, ChefHat } from 'lucide-react';
+import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 
@@ -78,8 +79,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-5 space-y-6 animate-fade-in">
-      <h1 className="text-xl font-bold tracking-tight">{t('settings.title')}</h1>
+    <>
+      <ControlCenterTabs />
+      <div className="p-5 space-y-6 animate-fade-in">
 
       {/* Group Name */}
       <section>
@@ -109,26 +111,6 @@ export default function SettingsPage() {
             </Button>
           </div>
         </Card>
-      </section>
-
-      {/* Bread Catalog link */}
-      <section>
-        <Link href="/miniapp/settings/catalog">
-          <Card className="flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer bg-primary/5 border-primary/20">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                <Wheat className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="font-medium">{t('settings.manage_catalog')}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {t('settings.bread_types')} · {t('settings.global_sizes')}
-                </div>
-              </div>
-            </div>
-            <Chevron className="h-4 w-4 text-muted-foreground/40" />
-          </Card>
-        </Link>
       </section>
 
       {/* Baker page link */}
@@ -204,8 +186,22 @@ export default function SettingsPage() {
               </Button>
             </div>
           )}
+          {invites.length > 0 && (
+            <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+              <div className="text-xs font-medium text-muted-foreground mb-1">הזמנות ממתינות</div>
+              {invites.map((inv) => (
+                <div key={inv.id} className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{t(`role.${inv.role}`)}</span>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                    {inv.status === 'pending' ? 'ממתין' : inv.status === 'accepted' ? 'התקבל' : inv.status === 'declined' ? 'נדחה' : 'פג'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

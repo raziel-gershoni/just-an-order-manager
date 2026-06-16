@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
@@ -480,6 +481,7 @@ export default function CatalogPage() {
   return (
     <>
       <PageHeader title={t('settings.catalog')} />
+      <ControlCenterTabs />
       <div className="p-5 space-y-4 animate-fade-in">
         {/* SIZES CATALOG (managers only) */}
         {!isBaker && (
