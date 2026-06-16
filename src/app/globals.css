@@ -120,6 +120,12 @@
   --status-cancelled: #E0685A;
 }
 
+/* Reserve the scrollbar gutter always so page width doesn't jump
+   between scrolling and non-scrolling views. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
