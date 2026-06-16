@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
@@ -467,7 +466,7 @@ export default function CatalogPage() {
   if (loading) {
     return (
       <>
-        <PageHeader title={t('settings.catalog')} />
+        <ControlCenterTabs />
         <div className="p-5 space-y-4">
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
           <div className="h-48 rounded-xl bg-muted animate-pulse" />
@@ -480,7 +479,6 @@ export default function CatalogPage() {
 
   return (
     <>
-      <PageHeader title={t('settings.catalog')} />
       <ControlCenterTabs />
       <div className="p-5 space-y-4 animate-fade-in">
         {/* SIZES CATALOG (managers only) */}
