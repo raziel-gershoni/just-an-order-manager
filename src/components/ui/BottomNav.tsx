@@ -23,7 +23,7 @@ export function BottomNav({ labels }: { labels: Record<TabKey, string> }) {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/80 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-dashed border-border bg-card/80 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around h-14">
         {tabs.map((tab) => {
           const active = isActive(tab.href);
@@ -33,7 +33,7 @@ export function BottomNav({ labels }: { labels: Record<TabKey, string> }) {
               key={tab.href}
               href={tab.href}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs transition-colors rounded-lg',
+                'relative flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs transition-colors rounded-lg',
                 active
                   ? 'text-primary font-medium'
                   : 'text-muted-foreground'
