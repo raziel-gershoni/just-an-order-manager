@@ -3,14 +3,22 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
-import { useT } from '@/hooks/useLang';
+import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ChevronLeft, ChevronRight, ChefHat, AlertTriangle } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChefHat,
+  AlertTriangle,
+  ChevronDown,
+} from 'lucide-react';
 import Link from 'next/link';
 import { format, addDays, parseISO } from 'date-fns';
 import { groupByKind, type IngredientKind } from '@/lib/recipe';
+import { formatDateRelative } from '@/lib/date-utils';
+import { cn } from '@/lib/utils';
 
 interface ScaledIngredient {
   name: string;
@@ -63,19 +71,33 @@ export default function BakerPage() {
   const { apiFetch } = useApi();
   const { activeGroupId } = useGroup();
   const t = useT();
+  const lang = useLang();
 
   const [date, setDate] = useState<string>(todayISO());
   const [data, setData] = useState<BakerData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [expandedSizeBreakdown, setExpandedSizeBreakdown] = useState<Set<number>>(new Set());
 
-  useEffect(() => {
+  function load() {
     if (!activeGroupId) return;
     setLoading(true);
+    setError(false);
     apiFetch<BakerData>(`/baker?date=${date}`)
-      .then(setData)
-      .catch(() => setData(null))
+      .then((d) => {
+        setData(d);
+        setError(false);
+      })
+      .catch(() => {
+        setData(null);
+        setError(true);
+      })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, date]);
 
   const dateObj = useMemo(() => parseISO(date), [date]);
@@ -102,19 +124,32 @@ export default function BakerPage() {
 
       {/* Date picker */}
       <Card>
-        <div className="flex items-center justify-between gap-2">
-          <Button size="icon" variant="outline" onClick={() => shiftDate(-1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="flex-1 bg-transparent text-center font-medium tabular-nums focus:outline-none"
-          />
-          <Button size="icon" variant="outline" onClick={() => shiftDate(1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        <div className="space-y-2">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-base font-medium">{formatDateRelative(date, lang)}</span>
+            {date !== todayISO() && (
+              <button
+                onClick={() => setDate(todayISO())}
+                className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+              >
+                {lang === 'he' ? 'היום' : 'Today'}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Button size="icon" variant="outline" onClick={() => shiftDate(-1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="flex-1 bg-transparent text-center font-medium tabular-nums focus:outline-none"
+            />
+            <Button size="icon" variant="outline" onClick={() => shiftDate(1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -125,11 +160,23 @@ export default function BakerPage() {
         </div>
       )}
 
-      {!loading && data && data.byType.length === 0 && (
+      {!loading && error && (
+        <Card className="border-destructive/30 bg-destructive/10">
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <AlertTriangle className="h-8 w-8 text-destructive" />
+            <div className="font-medium text-destructive">שגיאה בטעינת הנתונים</div>
+            <Button variant="outline" loading={loading} onClick={() => load()}>
+              נסה שוב
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!loading && !error && data && data.byType.length === 0 && (
         <EmptyState icon={ChefHat} title={t('baker.no_orders')} />
       )}
 
-      {!loading && data && data.byType.length > 0 && (
+      {!loading && !error && data && data.byType.length > 0 && (
         <div className="space-y-3">
           {data.byType.map((typ) => (
             <Card key={typ.breadTypeId} className="space-y-3">
@@ -176,12 +223,18 @@ export default function BakerPage() {
                     <div className="border-t border-border pt-2">
                       <button
                         onClick={() => toggleBreakdown(typ.breadTypeId)}
-                        className="text-xs text-primary hover:underline"
+                        className="flex min-h-11 w-full items-center justify-between gap-2 text-sm font-medium text-primary"
                       >
-                        {expandedSizeBreakdown.has(typ.breadTypeId) ? '−' : '+'} {t('baker.by_size')}
+                        <span>{t('baker.by_size')}</span>
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 transition-transform',
+                            expandedSizeBreakdown.has(typ.breadTypeId) && 'rotate-180'
+                          )}
+                        />
                       </button>
                       {expandedSizeBreakdown.has(typ.breadTypeId) && (
-                        <div className="mt-2 space-y-2">
+                        <div className="mt-2 space-y-2 animate-slide-down">
                           {typ.bySize.map((s, idx) => (
                             <div key={idx} className="text-xs bg-muted/50 rounded-md p-2">
                               <div className="font-medium">
@@ -216,17 +269,19 @@ export default function BakerPage() {
         </div>
       )}
 
-      {!loading && data && data.unconfigured.length > 0 && (
-        <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30">
+      {!loading && !error && data && data.unconfigured.length > 0 && (
+        <Card className="border-warning/30 bg-warning/10">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
             <div className="text-xs space-y-1">
-              <div className="font-medium text-amber-700 dark:text-amber-400">
-                {t('baker.unconfigured_recipe')}
-              </div>
+              <div className="font-medium text-warning">דרושה הגדרת מתכון</div>
               {data.unconfigured.map((u) => (
                 <div key={u.breadTypeId} className="text-muted-foreground">
-                  {u.name} —{' '}
+                  {u.name}
+                  {u.reason === 'size_missing_weight' && (
+                    <span className="opacity-70"> · חסר משקל לגודל</span>
+                  )}{' '}
+                  —{' '}
                   <Link href="/miniapp/settings/catalog" className="text-primary hover:underline">
                     {t('settings.set_recipe')}
                   </Link>
