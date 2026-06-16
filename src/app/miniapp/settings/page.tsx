@@ -200,7 +200,7 @@ export default function SettingsPage() {
             <div className="mt-3 flex items-center gap-2 p-3 bg-muted rounded-lg">
               <span className="text-sm break-all flex-1 text-muted-foreground">{inviteLink}</span>
               <Button size="icon" variant="ghost" onClick={copyInviteLink}>
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           )}

@@ -38,7 +38,7 @@ export function StatusFlow({
                 <div
                   className={cn(
                     'flex-1 h-0.5 rounded-full transition-colors',
-                    i <= currentIdx ? 'bg-emerald-400' : 'bg-border'
+                    i <= currentIdx ? 'bg-success' : 'bg-border'
                   )}
                 />
               )}
@@ -56,7 +56,7 @@ export function StatusFlow({
                 <div
                   className={cn(
                     'flex-1 h-0.5 rounded-full transition-colors',
-                    i < currentIdx ? 'bg-emerald-400' : 'bg-border'
+                    i < currentIdx ? 'bg-success' : 'bg-border'
                   )}
                 />
               )}
