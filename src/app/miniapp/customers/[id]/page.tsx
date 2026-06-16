@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 
 interface CustomerPhone {
@@ -45,6 +45,7 @@ export default function CustomerDetailPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -59,7 +60,9 @@ export default function CustomerDetailPage() {
   const [newPhoneValue, setNewPhoneValue] = useState('');
   const [showAddPhone, setShowAddPhone] = useState(false);
 
-  useEffect(() => {
+  function loadData() {
+    setLoading(true);
+    setError(false);
     Promise.all([
       apiFetch<{ customer: Customer }>(`/customers/${id}`),
       apiFetch<{ balance: string }>(`/customers/${id}/balance`),
@@ -72,9 +75,21 @@ export default function CustomerDetailPage() {
         setOrders(o.orders);
         setPayments(p.payments);
       })
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Normalize an Israeli phone number to international form for wa.me:
+  // strip non-digits; if it starts with 0, replace the leading 0 with 972.
+  function toIntlPhone(phone: string) {
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
+  }
 
   function startEditing() {
     if (!customer) return;
@@ -144,6 +159,7 @@ export default function CustomerDetailPage() {
   }
 
   async function deletePhone(phoneId: number) {
+    if (!window.confirm('למחוק את המספר?')) return;
     try {
       await apiFetch(`/customer-phones/${phoneId}`, { method: 'DELETE' });
       setCustomer((prev) => prev ? {
@@ -163,6 +179,21 @@ export default function CustomerDetailPage() {
           <div className="h-28 rounded-xl bg-muted animate-pulse" />
           <div className="h-14 rounded-xl bg-muted animate-pulse" />
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
+        </div>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <PageHeader title={t('form.customer')} />
+        <div className="p-5 flex flex-col items-center gap-4 text-center">
+          <p className="text-muted-foreground">טעינת הלקוח נכשלה</p>
+          <Button variant="outline" loading={loading} onClick={loadData}>
+            <Repeat className="h-4 w-4" />
+            נסה שוב
+          </Button>
         </div>
       </>
     );
@@ -248,12 +279,27 @@ export default function CustomerDetailPage() {
               </div>
             ) : (
               <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="tabular-nums">{p.phone}</span>
+                <a
+                  href={`tel:${p.phone}`}
+                  className="tabular-nums text-primary inline-flex min-h-[44px] items-center hover:underline"
+                  dir="ltr"
+                >
+                  {p.phone}
+                </a>
                 <div className="flex gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); }}>
+                  <a
+                    href={`https://wa.me/${toIntlPhone(p.phone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="WhatsApp"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-success transition-all duration-150 hover:bg-success/10 active:scale-[0.98]"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </a>
+                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => deletePhone(p.id)}>
+                  <Button size="icon" variant="ghost" className="h-11 w-11 text-destructive hover:bg-destructive/10" onClick={() => deletePhone(p.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>

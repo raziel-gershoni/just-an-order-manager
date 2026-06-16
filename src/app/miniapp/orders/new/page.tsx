@@ -218,6 +218,22 @@ function OrderFormContent() {
     ? { id: customerId!, name: customerName }
     : customers.find((c) => c.id === customerId);
 
+  // Live order total: sum of (size price + additions surcharge when item has additions) * quantity
+  let hasPricedItem = false;
+  const liveTotal = items.reduce((sum, item) => {
+    const type = breadTypes.find((bt) => bt.id === item.breadTypeId);
+    const size = type?.enabledSizes?.find((s) => s.id === item.breadSizeId);
+    if (!size) return sum;
+    hasPricedItem = true;
+    const surcharge = item.breadAdditionIds.length > 0 ? additionsSurcharge : 0;
+    return sum + (Number(size.price) + surcharge) * item.quantity;
+  }, 0);
+
+  // Earliest selectable delivery date (today, local time) as yyyy-MM-dd
+  const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
+
   const deliveryOptions: [DeliveryType, string][] = [
     ['shabbat', t('delivery.shabbat')],
     ['asap', t('delivery.asap')],
@@ -465,6 +481,7 @@ function OrderFormContent() {
             <Input
               type="date"
               value={deliveryDate}
+              min={todayIso}
               onChange={(e) => setDeliveryDate(e.target.value)}
               className="mt-3"
             />
@@ -521,16 +538,31 @@ function OrderFormContent() {
           </label>
         )}
 
-        {/* Submit */}
-        <Button
-          className="w-full"
-          size="lg"
-          disabled={!customerId || items.length === 0 || items.some((i) => !i.breadSizeId)}
-          loading={submitting}
-          onClick={handleSubmit}
-        >
-          {isEdit ? t('form.update_order') : t('form.create_order')}
-        </Button>
+        {/* Sticky submit footer — stays above the fixed bottom nav */}
+        <div className="sticky bottom-14 -mx-5 -mb-4 mt-4 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
+          {hasPricedItem && (
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">{t('orders.total')}</span>
+              <span className="font-mono text-lg font-bold tabular-nums text-primary">
+                ₪{liveTotal}
+              </span>
+            </div>
+          )}
+          <Button
+            className="w-full"
+            size="lg"
+            disabled={
+              !customerId ||
+              items.length === 0 ||
+              items.some((i) => !i.breadSizeId) ||
+              (deliveryType === 'specific_date' && !deliveryDate)
+            }
+            loading={submitting}
+            onClick={handleSubmit}
+          >
+            {isEdit ? t('form.update_order') : t('form.create_order')}
+          </Button>
+        </div>
       </div>
     </>
   );

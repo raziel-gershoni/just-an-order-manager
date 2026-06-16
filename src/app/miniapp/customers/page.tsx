@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 
@@ -29,6 +29,7 @@ export default function CustomersPage() {
   const toast = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
@@ -36,12 +37,19 @@ export default function CustomersPage() {
 
   const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
 
-  useEffect(() => {
+  function load() {
     if (!activeGroupId) return;
+    setLoading(true);
+    setError(false);
     apiFetch<{ customers: Customer[] }>('/customers')
       .then((d) => setCustomers(d.customers))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
   async function handleAdd() {
@@ -63,9 +71,14 @@ export default function CustomersPage() {
     }
   }
 
-  const filtered = customers.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+  const phoneQuery = search.replace(/\D/g, '');
+  const filtered = customers.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (phoneQuery !== '' &&
+        c.phones.some((p) => p.phone.replace(/\D/g, '').includes(phoneQuery)))
   );
+  const hasSearch = search.trim() !== '';
 
   return (
     <div className="p-5 space-y-4 animate-fade-in">
@@ -114,12 +127,26 @@ export default function CustomersPage() {
             <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />
           ))}
         </div>
+      ) : error ? (
+        <Card className="flex flex-col items-center text-center gap-3 py-8 bg-destructive/10">
+          <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <p className="text-sm text-destructive">טעינת הלקוחות נכשלה</p>
+          <Button variant="outline" onClick={load} className="min-h-11">
+            נסו שוב
+          </Button>
+        </Card>
       ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={t('customers.empty')}
-          description={t('customers.empty_hint')}
-        />
+        hasSearch && customers.length > 0 ? (
+          <EmptyState icon={SearchX} title="לא נמצאו תוצאות" />
+        ) : (
+          <EmptyState
+            icon={Users}
+            title={t('customers.empty')}
+            description={t('customers.empty_hint')}
+          />
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((c) => {

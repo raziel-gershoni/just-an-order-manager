@@ -51,6 +51,7 @@ function PaymentsContent() {
     presetOrderId ? 'charge' : 'payment'
   );
   const [description, setDescription] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
 
   useEffect(() => {
     apiFetch<{ customers: Customer[] }>('/customers')
@@ -59,8 +60,11 @@ function PaymentsContent() {
       .finally(() => setLoading(false));
   }, []);
 
+  const amountValue = Number(amount);
+  const amountValid = Number.isFinite(amountValue) && amountValue > 0;
+
   async function handleSubmit() {
-    if (!customerId || !amount) return;
+    if (!customerId || !amountValid) return;
     setSubmitting(true);
     try {
       await apiFetch('/payments', {
@@ -143,28 +147,48 @@ function PaymentsContent() {
               </Button>
             </div>
           ) : (
-            <div className="max-h-40 overflow-y-auto space-y-0.5">
-              {customers.map((c) => (
-                <button
-                  key={c.id}
-                  className="w-full text-start px-3 py-2.5 rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
-                  onClick={() => setCustomerId(c.id)}
-                >
-                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                    {getInitial(c.name)}
-                  </div>
-                  {c.name}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <Input
+                autoFocus
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                placeholder={t('form.search_customer')}
+              />
+              <div className="max-h-40 overflow-y-auto space-y-0.5">
+                {customers
+                  .filter((c) =>
+                    c.name.toLowerCase().includes(customerSearch.trim().toLowerCase())
+                  )
+                  .map((c) => (
+                    <button
+                      key={c.id}
+                      className="w-full text-start px-3 py-2.5 rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
+                      onClick={() => setCustomerId(c.id)}
+                    >
+                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                        {getInitial(c.name)}
+                      </div>
+                      {c.name}
+                    </button>
+                  ))}
+              </div>
             </div>
           )}
         </Card>
+
+        {presetOrderId && (
+          <div className="rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-medium text-primary">
+            {`חיוב עבור הזמנה #${presetOrderId}`}
+          </div>
+        )}
 
         <Card className="space-y-3">
           <Input
             label={t('payments.amount')}
             type="number"
             inputMode="decimal"
+            min="0"
+            step="0.01"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0"
@@ -182,7 +206,7 @@ function PaymentsContent() {
           className="w-full"
           size="lg"
           variant={type === 'charge' ? 'danger' : 'primary'}
-          disabled={!customerId || !amount}
+          disabled={!customerId || !amountValid}
           loading={submitting}
           onClick={handleSubmit}
         >

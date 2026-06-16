@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
 import { formatDateRelative } from '@/lib/date-utils';
-import { Plus, ClipboardList, ChevronRight, ChevronLeft, Repeat } from 'lucide-react';
+import { Plus, ClipboardList, ChevronRight, ChevronLeft, Repeat, AlertCircle, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -36,6 +36,8 @@ export default function OrdersPage() {
   const lang = useLang();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<Tab>('active');
 
   const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
@@ -43,6 +45,7 @@ export default function OrdersPage() {
   useEffect(() => {
     if (!activeGroupId) return;
     setLoading(true);
+    setError(false);
     const params = new URLSearchParams();
 
     if (tab === 'active') {
@@ -53,9 +56,9 @@ export default function OrdersPage() {
 
     apiFetch<{ orders: Order[] }>(`/orders?${params}`)
       .then((d) => setOrders(d.orders))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [activeGroupId, tab]);
+  }, [activeGroupId, tab, reloadKey]);
 
   const tabLabels: Record<Tab, string> = {
     active: t('orders.tab_active'),
@@ -99,18 +102,42 @@ export default function OrdersPage() {
             <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />
           ))}
         </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center mb-4">
+            <AlertCircle className="h-7 w-7 text-destructive" />
+          </div>
+          <h3 className="font-semibold text-foreground mb-1">{t('orders.update_failed')}</h3>
+          <p className="text-sm text-muted-foreground max-w-[240px]">
+            טעינת ההזמנות נכשלה. בדקו את החיבור ונסו שוב.
+          </p>
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-[44px]"
+              loading={loading}
+              onClick={() => setReloadKey((k) => k + 1)}
+            >
+              <RotateCw className="h-4 w-4" />
+              נסו שוב
+            </Button>
+          </div>
+        </div>
       ) : orders.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
-          title={t('orders.empty')}
-          description={t('orders.empty_hint')}
+          title={tab === 'completed' ? 'אין הזמנות שהושלמו' : t('orders.empty')}
+          description={tab === 'completed' ? undefined : t('orders.empty_hint')}
           action={
-            <Link href="/miniapp/orders/new">
-              <Button variant="outline" size="sm">
-                <Plus className="h-4 w-4" />
-                {t('dash.new_order')}
-              </Button>
-            </Link>
+            tab === 'completed' ? undefined : (
+              <Link href="/miniapp/orders/new">
+                <Button variant="outline" size="sm">
+                  <Plus className="h-4 w-4" />
+                  {t('dash.new_order')}
+                </Button>
+              </Link>
+            )
           }
         />
       ) : (
@@ -133,11 +160,18 @@ export default function OrdersPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="flex flex-col items-end gap-1">
                         <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
-                        {o.deliveryDate && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatDateRelative(o.deliveryDate, lang)}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {o.status !== 'delivered' && !o.paid && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning/10 text-warning">
+                              {t('orders.not_yet_paid')}
+                            </span>
+                          )}
+                          {o.deliveryDate && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateRelative(o.deliveryDate, lang)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <Chevron className="h-4 w-4 text-muted-foreground/30" />
                     </div>

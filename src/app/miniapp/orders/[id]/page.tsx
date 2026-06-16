@@ -77,6 +77,7 @@ export default function OrderDetailPage() {
   const toast = useToast();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [expandedRecipes, setExpandedRecipes] = useState<Set<number>>(new Set());
 
   const [showPriceEdit, setShowPriceEdit] = useState(false);
@@ -106,10 +107,15 @@ export default function OrderDetailPage() {
 
   async function updateStatus(status: string) {
     const willNotify = status === 'ready' || status === 'cancelled';
-    await apiFetch(`/orders/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, ...(willNotify && { notifyCustomer }) }),
-    });
+    try {
+      await apiFetch(`/orders/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, ...(willNotify && { notifyCustomer }) }),
+      });
+    } catch (err) {
+      toast.error(t('orders.update_failed'));
+      throw err;
+    }
     setOrder((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, status };
@@ -120,6 +126,20 @@ export default function OrderDetailPage() {
       }
       return updated;
     });
+  }
+
+  async function handleStatusAction(status: string) {
+    if (updating) return;
+    if (status === 'cancelled' && !window.confirm('לבטל את ההזמנה?')) return;
+    setUpdating(true);
+    try {
+      await updateStatus(status);
+      toast.success(t('orders.updated'));
+    } catch {
+      // error toast already shown in updateStatus; optimistic state not applied
+    } finally {
+      setUpdating(false);
+    }
   }
 
   function handleDeliverClick() {
@@ -290,7 +310,7 @@ export default function OrderDetailPage() {
                             })
                           }
                           className={cn(
-                            'text-muted-foreground hover:text-primary transition-colors',
+                            'inline-flex items-center justify-center w-11 h-11 -m-2.5 text-muted-foreground hover:text-primary transition-colors',
                             isExpanded && 'text-primary'
                           )}
                         >
@@ -348,7 +368,7 @@ export default function OrderDetailPage() {
                   )}
                   {order.status !== 'delivered' && order.status !== 'cancelled' && (
                     <button
-                      className="p-1 rounded hover:bg-muted transition-colors"
+                      className="inline-flex items-center justify-center w-11 h-11 -m-2.5 rounded hover:bg-muted transition-colors"
                       onClick={() => { setPriceInput(order.totalPrice.toFixed(0)); setShowPriceEdit(true); }}
                     >
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
@@ -411,7 +431,8 @@ export default function OrderDetailPage() {
                 key={s}
                 variant={s === 'cancelled' ? 'danger' : 'primary'}
                 className="flex-1"
-                onClick={() => updateStatus(s)}
+                loading={updating}
+                onClick={() => handleStatusAction(s)}
               >
                 {translate(`status.${s}`, lang)}
               </Button>
