@@ -278,7 +278,7 @@ export default function OrderDetailPage() {
 
         {/* Items */}
         <Card>
-          <h3 className="font-semibold mb-3">{t('form.bread_type')}</h3>
+          <h3 className="font-semibold mb-3">פריטים</h3>
           <div className="space-y-2.5">
             {order.items.map((item) => {
               const isExpanded = expandedRecipes.has(item.id);

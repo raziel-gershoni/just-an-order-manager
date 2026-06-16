@@ -105,8 +105,10 @@ function PaymentsContent() {
       <PageHeader title={t('payments.title')} />
       <div className="p-5 space-y-4 animate-fade-in">
         {/* Type toggle */}
-        <div className="flex gap-1 bg-muted p-1 rounded-lg">
+        <div role="radiogroup" className="flex gap-1 bg-muted p-1 rounded-lg">
           <button
+            role="radio"
+            aria-checked={type === 'payment'}
             className={cn(
               'flex-1 py-2.5 rounded-md text-sm font-medium transition-all',
               type === 'payment'
@@ -118,6 +120,8 @@ function PaymentsContent() {
             {t('payments.payment_plus')}
           </button>
           <button
+            role="radio"
+            aria-checked={type === 'charge'}
             className={cn(
               'flex-1 py-2.5 rounded-md text-sm font-medium transition-all',
               type === 'charge'
@@ -210,7 +214,9 @@ function PaymentsContent() {
           loading={submitting}
           onClick={handleSubmit}
         >
-          {`${t('payments.record')} ${type === 'payment' ? '+' : '-'}₪${amount || '0'}`}
+          {submitting
+            ? t('payments.recording')
+            : `${t('payments.record')} ${type === 'payment' ? '+' : '-'}₪${amount || '0'}`}
         </Button>
       </div>
     </>

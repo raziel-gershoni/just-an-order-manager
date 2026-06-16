@@ -32,7 +32,7 @@ const translations: Record<string, string> = {
   // Dashboard
   'dash.welcome': '!ברוכים הבאים',
   'dash.create_group': 'צרו את קבוצת המאפייה',
-  'dash.group_name': '...שם הקבוצה',
+  'dash.group_name': '…שם הקבוצה',
   'dash.create': 'צור',
   'dash.new_order': 'הזמנה חדשה',
   'dash.record_payment': 'רשום תשלום',
@@ -64,7 +64,7 @@ const translations: Record<string, string> = {
 
   // Order form
   'form.customer': 'לקוח',
-  'form.search_customer': '...חפש לקוח',
+  'form.search_customer': '…חפש לקוח',
   'form.add_customer': 'הוסף לקוח חדש',
   'form.customer_name': 'שם הלקוח',
   'form.add': 'הוסף',
@@ -73,13 +73,13 @@ const translations: Record<string, string> = {
   'form.quantity': 'כמות',
   'form.delivery': 'מסירה',
   'form.notes': '(הערות (אופציונלי',
-  'form.notes_placeholder': '...בקשות מיוחדות',
+  'form.notes_placeholder': '…בקשות מיוחדות',
   'form.create_order': 'צור הזמנה',
-  'form.creating': '...יוצר',
+  'form.creating': '…יוצר',
 
   // Customers
   'customers.title': 'לקוחות',
-  'customers.search': '...חיפוש',
+  'customers.search': '…חיפוש',
   'customers.empty': 'אין עדיין לקוחות',
   'customers.empty_hint': 'הוסיפו לקוח ראשון בעת יצירת הזמנה',
   'customers.balance': 'יתרה',
@@ -104,7 +104,7 @@ const translations: Record<string, string> = {
   'payments.description': '(תיאור (אופציונלי',
   'payments.description_hint': 'למשל, תשלום במזומן',
   'payments.record': 'רשום',
-  'payments.recording': '...רושם',
+  'payments.recording': '…רושם',
   'payments.success': '!התשלום נרשם',
   'payments.failed': 'רישום התשלום נכשל',
   'payments.cancel': 'ביטול',
@@ -203,7 +203,7 @@ const translations: Record<string, string> = {
   'join.failed': 'המענה להזמנה נכשל',
 
   // General
-  'general.loading': '...טוען',
+  'general.loading': '…טוען',
   'general.back': 'חזרה',
   'general.not_found': 'לא נמצא',
   'general.orders_fulfilled': 'הזמנות שסופקו',
@@ -273,7 +273,7 @@ const translations: Record<string, string> = {
   'orders.updated': 'הזמנה עודכנה!',
   'orders.update_failed': 'עדכון ההזמנה נכשל',
   'form.update_order': 'עדכן הזמנה',
-  'form.updating': '...מעדכן',
+  'form.updating': '…מעדכן',
   'form.custom_total': '(סכום מותאם (אופציונלי',
 
   // Notification balance

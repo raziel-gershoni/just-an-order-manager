@@ -152,10 +152,18 @@ export default function OrdersPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="font-medium flex items-center gap-1.5">
-                        {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                        {o.isRecurring && (
+                          <Repeat
+                            className="h-3 w-3 text-primary shrink-0"
+                            aria-label="הזמנה קבועה"
+                            role="img"
+                          >
+                            <title>הזמנה קבועה</title>
+                          </Repeat>
+                        )}
                         {o.customerName}
                       </div>
-                      <div className="text-sm text-muted-foreground mt-0.5">{o.itemsSummary}</div>
+                      <div className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{o.itemsSummary}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="flex flex-col items-end gap-1">

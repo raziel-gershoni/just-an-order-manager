@@ -125,10 +125,10 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="p-5 space-y-5">
         <div className="grid grid-cols-2 gap-3">
-          <div className="h-14 rounded-xl bg-muted animate-pulse" />
-          <div className="h-14 rounded-xl bg-muted animate-pulse" />
+          <div className="h-[68px] rounded-xl bg-muted animate-pulse" />
+          <div className="h-[68px] rounded-xl bg-muted animate-pulse" />
         </div>
         <div className="h-40 rounded-xl bg-muted animate-pulse" />
         <div className="h-24 rounded-xl bg-muted animate-pulse" />

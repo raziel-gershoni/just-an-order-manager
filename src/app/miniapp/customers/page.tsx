@@ -42,7 +42,7 @@ export default function CustomersPage() {
     setLoading(true);
     setError(false);
     apiFetch<{ customers: Customer[] }>('/customers')
-      .then((d) => setCustomers(d.customers))
+      .then((d) => setCustomers([...d.customers].sort((a, b) => a.name.localeCompare(b.name, 'he'))))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }
@@ -160,9 +160,9 @@ export default function CustomersPage() {
                       {getInitial(c.name)}
                     </div>
                     <div className="min-w-0">
-                      <span className="font-medium">{c.name}</span>
+                      <span className="block font-medium truncate">{c.name}</span>
                       {firstPhone && (
-                        <span className="text-sm text-muted-foreground ms-2">
+                        <span className="block text-sm text-muted-foreground truncate">
                           {firstPhone}
                           {extraCount > 0 && (
                             <span className="text-muted-foreground/60"> +{extraCount}</span>
