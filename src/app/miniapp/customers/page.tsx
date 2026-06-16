@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft, MessageCircle } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 
@@ -33,28 +33,8 @@ export default function CustomersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
-  const [sendingId, setSendingId] = useState<number | null>(null);
 
   const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
-
-  async function sendOne(id: number, e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (sendingId !== null) return;
-    setSendingId(id);
-    try {
-      const res = await apiFetch<{ sent: number; failed: number }>('/customers/remind', {
-        method: 'POST',
-        body: JSON.stringify({ customerIds: [id] }),
-      });
-      if (res.sent > 0) toast.success(t('reminder.sent'));
-      else toast.error(t('reminder.send_failed'));
-    } catch {
-      toast.error(t('reminder.send_failed'));
-    } finally {
-      setSendingId(null);
-    }
-  }
 
   useEffect(() => {
     if (!activeGroupId) return;
@@ -164,19 +144,7 @@ export default function CustomersPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {c.phones.length > 0 && (
-                      <button
-                        onClick={(e) => sendOne(c.id, e)}
-                        disabled={sendingId === c.id}
-                        className="h-8 w-8 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50 disabled:animate-pulse"
-                        aria-label={t('reminder.send')}
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                      </button>
-                    )}
-                    <Chevron className="h-4 w-4 text-muted-foreground/30" />
-                  </div>
+                  <Chevron className="h-4 w-4 text-muted-foreground/30 shrink-0" />
                 </Card>
               </Link>
             );

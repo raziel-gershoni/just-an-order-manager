@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, MessageCircle, Repeat, Trash2, Check, X } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X } from 'lucide-react';
 import Link from 'next/link';
 
 interface CustomerPhone {
@@ -52,7 +52,6 @@ export default function CustomerDetailPage() {
   const [editCity, setEditCity] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [sendingReminder, setSendingReminder] = useState(false);
 
   // Phone management state
   const [editingPhoneId, setEditingPhoneId] = useState<number | null>(null);
@@ -221,32 +220,6 @@ export default function CustomerDetailPage() {
             </Card>
           </Link>
         </div>
-
-        {/* Reminder button */}
-        {customer.phones.length > 0 && (
-          <button
-            disabled={sendingReminder}
-            onClick={async () => {
-              setSendingReminder(true);
-              try {
-                const res = await apiFetch<{ sent: number; failed: number }>(
-                  '/customers/remind',
-                  { method: 'POST', body: JSON.stringify({ customerIds: [customer.id] }) }
-                );
-                if (res.sent > 0) toast.success(t('reminder.sent'));
-                else toast.error(t('reminder.send_failed'));
-              } catch {
-                toast.error(t('reminder.send_failed'));
-              } finally {
-                setSendingReminder(false);
-              }
-            }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-medium text-sm hover:bg-emerald-100 transition-colors active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <MessageCircle className="h-4 w-4" />
-            {sendingReminder ? t('reminder.sending') : t('reminder.send')}
-          </button>
-        )}
 
         {/* Phones — manage inline (always visible, independent of edit drawer) */}
         <Card className="space-y-2.5">
