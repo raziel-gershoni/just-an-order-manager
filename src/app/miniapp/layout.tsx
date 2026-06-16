@@ -8,6 +8,8 @@ import { ToastCtx, type Toast } from '@/hooks/useToast';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { LangCtx } from '@/hooks/useLang';
 import { t, type Lang } from '@/lib/i18n';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 function AppProviders({ children }: { children: ReactNode }) {
   const [activeGroupId, setActiveGroupId] = useState<number | null>(null);
@@ -58,7 +60,11 @@ function AppProviders({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, [ready, initDataRaw]);
 
-  const dir = lang === 'he' ? 'rtl' : 'ltr';
+  const dir = 'rtl';
+  // Dark "back-office" theme: owner/manager in the settings/catalog area. Bakers stay light.
+  const pathname = usePathname();
+  const isBackOffice = pathname?.startsWith('/miniapp/settings') ?? false;
+  const dark = isBackOffice && activeGroupRole !== null && activeGroupRole !== 'baker';
 
   return (
     <LangCtx.Provider value={lang}>
@@ -66,7 +72,7 @@ function AppProviders({ children }: { children: ReactNode }) {
         <GroupCtx.Provider value={{ activeGroupId, activeGroupRole, setActiveGroupId, setActiveGroupRole }}>
           <div
             dir={dir}
-            className="min-h-screen bg-background text-foreground"
+            className={cn('min-h-screen bg-background text-foreground', dark && 'theme-dark')}
           >
             <Toaster
               position="top-center"

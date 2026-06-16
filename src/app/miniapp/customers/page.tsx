@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft, MessageCircle } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 
@@ -29,39 +29,27 @@ export default function CustomersPage() {
   const toast = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
-  const [sendingId, setSendingId] = useState<number | null>(null);
 
   const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
 
-  async function sendOne(id: number, e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (sendingId !== null) return;
-    setSendingId(id);
-    try {
-      const res = await apiFetch<{ sent: number; failed: number }>('/customers/remind', {
-        method: 'POST',
-        body: JSON.stringify({ customerIds: [id] }),
-      });
-      if (res.sent > 0) toast.success(t('reminder.sent'));
-      else toast.error(t('reminder.send_failed'));
-    } catch {
-      toast.error(t('reminder.send_failed'));
-    } finally {
-      setSendingId(null);
-    }
+  function load() {
+    if (!activeGroupId) return;
+    setLoading(true);
+    setError(false);
+    apiFetch<{ customers: Customer[] }>('/customers')
+      .then((d) => setCustomers([...d.customers].sort((a, b) => a.name.localeCompare(b.name, 'he'))))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    if (!activeGroupId) return;
-    apiFetch<{ customers: Customer[] }>('/customers')
-      .then((d) => setCustomers(d.customers))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
   async function handleAdd() {
@@ -83,9 +71,14 @@ export default function CustomersPage() {
     }
   }
 
-  const filtered = customers.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+  const phoneQuery = search.replace(/\D/g, '');
+  const filtered = customers.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (phoneQuery !== '' &&
+        c.phones.some((p) => p.phone.replace(/\D/g, '').includes(phoneQuery)))
   );
+  const hasSearch = search.trim() !== '';
 
   return (
     <div className="p-5 space-y-4 animate-fade-in">
@@ -134,12 +127,26 @@ export default function CustomersPage() {
             <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />
           ))}
         </div>
+      ) : error ? (
+        <Card className="flex flex-col items-center text-center gap-3 py-8 bg-destructive/10">
+          <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <p className="text-sm text-destructive">טעינת הלקוחות נכשלה</p>
+          <Button variant="outline" onClick={load} className="min-h-11">
+            נסו שוב
+          </Button>
+        </Card>
       ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={t('customers.empty')}
-          description={t('customers.empty_hint')}
-        />
+        hasSearch && customers.length > 0 ? (
+          <EmptyState icon={SearchX} title="לא נמצאו תוצאות" />
+        ) : (
+          <EmptyState
+            icon={Users}
+            title={t('customers.empty')}
+            description={t('customers.empty_hint')}
+          />
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((c) => {
@@ -153,9 +160,9 @@ export default function CustomersPage() {
                       {getInitial(c.name)}
                     </div>
                     <div className="min-w-0">
-                      <span className="font-medium">{c.name}</span>
+                      <span className="block font-medium truncate">{c.name}</span>
                       {firstPhone && (
-                        <span className="text-sm text-muted-foreground ms-2">
+                        <span className="block text-sm text-muted-foreground truncate">
                           {firstPhone}
                           {extraCount > 0 && (
                             <span className="text-muted-foreground/60"> +{extraCount}</span>
@@ -164,19 +171,7 @@ export default function CustomersPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {c.phones.length > 0 && (
-                      <button
-                        onClick={(e) => sendOne(c.id, e)}
-                        disabled={sendingId === c.id}
-                        className="h-8 w-8 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50 disabled:animate-pulse"
-                        aria-label={t('reminder.send')}
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                      </button>
-                    )}
-                    <Chevron className="h-4 w-4 text-muted-foreground/30" />
-                  </div>
+                  <Chevron className="h-4 w-4 text-muted-foreground/30 shrink-0" />
                 </Card>
               </Link>
             );

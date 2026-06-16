@@ -47,7 +47,16 @@ export default function JoinPage() {
     return (
       <>
         <PageHeader title={t('join.title')} />
-        <div className="p-4 text-center opacity-50">{t('general.loading')}</div>
+        <div className="p-4 space-y-4">
+          <Card className="space-y-3">
+            <div className="h-5 w-3/4 mx-auto rounded bg-muted animate-pulse" />
+            <div className="h-4 w-1/2 mx-auto rounded bg-muted animate-pulse" />
+          </Card>
+          <div className="flex gap-3">
+            <div className="flex-1 h-11 rounded-lg bg-muted animate-pulse" />
+            <div className="flex-1 h-11 rounded-lg bg-muted animate-pulse" />
+          </div>
+        </div>
       </>
     );
   }

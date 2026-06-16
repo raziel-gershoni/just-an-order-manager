@@ -2,16 +2,11 @@
 
 import { cn } from '@/lib/utils';
 
-const statusColors: Record<string, string> = {
-  pending: 'bg-amber-50 text-amber-800 border-amber-200',
-  confirmed: 'bg-sky-50 text-sky-800 border-sky-200',
-  baking: 'bg-orange-50 text-orange-800 border-orange-200',
-  ready: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  delivered: 'bg-stone-100 text-stone-600 border-stone-200',
-  to_be_paid: 'bg-amber-50 text-amber-800 border-amber-300',
-  cancelled: 'bg-red-50 text-red-800 border-red-200',
-};
-
+/**
+ * DOCKET status "rubber stamp". Colors come from the shared --status-* tokens
+ * (single source, also used by the border-status-* ticks), so it themes itself
+ * in both light front-of-house and dark back-office.
+ */
 export function Badge({
   status,
   label,
@@ -21,13 +16,18 @@ export function Badge({
   label: string;
   className?: string;
 }) {
+  const v = `var(--status-${status}, var(--muted-foreground))`;
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-        statusColors[status] ?? 'bg-stone-100 text-stone-800 border-stone-200',
+        'inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[11px] font-semibold tracking-wide -rotate-3',
         className
       )}
+      style={{
+        color: v,
+        borderColor: v,
+        backgroundColor: `color-mix(in oklab, ${v} 14%, var(--card))`,
+      }}
     >
       {label}
     </span>

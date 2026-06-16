@@ -15,7 +15,7 @@ export function StatusFlow({
   if (status === 'cancelled') {
     return (
       <div className="flex items-center justify-center py-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm font-medium">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 border border-destructive/30 text-destructive px-4 py-2 text-sm font-medium">
           <X className="h-4 w-4" />
           {labels.cancelled || 'Cancelled'}
         </span>
@@ -38,14 +38,14 @@ export function StatusFlow({
                 <div
                   className={cn(
                     'flex-1 h-0.5 rounded-full transition-colors',
-                    i <= currentIdx ? 'bg-emerald-400' : 'bg-border'
+                    i <= currentIdx ? 'bg-success' : 'bg-border'
                   )}
                 />
               )}
               <div
                 className={cn(
                   'w-4 h-4 rounded-full shrink-0 flex items-center justify-center transition-all',
-                  isCompleted && 'bg-emerald-500',
+                  isCompleted && 'bg-success',
                   isCurrent && 'bg-primary ring-[3px] ring-primary/20',
                   !isCompleted && !isCurrent && 'bg-muted border border-border'
                 )}
@@ -56,7 +56,7 @@ export function StatusFlow({
                 <div
                   className={cn(
                     'flex-1 h-0.5 rounded-full transition-colors',
-                    i < currentIdx ? 'bg-emerald-400' : 'bg-border'
+                    i < currentIdx ? 'bg-success' : 'bg-border'
                   )}
                 />
               )}

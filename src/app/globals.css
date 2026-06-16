@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-/* ---- Warm & Crafty Bakery Theme ---- */
+/* ============================================================
+   DOCKET design system
+   Light = front-of-house (everyone). Dark = owner back-office.
+   ============================================================ */
 
 @theme inline {
   --color-background: var(--background);
@@ -17,47 +20,104 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-assistant), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-assistant), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
 }
 
+/* ---- Light DOCKET — front-of-house (default) ---- */
 :root {
-  --radius: 0.75rem;
+  --radius: 0.375rem; /* 6px — kraft-ticket */
 
-  /* Warm cream & brown palette */
-  --background: oklch(0.97 0.01 75);
-  --foreground: oklch(0.22 0.02 55);
+  --background: #E7DCC4;   /* kraft paper */
+  --foreground: #241F1A;   /* carbon ink */
 
-  --card: oklch(0.99 0.005 75);
-  --card-foreground: oklch(0.22 0.02 55);
+  --card: #F1E9D6;         /* bag tan */
+  --card-foreground: #241F1A;
 
-  --primary: oklch(0.65 0.14 60);
-  --primary-foreground: oklch(0.98 0.005 75);
+  --primary: #5B3A8C;      /* stamp violet */
+  --primary-foreground: #F4EEDD;
 
-  --secondary: oklch(0.94 0.02 130);
-  --secondary-foreground: oklch(0.30 0.04 130);
+  --secondary: #E0D4B8;    /* muted kraft */
+  --secondary-foreground: #3A3026;
 
-  --muted: oklch(0.94 0.01 75);
-  --muted-foreground: oklch(0.55 0.02 55);
+  --muted: #DECFB0;
+  --muted-foreground: #6B5E4A;
 
-  --accent: oklch(0.60 0.15 35);
-  --accent-foreground: oklch(0.98 0.005 75);
+  --accent: #5B3A8C;
+  --accent-foreground: #F4EEDD;
 
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.98 0.005 75);
+  --destructive: #C0392B;  /* docket red */
+  --destructive-foreground: #F7ECE8;
 
-  --border: oklch(0.90 0.01 75);
-  --input: oklch(0.90 0.01 75);
-  --ring: oklch(0.65 0.14 60);
+  --success: #5E7148;      /* twine green */
+  --success-foreground: #F1F4EA;
+  --warning: #B07B1E;
+
+  --border: #D6C8A8;
+  --input: #D6C8A8;
+  --ring: #5B3A8C;
+
+  /* status hues — single source for ticks, badges, stamps */
+  --status-pending: #B07B1E;
+  --status-confirmed: #3E5C6B;
+  --status-baking: #B5611E;
+  --status-ready: #5E7148;
+  --status-delivered: #8A7E68;
+  --status-to_be_paid: #B07B1E;
+  --status-cancelled: #C0392B;
+}
+
+/* ---- Dark DOCKET — owner back-office ("מצב ניהול") ---- */
+.theme-dark {
+  --background: #1E1812;   /* charred warm-brown */
+  --foreground: #EDE3D1;   /* flour-white */
+
+  --card: #2A221A;
+  --card-foreground: #EDE3D1;
+
+  --primary: #A98BDD;      /* lightened stamp violet */
+  --primary-foreground: #1E1812;
+
+  --secondary: #34291F;
+  --secondary-foreground: #EDE3D1;
+
+  --muted: #34291F;
+  --muted-foreground: #A2937D;
+
+  --accent: #A98BDD;
+  --accent-foreground: #1E1812;
+
+  --destructive: #E0685A;
+  --destructive-foreground: #1E1812;
+
+  --success: #93B26F;
+  --success-foreground: #1E1812;
+  --warning: #E0A24A;
+
+  --border: #4A3E30;
+  --input: #4A3E30;
+  --ring: #A98BDD;
+
+  --status-pending: #E0A24A;
+  --status-confirmed: #7FA8C0;
+  --status-baking: #E0945A;
+  --status-ready: #93B26F;
+  --status-delivered: #A2937D;
+  --status-to_be_paid: #E0A24A;
+  --status-cancelled: #E0685A;
 }
 
 body {
@@ -68,71 +128,56 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ---- Animations ---- */
-
-@keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Keyboard focus baseline (fixes "no visible focus anywhere") */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
+/* ---- Animations ---- */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes expand {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 500px;
-  }
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 500px; }
 }
-
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
-
-.animate-slide-down {
-  animation: slide-down 0.25s ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-.animate-expand {
-  animation: expand 0.25s ease-out;
-  overflow: hidden;
-}
-
-.animate-pulse-soft {
-  animation: pulse-soft 2s ease-in-out infinite;
-}
-
 @keyframes fade-reorder {
   0% { opacity: 0.4; transform: translateY(-8px); }
   100% { opacity: 1; transform: translateY(0); }
 }
 
-.animate-reorder {
-  animation: fade-reorder 0.3s ease-out;
+.animate-slide-down { animation: slide-down 0.25s ease-out; }
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
+.animate-expand { animation: expand 0.25s ease-out; overflow: hidden; }
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+.animate-reorder { animation: fade-reorder 0.3s ease-out; }
+
+/* Respect reduced motion (a11y) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-/* ---- Status border colors ---- */
-.border-status-pending { border-inline-start: 3px solid oklch(0.75 0.15 85); }
-.border-status-confirmed { border-inline-start: 3px solid oklch(0.65 0.15 230); }
-.border-status-baking { border-inline-start: 3px solid oklch(0.70 0.17 55); }
-.border-status-ready { border-inline-start: 3px solid oklch(0.65 0.18 155); }
-.border-status-delivered { border-inline-start: 3px solid oklch(0.70 0.01 75); }
-.border-status-to_be_paid { border-inline-start: 3px solid oklch(0.70 0.15 70); }
-.border-status-cancelled { border-inline-start: 3px solid oklch(0.55 0.2 25); }
+/* ---- Status border ticks (share the token source above) ---- */
+.border-status-pending { border-inline-start: 3px solid var(--status-pending); }
+.border-status-confirmed { border-inline-start: 3px solid var(--status-confirmed); }
+.border-status-baking { border-inline-start: 3px solid var(--status-baking); }
+.border-status-ready { border-inline-start: 3px solid var(--status-ready); }
+.border-status-delivered { border-inline-start: 3px solid var(--status-delivered); }
+.border-status-to_be_paid { border-inline-start: 3px solid var(--status-to_be_paid); }
+.border-status-cancelled { border-inline-start: 3px solid var(--status-cancelled); }

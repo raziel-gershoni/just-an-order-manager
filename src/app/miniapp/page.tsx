@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Plus, Banknote, Wheat, CalendarDays, AlertTriangle, ChevronRight, ChevronLeft, Repeat } from 'lucide-react';
+import { Plus, Banknote, Wheat, CalendarDays, AlertTriangle, ChevronRight, ChevronLeft, Repeat, StickyNote, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 interface DashboardData {
@@ -53,6 +53,7 @@ export default function Dashboard() {
   const toast = useToast();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
 
@@ -60,16 +61,22 @@ export default function Dashboard() {
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
+  function loadDashboard() {
     if (!activeGroupId) {
       setLoading(false);
       return;
     }
     setLoading(true);
+    setError(false);
     apiFetch<DashboardData>('/dashboard')
       .then(setData)
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
   async function handleCreateGroup() {
@@ -118,13 +125,29 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="p-5 space-y-5">
         <div className="grid grid-cols-2 gap-3">
-          <div className="h-14 rounded-xl bg-muted animate-pulse" />
-          <div className="h-14 rounded-xl bg-muted animate-pulse" />
+          <div className="h-[68px] rounded-xl bg-muted animate-pulse" />
+          <div className="h-[68px] rounded-xl bg-muted animate-pulse" />
         </div>
         <div className="h-40 rounded-xl bg-muted animate-pulse" />
         <div className="h-24 rounded-xl bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 animate-fade-in">
+        <EmptyState
+          icon={AlertTriangle}
+          title="שגיאה בטעינת הנתונים"
+          action={
+            <Button variant="outline" size="sm" onClick={loadDashboard}>
+              נסה שוב
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -150,6 +173,16 @@ export default function Dashboard() {
           </Card>
         </Link>
       </div>
+
+      {/* Pending triage chip */}
+      {data?.pendingCount != null && data.pendingCount > 0 && (
+        <Link href="/miniapp/orders" className="block">
+          <div className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl bg-warning/10 text-warning font-medium text-sm">
+            <Clock className="h-4 w-4 shrink-0" />
+            ממתינות · {data.pendingCount}
+          </div>
+        </Link>
+      )}
 
       {/* Today's Orders */}
       <Card className="p-0 overflow-hidden">
@@ -187,6 +220,7 @@ export default function Dashboard() {
                       <div className="font-medium flex items-center gap-1.5">
                         {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
                         {o.customerName}
+                        {o.notes && <StickyNote className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                       </div>
                       <div className="text-sm text-muted-foreground">{o.itemsSummary}</div>
                     </div>

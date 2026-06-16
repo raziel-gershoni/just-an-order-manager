@@ -9,9 +9,10 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
-  Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight,
+  Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
   Star,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
@@ -475,9 +476,12 @@ export default function CatalogPage() {
     );
   }
 
+  const editingType = breadTypes.find((bt) => bt.id === expandedTypeId) ?? null;
+
   return (
     <>
       <PageHeader title={t('settings.catalog')} />
+      <ControlCenterTabs />
       <div className="p-5 space-y-4 animate-fade-in">
         {/* SIZES CATALOG (managers only) */}
         {!isBaker && (
@@ -859,201 +863,35 @@ export default function CatalogPage() {
 
           {breadTypesSectionOpen && (<>
           <div className="space-y-2">
-            {breadTypes.map((bt) => (
-              <div key={bt.id} className="space-y-1">
-                <Card className="flex justify-between items-center">
+            {breadTypes.map((bt) => {
+              const priced = bt.enabledSizes
+                .map((s) => Number(s.priceOverride ?? s.price))
+                .filter((n) => !Number.isNaN(n));
+              const low = priced.length ? Math.min(...priced) : null;
+              const high = priced.length ? Math.max(...priced) : null;
+              return (
+                <Card key={bt.id} className="flex justify-between items-center">
                   <button
                     type="button"
                     className="flex items-center gap-2 flex-1 text-start min-w-0"
                     onClick={() => expandType(bt.id)}
                   >
-                    <ChevronRight
-                      className={cn(
-                        'h-4 w-4 text-muted-foreground transition-transform shrink-0',
-                        expandedTypeId === bt.id && 'rotate-90'
-                      )}
-                    />
-                    <span className={cn('font-medium', !bt.isActive && 'text-muted-foreground line-through')}>
-                      {bt.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-                      ({bt.enabledSizes.length})
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className={cn('font-medium truncate', !bt.isActive && 'text-muted-foreground line-through')}>
+                        {bt.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground tabular-nums">
+                        {bt.enabledSizes.length} גדלים
+                        {low != null && high != null && (
+                          low === high ? ` · ₪${low}` : ` · ₪${low}–${high}`
+                        )}
+                      </div>
+                    </div>
+                    <ChevronLeft className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                   </button>
                 </Card>
-
-                {expandedTypeId === bt.id && (
-                  <Card className="animate-expand p-3 space-y-3 ms-3">
-                    {/* Name (managers edit, bakers see read-only) */}
-                    {isBaker ? (
-                      <div className="text-base font-semibold">{bt.name}</div>
-                    ) : (
-                      <Input
-                        label={t('settings.name')}
-                        value={typeNameDraft}
-                        onChange={(e) => setTypeNameDraft(e.target.value)}
-                      />
-                    )}
-
-                    {/* Recipe — surfaced near the top (primary use case) */}
-                    <RecipeEditor
-                      breadTypeId={bt.id}
-                      defaultReferenceWeight={
-                        typeDetailSizes.find((s) => s.enabled && s.weightGrams != null)?.weightGrams ?? null
-                      }
-                    />
-
-                    {/* Sizes */}
-                    {isBaker ? (
-                      typeDetailSizes.some((s) => s.enabled) && (
-                        <div className="border-t border-border pt-3">
-                          <div className="text-sm font-medium text-muted-foreground mb-1.5">
-                            {t('settings.enabled_sizes')}
-                          </div>
-                          <div className="text-sm space-y-0.5">
-                            {typeDetailSizes
-                              .filter((s) => s.enabled)
-                              .map((s) => (
-                                <div key={s.id} className="flex justify-between gap-2">
-                                  <span>
-                                    {s.name}
-                                    {s.weightGrams != null && (
-                                      <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">
-                                        {s.weightGrams}g
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground tabular-nums">
-                                    ₪{s.priceOverride ?? s.price}
-                                  </span>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )
-                    ) : (
-                      <div className="border-t border-border pt-3">
-                        <div className="text-sm font-medium text-muted-foreground mb-2">
-                          {t('settings.enabled_sizes')}
-                        </div>
-                        {typeDetailSizes.length === 0 && (
-                          <p className="text-xs text-muted-foreground italic px-2 py-3">
-                            {t('settings.no_enabled_sizes')}
-                          </p>
-                        )}
-                        <div className="space-y-1.5">
-                          {typeDetailSizes.map((s) => (
-                            <div
-                              key={s.id}
-                              className={cn(
-                                'rounded-lg border p-2.5 transition-colors',
-                                s.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
-                              )}
-                            >
-                              <label className="flex items-center gap-2.5 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={s.enabled}
-                                  onChange={() => toggleEnabled(s.id)}
-                                  className="h-4 w-4 accent-primary cursor-pointer"
-                                />
-                                <span className={cn('text-sm font-medium flex-1', !s.enabled && 'text-muted-foreground')}>
-                                  {s.name}
-                                  {s.weightGrams != null && (
-                                    <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">{s.weightGrams}g</span>
-                                  )}
-                                </span>
-                                <span className="text-xs text-muted-foreground tabular-nums">
-                                  ₪{s.price}
-                                </span>
-                              </label>
-                              {s.enabled && (
-                                <div className="mt-2 flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground shrink-0">
-                                    {t('settings.price_override')}
-                                  </span>
-                                  <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    value={s.priceOverride ?? ''}
-                                    onChange={(e) => updateOverride(s.id, e.target.value)}
-                                    placeholder={`₪${s.price}`}
-                                    className="flex-1 max-w-32"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Additions */}
-                    {isBaker ? (
-                      typeDetailAdditions.some((a) => a.enabled) && (
-                        <div className="border-t border-border pt-3">
-                          <div className="text-sm font-medium text-muted-foreground mb-1.5">
-                            {t('settings.enabled_additions')}
-                          </div>
-                          <div className="text-sm">
-                            {typeDetailAdditions
-                              .filter((a) => a.enabled)
-                              .map((a) => a.name)
-                              .join(' · ')}
-                          </div>
-                        </div>
-                      )
-                    ) : (
-                      typeDetailAdditions.length > 0 && (
-                        <div className="border-t border-border pt-3">
-                          <div className="text-sm font-medium text-muted-foreground mb-2">
-                            {t('settings.enabled_additions')}
-                          </div>
-                          <div className="space-y-1.5">
-                            {typeDetailAdditions.map((a) => (
-                              <label
-                                key={a.id}
-                                className={cn(
-                                  'flex items-center gap-2.5 cursor-pointer rounded-lg border p-2.5 transition-colors',
-                                  a.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={a.enabled}
-                                  onChange={() => toggleAdditionEnabledForType(a.id)}
-                                  className="h-4 w-4 accent-primary cursor-pointer"
-                                />
-                                <span className={cn('text-sm font-medium flex-1', !a.enabled && 'text-muted-foreground')}>
-                                  {a.name}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    )}
-
-                    {/* Save / Delete (managers only) */}
-                    {!isBaker && (
-                      <div className="flex gap-2 items-center pt-1">
-                        <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(bt.id)}>
-                          {t('settings.save')}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:bg-destructive/10 h-8 w-8"
-                          onClick={() => deleteType(bt.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </Card>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {!isBaker && (
@@ -1084,6 +922,194 @@ export default function CatalogPage() {
           </>)}
         </section>
       </div>
+
+      {/* FULL-SCREEN bread editor */}
+      {editingType && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto pb-24 animate-fade-in">
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-card/50 backdrop-blur-sm px-2 py-2">
+            <button
+              type="button"
+              aria-label="חזרה"
+              className="flex h-11 w-11 items-center justify-center shrink-0"
+              onClick={() => setExpandedTypeId(null)}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <h1 className="text-lg font-bold truncate">{editingType.name}</h1>
+          </div>
+
+          <div className="p-5 space-y-3">
+            {/* Name (managers edit, bakers see read-only) */}
+            {isBaker ? (
+              <div className="text-base font-semibold">{editingType.name}</div>
+            ) : (
+              <Input
+                label={t('settings.name')}
+                value={typeNameDraft}
+                onChange={(e) => setTypeNameDraft(e.target.value)}
+              />
+            )}
+
+            {/* Recipe — surfaced near the top (primary use case) */}
+            <RecipeEditor
+              breadTypeId={editingType.id}
+              defaultReferenceWeight={
+                typeDetailSizes.find((s) => s.enabled && s.weightGrams != null)?.weightGrams ?? null
+              }
+            />
+
+            {/* Sizes */}
+            {isBaker ? (
+              typeDetailSizes.some((s) => s.enabled) && (
+                <div className="border-t border-border pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-1.5">
+                    {t('settings.enabled_sizes')}
+                  </div>
+                  <div className="text-sm space-y-0.5">
+                    {typeDetailSizes
+                      .filter((s) => s.enabled)
+                      .map((s) => (
+                        <div key={s.id} className="flex justify-between gap-2">
+                          <span>
+                            {s.name}
+                            {s.weightGrams != null && (
+                              <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">
+                                {s.weightGrams}g
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            ₪{s.priceOverride ?? s.price}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="border-t border-border pt-3">
+                <div className="text-sm font-medium text-muted-foreground mb-2">
+                  {t('settings.enabled_sizes')}
+                </div>
+                {typeDetailSizes.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic px-2 py-3">
+                    {t('settings.no_enabled_sizes')}
+                  </p>
+                )}
+                <div className="space-y-1.5">
+                  {typeDetailSizes.map((s) => (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        'rounded-lg border p-2.5 transition-colors',
+                        s.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
+                      )}
+                    >
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={s.enabled}
+                          onChange={() => toggleEnabled(s.id)}
+                          className="h-4 w-4 accent-primary cursor-pointer"
+                        />
+                        <span className={cn('text-sm font-medium flex-1', !s.enabled && 'text-muted-foreground')}>
+                          {s.name}
+                          {s.weightGrams != null && (
+                            <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">{s.weightGrams}g</span>
+                          )}
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          ₪{s.price}
+                        </span>
+                      </label>
+                      {s.enabled && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {t('settings.price_override')}
+                          </span>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            value={s.priceOverride ?? ''}
+                            onChange={(e) => updateOverride(s.id, e.target.value)}
+                            placeholder={`₪${s.price}`}
+                            className="flex-1 max-w-32"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Additions */}
+            {isBaker ? (
+              typeDetailAdditions.some((a) => a.enabled) && (
+                <div className="border-t border-border pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-1.5">
+                    {t('settings.enabled_additions')}
+                  </div>
+                  <div className="text-sm">
+                    {typeDetailAdditions
+                      .filter((a) => a.enabled)
+                      .map((a) => a.name)
+                      .join(' · ')}
+                  </div>
+                </div>
+              )
+            ) : (
+              typeDetailAdditions.length > 0 && (
+                <div className="border-t border-border pt-3">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
+                    {t('settings.enabled_additions')}
+                  </div>
+                  <div className="space-y-1.5">
+                    {typeDetailAdditions.map((a) => (
+                      <label
+                        key={a.id}
+                        className={cn(
+                          'flex items-center gap-2.5 cursor-pointer rounded-lg border p-2.5 transition-colors',
+                          a.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={a.enabled}
+                          onChange={() => toggleAdditionEnabledForType(a.id)}
+                          className="h-4 w-4 accent-primary cursor-pointer"
+                        />
+                        <span className={cn('text-sm font-medium flex-1', !a.enabled && 'text-muted-foreground')}>
+                          {a.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* Save / Delete (managers only) */}
+            {!isBaker && (
+              <div className="flex gap-2 items-center pt-1">
+                <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(editingType.id)}>
+                  {t('settings.save')}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 h-8 w-8"
+                  onClick={() => {
+                    if (window.confirm('למחוק את הלחם? פעולה זו בלתי הפיכה.')) deleteType(editingType.id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
