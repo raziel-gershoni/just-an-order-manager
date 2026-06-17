@@ -12,7 +12,7 @@ import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
-  Star,
+  Star, Check,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
@@ -1008,30 +1008,27 @@ export default function CatalogPage() {
               }
             />
 
-            {/* Sizes */}
+            {/* Sizes — tag cloud */}
             {isBaker ? (
               typeDetailSizes.some((s) => s.enabled) && (
                 <div className="border-t border-border pt-3">
-                  <div className="text-sm font-medium text-muted-foreground mb-1.5">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
                     {t('settings.enabled_sizes')}
                   </div>
-                  <div className="text-sm space-y-0.5">
+                  <div className="flex flex-wrap gap-2">
                     {typeDetailSizes
                       .filter((s) => s.enabled)
                       .map((s) => (
-                        <div key={s.id} className="flex justify-between gap-2">
-                          <span>
-                            {s.name}
-                            {s.weightGrams != null && (
-                              <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">
-                                {s.weightGrams}g
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-xs text-muted-foreground tabular-nums">
-                            ₪{s.priceOverride ?? s.price}
-                          </span>
-                        </div>
+                        <span
+                          key={s.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm"
+                        >
+                          {s.name}
+                          {s.weightGrams != null && (
+                            <span className="text-xs text-muted-foreground tabular-nums">{s.weightGrams}g</span>
+                          )}
+                          <span className="font-mono text-xs text-muted-foreground tabular-nums">· ₪{s.priceOverride ?? s.price}</span>
+                        </span>
                       ))}
                   </div>
                 </div>
@@ -1041,70 +1038,87 @@ export default function CatalogPage() {
                 <div className="text-sm font-medium text-muted-foreground mb-2">
                   {t('settings.enabled_sizes')}
                 </div>
-                {typeDetailSizes.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic px-2 py-3">
+                {typeDetailSizes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-2">
                     {t('settings.no_enabled_sizes')}
                   </p>
-                )}
-                <div className="space-y-1.5">
-                  {typeDetailSizes.map((s) => (
-                    <div
-                      key={s.id}
-                      className={cn(
-                        'rounded-lg border p-2.5 transition-colors',
-                        s.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
-                      )}
-                    >
-                      <label className="flex items-center gap-2.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={s.enabled}
-                          onChange={() => toggleEnabled(s.id)}
-                          className="h-4 w-4 accent-primary cursor-pointer"
-                        />
-                        <span className={cn('text-sm font-medium flex-1', !s.enabled && 'text-muted-foreground')}>
-                          {s.name}
-                          {s.weightGrams != null && (
-                            <span className="text-xs text-muted-foreground ms-1.5 tabular-nums">{s.weightGrams}g</span>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {typeDetailSizes.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => toggleEnabled(s.id)}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                            s.enabled
+                              ? 'bg-primary/15 border-primary/50 text-foreground font-medium'
+                              : 'border-border text-muted-foreground hover:border-muted-foreground/40'
                           )}
-                        </span>
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          ₪{s.price}
-                        </span>
-                      </label>
-                      {s.enabled && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {t('settings.price_override')}
+                        >
+                          {s.enabled && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          <span>
+                            {s.name}
+                            {s.weightGrams != null && (
+                              <span className="text-xs text-muted-foreground tabular-nums ms-0.5">{s.weightGrams}g</span>
+                            )}
                           </span>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            value={s.priceOverride ?? ''}
-                            onChange={(e) => updateOverride(s.id, e.target.value)}
-                            placeholder={`₪${s.price}`}
-                            className="flex-1 max-w-32"
-                          />
-                        </div>
-                      )}
+                          <span className="font-mono text-xs text-muted-foreground tabular-nums">· ₪{s.priceOverride ?? s.price}</span>
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    {typeDetailSizes.some((s) => s.enabled) && (
+                      <div className="mt-3">
+                        <div className="text-xs text-muted-foreground mb-1.5">מחיר מותאם · אופציונלי</div>
+                        <div className="space-y-1.5">
+                          {typeDetailSizes
+                            .filter((s) => s.enabled)
+                            .map((s) => (
+                              <div key={s.id} className="flex items-center gap-2 text-sm">
+                                <span className="min-w-0 flex-1 truncate">
+                                  {s.name}
+                                  {s.weightGrams != null && (
+                                    <span className="text-xs text-muted-foreground ms-1 tabular-nums">{s.weightGrams}g</span>
+                                  )}
+                                </span>
+                                <span className="text-muted-foreground shrink-0">₪</span>
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={s.priceOverride ?? ''}
+                                  onChange={(e) => updateOverride(s.id, e.target.value)}
+                                  placeholder={s.price}
+                                  className="w-24 shrink-0"
+                                />
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
-            {/* Additions */}
+            {/* Additions — tag cloud */}
             {isBaker ? (
               typeDetailAdditions.some((a) => a.enabled) && (
                 <div className="border-t border-border pt-3">
-                  <div className="text-sm font-medium text-muted-foreground mb-1.5">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">
                     {t('settings.enabled_additions')}
                   </div>
-                  <div className="text-sm">
+                  <div className="flex flex-wrap gap-2">
                     {typeDetailAdditions
                       .filter((a) => a.enabled)
-                      .map((a) => a.name)
-                      .join(' · ')}
+                      .map((a) => (
+                        <span
+                          key={a.id}
+                          className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm"
+                        >
+                          {a.name}
+                        </span>
+                      ))}
                   </div>
                 </div>
               )
@@ -1114,25 +1128,22 @@ export default function CatalogPage() {
                   <div className="text-sm font-medium text-muted-foreground mb-2">
                     {t('settings.enabled_additions')}
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {typeDetailAdditions.map((a) => (
-                      <label
+                      <button
                         key={a.id}
+                        type="button"
+                        onClick={() => toggleAdditionEnabledForType(a.id)}
                         className={cn(
-                          'flex items-center gap-2.5 cursor-pointer rounded-lg border p-2.5 transition-colors',
-                          a.enabled ? 'bg-card border-border' : 'bg-muted/30 border-border/50'
+                          'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                          a.enabled
+                            ? 'bg-primary/15 border-primary/50 text-foreground font-medium'
+                            : 'border-border text-muted-foreground hover:border-muted-foreground/40'
                         )}
                       >
-                        <input
-                          type="checkbox"
-                          checked={a.enabled}
-                          onChange={() => toggleAdditionEnabledForType(a.id)}
-                          className="h-4 w-4 accent-primary cursor-pointer"
-                        />
-                        <span className={cn('text-sm font-medium flex-1', !a.enabled && 'text-muted-foreground')}>
-                          {a.name}
-                        </span>
-                      </label>
+                        {a.enabled && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                        <span>{a.name}</span>
+                      </button>
                     ))}
                   </div>
                 </div>
