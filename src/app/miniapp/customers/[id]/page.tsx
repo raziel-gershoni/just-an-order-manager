@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy } from 'lucide-react';
 import Link from 'next/link';
 
 interface CustomerPhone {
@@ -89,6 +89,15 @@ export default function CustomerDetailPage() {
   function toIntlPhone(phone: string) {
     const digits = phone.replace(/\D/g, '');
     return digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
+  }
+
+  async function copyPhone(phone: string) {
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast.success('המספר הועתק');
+    } catch {
+      toast.error('ההעתקה נכשלה');
+    }
   }
 
   function startEditing() {
@@ -279,13 +288,17 @@ export default function CustomerDetailPage() {
               </div>
             ) : (
               <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
-                <a
-                  href={`tel:${p.phone}`}
-                  className="tabular-nums text-primary inline-flex min-h-[44px] items-center hover:underline"
+                <button
+                  type="button"
+                  onClick={() => copyPhone(p.phone)}
+                  className="tabular-nums text-primary inline-flex min-h-[44px] items-center gap-1.5 hover:underline"
                   dir="ltr"
+                  aria-label={`העתק מספר ${p.phone}`}
+                  title="העתק מספר"
                 >
                   {p.phone}
-                </a>
+                  <Copy className="h-3.5 w-3.5 opacity-50" />
+                </button>
                 <div className="flex gap-1">
                   <a
                     href={`https://wa.me/${toIntlPhone(p.phone)}`}
