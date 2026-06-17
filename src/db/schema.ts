@@ -61,6 +61,16 @@ export const ingredientKindEnum = pgEnum('ingredient_kind', [
   'other',
 ]);
 
+export const reminderOccasionEnum = pgEnum('reminder_occasion', [
+  'week_start',
+  'shabbat',
+]);
+
+export const reminderSendStatusEnum = pgEnum('reminder_send_status', [
+  'sent',
+  'failed',
+]);
+
 // ---- Tables ----
 
 export const users = pgTable('users', {
@@ -214,6 +224,7 @@ export const customers = pgTable('customers', {
   telegramChatId: varchar('telegram_chat_id', { length: 50 }),
   notes: text('notes'),
   isActive: boolean('is_active').notNull().default(true),
+  reminderOptOut: boolean('reminder_opt_out').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -289,4 +300,37 @@ export const payments = pgTable('payments', {
   orderId: integer('order_id').references(() => orders.id),
   description: text('description'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const reminderTemplates = pgTable('reminder_templates', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id')
+    .notNull()
+    .references(() => groups.id),
+  label: varchar('label', { length: 255 }).notNull(),
+  metaTemplateName: varchar('meta_template_name', { length: 255 }).notNull(),
+  occasion: reminderOccasionEnum('occasion').notNull(),
+  bodyPreview: text('body_preview'),
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const reminderSends = pgTable('reminder_sends', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id')
+    .notNull()
+    .references(() => groups.id),
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id),
+  phoneId: integer('phone_id')
+    .notNull()
+    .references(() => customerPhones.id),
+  templateId: integer('template_id')
+    .notNull()
+    .references(() => reminderTemplates.id),
+  occasion: reminderOccasionEnum('occasion').notNull(),
+  status: reminderSendStatusEnum('status').notNull(),
+  sentAt: timestamp('sent_at').notNull().defaultNow(),
 });
