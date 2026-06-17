@@ -420,7 +420,7 @@ export default function CatalogPage() {
             : t
         )
       );
-      toast.success(t('settings.deleted').replace('!נמחק', '✓').replace('Deleted!', '✓'));
+      toast.success('הלחם נשמר');
     } catch {
       toast.error(t('customers.save_failed'));
     } finally {
