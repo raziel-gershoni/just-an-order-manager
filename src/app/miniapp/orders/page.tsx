@@ -149,7 +149,6 @@ export default function OrdersPage() {
               <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
                 <div className={cn(
                   'flex items-stretch transition-colors hover:bg-muted/40',
-                  'border-status-' + displayStatus,
                   idx > 0 && 'border-t border-dashed border-border'
                 )}>
                   <DocketStub id={o.id} width={idW} />
