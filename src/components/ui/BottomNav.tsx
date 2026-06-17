@@ -39,11 +39,11 @@ export function BottomNav({ labels }: { labels: Record<TabKey, string> }) {
                   : 'text-muted-foreground'
               )}
             >
+              {active && (
+                <span className="absolute -top-px left-1/2 -translate-x-1/2 h-[3px] w-7 rounded-b-full bg-primary" />
+              )}
               <Icon className={cn('h-5 w-5', active && 'stroke-[2.5]')} />
               <span>{labels[tab.label]}</span>
-              {active && (
-                <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />
-              )}
             </Link>
           );
         })}
