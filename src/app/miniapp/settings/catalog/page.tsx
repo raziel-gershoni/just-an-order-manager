@@ -463,6 +463,18 @@ export default function CatalogPage() {
     }
   }
 
+  async function toggleTypeActive(id: number, isActive: boolean) {
+    try {
+      await apiFetch(`/bread-types/${id}`, {
+        method: isActive ? 'DELETE' : 'PATCH',
+        ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
+      });
+      setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? { ...bt, isActive: !isActive } : bt)));
+    } catch {
+      toast.error(t('settings.delete_failed'));
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -860,15 +872,24 @@ export default function CatalogPage() {
           </button>
 
           {breadTypesSectionOpen && (<>
-          <div className="space-y-2">
-            {breadTypes.map((bt) => {
+          <Card className="p-0 overflow-hidden">
+            {breadTypes.map((bt, idx) => {
               const priced = bt.enabledSizes
                 .map((s) => Number(s.priceOverride ?? s.price))
                 .filter((n) => !Number.isNaN(n));
               const low = priced.length ? Math.min(...priced) : null;
               const high = priced.length ? Math.max(...priced) : null;
               return (
-                <Card key={bt.id} className="flex justify-between items-center">
+                <div
+                  key={bt.id}
+                  className={cn(
+                    'flex items-center gap-2.5 px-3.5 py-3',
+                    idx > 0 && 'border-t border-dashed border-border'
+                  )}
+                >
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                    #{String(idx + 1).padStart(2, '0')}
+                  </span>
                   <button
                     type="button"
                     className="flex items-center gap-2 flex-1 text-start min-w-0"
@@ -887,10 +908,22 @@ export default function CatalogPage() {
                     </div>
                     <ChevronLeft className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                   </button>
-                </Card>
+                  {!isBaker && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="shrink-0"
+                      onClick={() => toggleTypeActive(bt.id, bt.isActive)}
+                      aria-label={bt.isActive ? t('settings.disable') : t('settings.enable')}
+                      title={bt.isActive ? t('settings.disable') : t('settings.enable')}
+                    >
+                      {bt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </Button>
+                  )}
+                </div>
               );
             })}
-          </div>
+          </Card>
 
           {!isBaker && (
             showAddType ? (
