@@ -13,6 +13,7 @@ function getCustomerId(url: string): number {
 
 const createSchema = z.object({
   phone: z.string().min(1).max(50),
+  name: z.string().max(255).optional(),
 });
 
 export const POST = withGroup(async (request, _auth, groupId) => {
@@ -39,6 +40,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .values({
       customerId,
       phone: parsed.data.phone.trim(),
+      name: parsed.data.name?.trim() || null,
       sortOrder: maxSort + 1,
     })
     .returning();

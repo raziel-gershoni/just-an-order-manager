@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { customers, customerPhones } from '@/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { getBot } from '@/lib/bot';
+import { phoneContactName } from '@/lib/name-utils';
 
 // pathname: /api/customers/<id>/send-contact
 function getCustomerId(url: string): number {
@@ -10,11 +11,14 @@ function getCustomerId(url: string): number {
   return Number(parts[parts.length - 2]);
 }
 
+const esc = (v: string) => v.replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
+
 /**
- * Sends the customer as a native Telegram contact card to the requesting user's
- * chat. Tapping it in Telegram opens the device's standard "Add to Contacts"
- * sheet. A full vCard (all phones + address) is attached so the saved contact is
- * complete, not just the primary number.
+ * Sends customer phone numbers as native Telegram contact cards to the requesting
+ * user's chat — one card PER number, each named via the number's own label +
+ * the customer's inferred family name (see phoneContactName). Tapping a card opens
+ * the device's standard Add-to-Contacts sheet.
+ * Body: { phoneId?: number } — a specific number, or all of them when omitted.
  */
 export const POST = withGroup(async (request, auth, groupId) => {
   const id = getCustomerId(request.url);
@@ -27,32 +31,42 @@ export const POST = withGroup(async (request, auth, groupId) => {
   if (!customer) return errorResponse('Customer not found', 404);
 
   const phones = await db
-    .select({ phone: customerPhones.phone })
+    .select({ id: customerPhones.id, phone: customerPhones.phone, name: customerPhones.name })
     .from(customerPhones)
     .where(eq(customerPhones.customerId, id))
     .orderBy(asc(customerPhones.sortOrder));
-
   if (phones.length === 0) return errorResponse('Customer has no phone numbers', 400);
 
-  const esc = (v: string) => v.replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
-  const lines = [
-    'BEGIN:VCARD',
-    'VERSION:3.0',
-    `FN:${esc(customer.name)}`,
-    `N:${esc(customer.name)};;;;`,
-    ...phones.map((p) => `TEL;TYPE=CELL:${p.phone}`),
-  ];
+  const body = await request.json().catch(() => ({}));
+  const phoneId = typeof body?.phoneId === 'number' ? body.phoneId : undefined;
+  const targets = phoneId ? phones.filter((p) => p.id === phoneId) : phones;
+  if (targets.length === 0) return errorResponse('Phone not found', 404);
+
   const addr = [customer.address, customer.city].filter(Boolean).join(', ');
-  if (addr) lines.push(`ADR;TYPE=HOME:;;${esc(addr)};;;;`);
-  lines.push('END:VCARD');
-  const vcard = lines.join('\n').slice(0, 2048); // Telegram vcard limit
 
   try {
-    await getBot().api.sendContact(auth.dbUser.telegramId, phones[0].phone, customer.name, { vcard });
+    for (const p of targets) {
+      const { firstName, lastName } = phoneContactName(customer.name, p.name);
+      const fn = [firstName, lastName].filter(Boolean).join(' ');
+      const lines = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${esc(fn)}`,
+        `N:${esc(lastName)};${esc(firstName)};;;`,
+        `TEL;TYPE=CELL:${p.phone}`,
+      ];
+      if (addr) lines.push(`ADR;TYPE=HOME:;;${esc(addr)};;;;`);
+      lines.push('END:VCARD');
+      const vcard = lines.join('\n').slice(0, 2048);
+      await getBot().api.sendContact(auth.dbUser.telegramId, p.phone, firstName, {
+        ...(lastName ? { last_name: lastName } : {}),
+        vcard,
+      });
+    }
   } catch (err) {
     console.error('[send-contact] failed:', err);
     return errorResponse('Failed to send contact', 500);
   }
 
-  return jsonResponse({ sent: true });
+  return jsonResponse({ sent: targets.length });
 });

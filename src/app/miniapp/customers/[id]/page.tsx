@@ -19,6 +19,7 @@ import Link from 'next/link';
 interface CustomerPhone {
   id: number;
   phone: string;
+  name: string | null;
   sortOrder: number;
 }
 
@@ -57,7 +58,9 @@ export default function CustomerDetailPage() {
   // Phone management state
   const [editingPhoneId, setEditingPhoneId] = useState<number | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState('');
+  const [editPhoneName, setEditPhoneName] = useState('');
   const [newPhoneValue, setNewPhoneValue] = useState('');
+  const [newPhoneName, setNewPhoneName] = useState('');
   const [showAddPhone, setShowAddPhone] = useState(false);
   const [sendingContact, setSendingContact] = useState(false);
 
@@ -101,11 +104,14 @@ export default function CustomerDetailPage() {
     }
   }
 
-  async function sendContactCard() {
+  async function sendContactCard(phoneId?: number) {
     setSendingContact(true);
     try {
-      await apiFetch(`/customers/${id}/send-contact`, { method: 'POST' });
-      toast.success('כרטיס איש קשר נשלח לצ׳אט — הקישו עליו כדי לשמור');
+      await apiFetch(`/customers/${id}/send-contact`, {
+        method: 'POST',
+        body: JSON.stringify(phoneId ? { phoneId } : {}),
+      });
+      toast.success('נשלח לצ׳אט — הקישו על הכרטיס כדי לשמור');
     } catch {
       toast.error('שליחת איש הקשר נכשלה');
     } finally {
@@ -153,10 +159,11 @@ export default function CustomerDetailPage() {
     try {
       const { phone } = await apiFetch<{ phone: CustomerPhone }>(
         `/customers/${id}/phones`,
-        { method: 'POST', body: JSON.stringify({ phone: newPhoneValue.trim() }) }
+        { method: 'POST', body: JSON.stringify({ phone: newPhoneValue.trim(), name: newPhoneName.trim() || undefined }) }
       );
       setCustomer((prev) => prev ? { ...prev, phones: [...prev.phones, phone] } : prev);
       setNewPhoneValue('');
+      setNewPhoneName('');
       setShowAddPhone(false);
     } catch {
       toast.error(t('customers.save_failed'));
@@ -168,7 +175,7 @@ export default function CustomerDetailPage() {
     try {
       const { phone } = await apiFetch<{ phone: CustomerPhone }>(
         `/customer-phones/${phoneId}`,
-        { method: 'PATCH', body: JSON.stringify({ phone: editPhoneValue.trim() }) }
+        { method: 'PATCH', body: JSON.stringify({ phone: editPhoneValue.trim(), name: editPhoneName.trim() || null }) }
       );
       setCustomer((prev) => prev ? {
         ...prev,
@@ -279,9 +286,9 @@ export default function CustomerDetailPage() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted-foreground">{t('customers.phones')}</span>
             {customer.phones.length > 0 && (
-              <Button size="sm" variant="ghost" loading={sendingContact} onClick={sendContactCard}>
+              <Button size="sm" variant="ghost" loading={sendingContact} onClick={() => sendContactCard()}>
                 <UserPlus className="h-4 w-4" />
-                שמור איש קשר
+                שמור אנשי קשר
               </Button>
             )}
           </div>
@@ -290,35 +297,45 @@ export default function CustomerDetailPage() {
           )}
           {customer.phones.map((p) => (
             editingPhoneId === p.id ? (
-              <div key={p.id} className="flex items-center gap-2">
+              <div key={p.id} className="space-y-2">
                 <Input
-                  type="tel"
-                  value={editPhoneValue}
-                  onChange={(e) => setEditPhoneValue(e.target.value)}
-                  className="flex-1"
-                  autoFocus
+                  value={editPhoneName}
+                  onChange={(e) => setEditPhoneName(e.target.value)}
+                  placeholder="שם (לא חובה)"
                 />
-                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => savePhone(p.id)}>
-                  <Check className="h-4 w-4 text-success" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditingPhoneId(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="tel"
+                    value={editPhoneValue}
+                    onChange={(e) => setEditPhoneValue(e.target.value)}
+                    className="flex-1"
+                    autoFocus
+                  />
+                  <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => savePhone(p.id)}>
+                    <Check className="h-4 w-4 text-success" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditingPhoneId(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ) : (
               <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={() => copyPhone(p.phone)}
-                  className="tabular-nums text-primary inline-flex min-h-[44px] items-center gap-1.5 hover:underline"
-                  dir="ltr"
-                  aria-label={`העתק מספר ${p.phone}`}
-                  title="העתק מספר"
-                >
-                  {p.phone}
-                  <Copy className="h-3.5 w-3.5 opacity-50" />
-                </button>
-                <div className="flex gap-1">
+                <div className="min-w-0">
+                  {p.name && <div className="text-xs text-muted-foreground truncate">{p.name}</div>}
+                  <button
+                    type="button"
+                    onClick={() => copyPhone(p.phone)}
+                    className="tabular-nums text-primary inline-flex min-h-[44px] items-center gap-1.5 hover:underline"
+                    dir="ltr"
+                    aria-label={`העתק מספר ${p.phone}`}
+                    title="העתק מספר"
+                  >
+                    {p.phone}
+                    <Copy className="h-3.5 w-3.5 opacity-50" />
+                  </button>
+                </div>
+                <div className="flex gap-1 shrink-0">
                   <a
                     href={`https://wa.me/${toIntlPhone(p.phone)}`}
                     target="_blank"
@@ -328,7 +345,7 @@ export default function CustomerDetailPage() {
                   >
                     <MessageCircle className="h-4 w-4" />
                   </a>
-                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); }}>
+                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); setEditPhoneName(p.name ?? ''); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button size="icon" variant="ghost" className="h-11 w-11 text-destructive hover:bg-destructive/10" onClick={() => deletePhone(p.id)}>
@@ -339,21 +356,28 @@ export default function CustomerDetailPage() {
             )
           ))}
           {showAddPhone ? (
-            <div className="flex items-center gap-2">
+            <div className="space-y-2">
               <Input
-                type="tel"
-                value={newPhoneValue}
-                onChange={(e) => setNewPhoneValue(e.target.value)}
-                placeholder="050-1234567"
-                className="flex-1"
-                autoFocus
+                value={newPhoneName}
+                onChange={(e) => setNewPhoneName(e.target.value)}
+                placeholder="שם (לא חובה)"
               />
-              <Button size="icon" variant="ghost" className="h-9 w-9" disabled={!newPhoneValue.trim()} onClick={addPhone}>
-                <Check className="h-4 w-4 text-success" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setShowAddPhone(false); setNewPhoneValue(''); }}>
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="tel"
+                  value={newPhoneValue}
+                  onChange={(e) => setNewPhoneValue(e.target.value)}
+                  placeholder="050-1234567"
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button size="icon" variant="ghost" className="h-9 w-9" disabled={!newPhoneValue.trim()} onClick={addPhone}>
+                  <Check className="h-4 w-4 text-success" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setShowAddPhone(false); setNewPhoneValue(''); setNewPhoneName(''); }}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           ) : (
             <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAddPhone(true)}>

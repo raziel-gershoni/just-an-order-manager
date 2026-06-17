@@ -224,6 +224,7 @@ export const customerPhones = pgTable('customer_phones', {
     .notNull()
     .references(() => customers.id),
   phone: varchar('phone', { length: 50 }).notNull(),
+  name: varchar('name', { length: 255 }),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });

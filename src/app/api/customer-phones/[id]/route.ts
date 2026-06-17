@@ -29,6 +29,7 @@ async function authorize(
 
 const updateSchema = z.object({
   phone: z.string().min(1).max(50).optional(),
+  name: z.string().max(255).nullable().optional(),
   sortOrder: z.number().int().optional(),
 });
 
@@ -43,6 +44,7 @@ export const PATCH = withAuth(async (request, auth) => {
 
   const updateData: Record<string, unknown> = {};
   if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone.trim();
+  if (parsed.data.name !== undefined) updateData.name = parsed.data.name?.trim() || null;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
 
   const [updated] = await db
