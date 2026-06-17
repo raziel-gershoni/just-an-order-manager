@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 
 interface CustomerPhone {
@@ -59,6 +59,7 @@ export default function CustomerDetailPage() {
   const [editPhoneValue, setEditPhoneValue] = useState('');
   const [newPhoneValue, setNewPhoneValue] = useState('');
   const [showAddPhone, setShowAddPhone] = useState(false);
+  const [sendingContact, setSendingContact] = useState(false);
 
   function loadData() {
     setLoading(true);
@@ -97,6 +98,18 @@ export default function CustomerDetailPage() {
       toast.success('המספר הועתק');
     } catch {
       toast.error('ההעתקה נכשלה');
+    }
+  }
+
+  async function sendContactCard() {
+    setSendingContact(true);
+    try {
+      await apiFetch(`/customers/${id}/send-contact`, { method: 'POST' });
+      toast.success('כרטיס איש קשר נשלח לצ׳אט — הקישו עליו כדי לשמור');
+    } catch {
+      toast.error('שליחת איש הקשר נכשלה');
+    } finally {
+      setSendingContact(false);
     }
   }
 
@@ -265,6 +278,12 @@ export default function CustomerDetailPage() {
         <Card className="space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted-foreground">{t('customers.phones')}</span>
+            {customer.phones.length > 0 && (
+              <Button size="sm" variant="ghost" loading={sendingContact} onClick={sendContactCard}>
+                <UserPlus className="h-4 w-4" />
+                שמור איש קשר
+              </Button>
+            )}
           </div>
           {customer.phones.length === 0 && !showAddPhone && (
             <p className="text-xs text-muted-foreground italic">{t('customers.no_phones')}</p>
