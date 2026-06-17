@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
+import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 interface CustomerPhone { id: number; phone: string; sortOrder: number }
@@ -72,6 +74,7 @@ export default function CustomersPage() {
   }
 
   const phoneQuery = search.replace(/\D/g, '');
+  const idW = docketWidth(customers.map((c) => c.id));
   const filtered = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -148,14 +151,20 @@ export default function CustomersPage() {
           />
         )
       ) : (
-        <div className="flex flex-col gap-3">
-          {filtered.map((c) => {
+        <Card className="p-0 overflow-hidden">
+          {filtered.map((c, idx) => {
             const firstPhone = c.phones[0]?.phone;
             const extraCount = c.phones.length - 1;
             return (
               <Link key={c.id} href={`/miniapp/customers/${c.id}`}>
-                <Card className="flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={cn(
+                    'flex items-stretch hover:bg-muted/40 transition-colors',
+                    idx > 0 && 'border-t border-dashed border-border'
+                  )}
+                >
+                  <DocketStub id={c.id} width={idW} />
+                  <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
                       {getInitial(c.name)}
                     </div>
@@ -170,13 +179,13 @@ export default function CustomersPage() {
                         </span>
                       )}
                     </div>
+                    <Chevron className="ms-auto h-4 w-4 text-muted-foreground/30 shrink-0" />
                   </div>
-                  <Chevron className="h-4 w-4 text-muted-foreground/30 shrink-0" />
-                </Card>
+                </div>
               </Link>
             );
           })}
-        </div>
+        </Card>
       )}
     </div>
   );

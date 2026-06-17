@@ -15,6 +15,7 @@ import {
   Star,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
+import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 
 interface BreadSize {
   id: number;
@@ -516,111 +517,121 @@ export default function CatalogPage() {
           </button>
 
           {sizesSectionOpen && (<>
-          <div className="space-y-2">
-            {sizes.length === 0 && (
-              <Card className="text-sm text-muted-foreground italic text-center py-6">
-                —
-              </Card>
-            )}
-            {sizes.map((s, idx) =>
-              editingSizeId === s.id ? (
-                <Card key={s.id} className="animate-expand p-3 space-y-3">
-                  <Input
-                    label={t('settings.size_name')}
-                    value={editSizeName}
-                    onChange={(e) => setEditSizeName(e.target.value)}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
+          {sizes.length === 0 ? (
+            <Card className="text-sm text-muted-foreground italic text-center py-6">
+              —
+            </Card>
+          ) : (
+            <Card className="p-0 overflow-hidden">
+              {sizes.map((s, idx) =>
+                editingSizeId === s.id ? (
+                  <div
+                    key={s.id}
+                    className={cn('animate-expand p-3 space-y-3', idx > 0 && 'border-t border-dashed border-border')}
+                  >
                     <Input
-                      label={t('settings.weight')}
-                      type="number"
-                      inputMode="numeric"
-                      value={editSizeWeight}
-                      onChange={(e) => setEditSizeWeight(e.target.value)}
+                      label={t('settings.size_name')}
+                      value={editSizeName}
+                      onChange={(e) => setEditSizeName(e.target.value)}
                     />
-                    <Input
-                      label={t('settings.price')}
-                      type="number"
-                      inputMode="decimal"
-                      value={editSizePrice}
-                      onChange={(e) => setEditSizePrice(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex gap-2 items-center pt-1">
-                    <Button size="sm" className="flex-1" onClick={() => saveSize(s.id)}>{t('settings.save')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditingSizeId(null)}>{t('payments.cancel')}</Button>
-                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteSize(s.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </Card>
-              ) : (
-                <Card key={s.id} className="flex justify-between items-center">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="flex flex-col -my-1 shrink-0">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        disabled={savingSizeOrder || idx === 0}
-                        onClick={() => moveSize(s.id, 'up')}
-                      >
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        disabled={savingSizeOrder || idx === sizes.length - 1}
-                        onClick={() => moveSize(s.id, 'down')}
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label={t('settings.weight')}
+                        type="number"
+                        inputMode="numeric"
+                        value={editSizeWeight}
+                        onChange={(e) => setEditSizeWeight(e.target.value)}
+                      />
+                      <Input
+                        label={t('settings.price')}
+                        type="number"
+                        inputMode="decimal"
+                        value={editSizePrice}
+                        onChange={(e) => setEditSizePrice(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2 items-center pt-1">
+                      <Button size="sm" className="flex-1" onClick={() => saveSize(s.id)}>{t('settings.save')}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingSizeId(null)}>{t('payments.cancel')}</Button>
+                      <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteSize(s.id)}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <span className={cn('font-medium', !s.isActive && 'text-muted-foreground line-through')}>
-                      {s.name}
-                    </span>
-                    {s.weightGrams != null && (
-                      <span className="text-xs text-muted-foreground tabular-nums">{s.weightGrams}g</span>
-                    )}
-                    <span className={cn(
-                      'text-xs font-medium px-2 py-0.5 rounded-full tabular-nums',
-                      s.isActive ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-muted-foreground/50'
-                    )}>
-                      ₪{s.price}
-                    </span>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => toggleDefault(s.id, s.isDefault)}
-                      aria-label={t('settings.is_default')}
-                      title={t('settings.is_default_hint')}
-                    >
-                      <Star
-                        className={cn(
-                          'h-3.5 w-3.5',
-                          s.isDefault ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/40'
+                ) : (
+                  <div
+                    key={s.id}
+                    className={cn('flex items-stretch', idx > 0 && 'border-t border-dashed border-border')}
+                  >
+                    <DocketStub id={s.id} width={docketWidth(sizes.map((x) => x.id))} />
+                    <div className="flex flex-1 items-center gap-2 px-3 py-2.5 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="flex flex-col -my-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            disabled={savingSizeOrder || idx === 0}
+                            onClick={() => moveSize(s.id, 'up')}
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            disabled={savingSizeOrder || idx === sizes.length - 1}
+                            onClick={() => moveSize(s.id, 'down')}
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <span className={cn('font-medium', !s.isActive && 'text-muted-foreground line-through')}>
+                          {s.name}
+                        </span>
+                        {s.weightGrams != null && (
+                          <span className="text-xs text-muted-foreground tabular-nums">{s.weightGrams}g</span>
                         )}
-                      />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => {
-                      setEditingSizeId(s.id);
-                      setEditSizeName(s.name);
-                      setEditSizeWeight(s.weightGrams != null ? String(s.weightGrams) : '');
-                      setEditSizePrice(s.price);
-                    }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => toggleActive(s.id, s.isActive)}>
-                      {s.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    </Button>
+                        <span className={cn(
+                          'text-xs font-medium px-2 py-0.5 rounded-full tabular-nums',
+                          s.isActive ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-muted-foreground/50'
+                        )}>
+                          ₪{s.price}
+                        </span>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => toggleDefault(s.id, s.isDefault)}
+                          aria-label={t('settings.is_default')}
+                          title={t('settings.is_default_hint')}
+                        >
+                          <Star
+                            className={cn(
+                              'h-3.5 w-3.5',
+                              s.isDefault ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/40'
+                            )}
+                          />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => {
+                          setEditingSizeId(s.id);
+                          setEditSizeName(s.name);
+                          setEditSizeWeight(s.weightGrams != null ? String(s.weightGrams) : '');
+                          setEditSizePrice(s.price);
+                        }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => toggleActive(s.id, s.isActive)}>
+                          {s.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </Card>
-              )
-            )}
-          </div>
+                )
+              )}
+            </Card>
+          )}
 
           {showAddSize ? (
             <Card className="mt-3 p-3 space-y-3 animate-expand">
@@ -731,82 +742,92 @@ export default function CatalogPage() {
               {t('settings.additions_surcharge_hint')}
             </div>
           </Card>
-          <div className="space-y-2">
-            {additions.length === 0 && (
-              <Card className="text-sm text-muted-foreground italic text-center py-6">—</Card>
-            )}
-            {additions.map((a, idx) =>
-              editingAdditionId === a.id ? (
-                <Card key={a.id} className="animate-expand p-3 space-y-3">
-                  <Input
-                    label={t('settings.name')}
-                    value={editAdditionName}
-                    onChange={(e) => setEditAdditionName(e.target.value)}
-                  />
-                  <div className="flex gap-2 items-center pt-1">
-                    <Button size="sm" className="flex-1" onClick={() => saveAddition(a.id)}>{t('settings.save')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditingAdditionId(null)}>{t('payments.cancel')}</Button>
-                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteAddition(a.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </Card>
-              ) : (
-                <Card key={a.id} className="flex justify-between items-center">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="flex flex-col -my-1 shrink-0">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        disabled={savingAdditionOrder || idx === 0}
-                        onClick={() => moveAddition(a.id, 'up')}
-                      >
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        disabled={savingAdditionOrder || idx === additions.length - 1}
-                        onClick={() => moveAddition(a.id, 'down')}
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" />
+          {additions.length === 0 ? (
+            <Card className="text-sm text-muted-foreground italic text-center py-6">—</Card>
+          ) : (
+            <Card className="p-0 overflow-hidden">
+              {additions.map((a, idx) =>
+                editingAdditionId === a.id ? (
+                  <div
+                    key={a.id}
+                    className={cn('animate-expand p-3 space-y-3', idx > 0 && 'border-t border-dashed border-border')}
+                  >
+                    <Input
+                      label={t('settings.name')}
+                      value={editAdditionName}
+                      onChange={(e) => setEditAdditionName(e.target.value)}
+                    />
+                    <div className="flex gap-2 items-center pt-1">
+                      <Button size="sm" className="flex-1" onClick={() => saveAddition(a.id)}>{t('settings.save')}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingAdditionId(null)}>{t('payments.cancel')}</Button>
+                      <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteAddition(a.id)}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <span className={cn('font-medium', !a.isActive && 'text-muted-foreground line-through')}>
-                      {a.name}
-                    </span>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => toggleAdditionDefault(a.id, a.isDefault)}
-                      aria-label={t('settings.is_default')}
-                      title={t('settings.is_default_hint')}
-                    >
-                      <Star
-                        className={cn(
-                          'h-3.5 w-3.5',
-                          a.isDefault ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/40'
-                        )}
-                      />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => {
-                      setEditingAdditionId(a.id);
-                      setEditAdditionName(a.name);
-                    }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => toggleAdditionActive(a.id, a.isActive)}>
-                      {a.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    </Button>
+                ) : (
+                  <div
+                    key={a.id}
+                    className={cn('flex items-stretch', idx > 0 && 'border-t border-dashed border-border')}
+                  >
+                    <DocketStub id={a.id} width={docketWidth(additions.map((x) => x.id))} />
+                    <div className="flex flex-1 items-center gap-2 px-3 py-2.5 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="flex flex-col -my-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            disabled={savingAdditionOrder || idx === 0}
+                            onClick={() => moveAddition(a.id, 'up')}
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            disabled={savingAdditionOrder || idx === additions.length - 1}
+                            onClick={() => moveAddition(a.id, 'down')}
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <span className={cn('font-medium', !a.isActive && 'text-muted-foreground line-through')}>
+                          {a.name}
+                        </span>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => toggleAdditionDefault(a.id, a.isDefault)}
+                          aria-label={t('settings.is_default')}
+                          title={t('settings.is_default_hint')}
+                        >
+                          <Star
+                            className={cn(
+                              'h-3.5 w-3.5',
+                              a.isDefault ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/40'
+                            )}
+                          />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => {
+                          setEditingAdditionId(a.id);
+                          setEditAdditionName(a.name);
+                        }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => toggleAdditionActive(a.id, a.isActive)}>
+                          {a.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </Card>
-              )
-            )}
-          </div>
+                )
+              )}
+            </Card>
+          )}
 
           {showAddAddition ? (
             <Card className="mt-3 p-3 space-y-3 animate-expand">
@@ -883,16 +904,14 @@ export default function CatalogPage() {
                 <div
                   key={bt.id}
                   className={cn(
-                    'flex items-center gap-2.5 px-3.5 py-3',
+                    'flex items-stretch',
                     idx > 0 && 'border-t border-dashed border-border'
                   )}
                 >
-                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
-                    #{String(idx + 1).padStart(2, '0')}
-                  </span>
+                  <DocketStub id={bt.id} width={docketWidth(breadTypes.map((b) => b.id))} />
                   <button
                     type="button"
-                    className="flex items-center gap-2 flex-1 text-start min-w-0"
+                    className="flex items-center gap-2 flex-1 text-start min-w-0 px-3.5 py-3"
                     onClick={() => expandType(bt.id)}
                   >
                     <div className="min-w-0 flex-1">
@@ -912,7 +931,7 @@ export default function CatalogPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="shrink-0"
+                      className="shrink-0 self-center me-1"
                       onClick={() => toggleTypeActive(bt.id, bt.isActive)}
                       aria-label={bt.isActive ? t('settings.disable') : t('settings.enable')}
                       title={bt.isActive ? t('settings.disable') : t('settings.enable')}
