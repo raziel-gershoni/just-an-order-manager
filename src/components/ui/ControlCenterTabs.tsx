@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 
 const tabs = [
   { href: '/miniapp/settings/catalog', label: 'קטלוג' },
+  { href: '/miniapp/settings/reminders', label: 'תזכורות' },
   { href: '/miniapp/settings', label: 'הגדרות' },
 ];
 
