@@ -35,6 +35,7 @@ const updateCustomerSchema = z.object({
   telegramChatId: z.string().max(50).optional(),
   notes: z.string().max(1000).optional(),
   isActive: z.boolean().optional(),
+  reminderOptOut: z.boolean().optional(),
 });
 
 export const PATCH = withGroup(async (request, _auth, groupId) => {
