@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
+import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
@@ -10,11 +11,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
 import { formatDateRelative } from '@/lib/date-utils';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send } from 'lucide-react';
 import Link from 'next/link';
 
 interface CustomerPhone {
@@ -30,6 +32,7 @@ interface Customer {
   address: string | null;
   city: string | null;
   notes: string | null;
+  reminderOptOut: boolean;
   phones: CustomerPhone[];
 }
 interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; isRecurring?: boolean; totalQuantity: number; itemsSummary: string }
@@ -38,9 +41,13 @@ interface Payment { id: number; amount: string; type: string; description: strin
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { apiFetch } = useApi();
+  const { activeGroupRole } = useGroup();
+  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
   const t = useT();
   const lang = useLang();
   const toast = useToast();
+
+  const [showSend, setShowSend] = useState<{ customerIds?: number[]; phoneId?: number; count: number } | null>(null);
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [balance, setBalance] = useState<string>('0');
@@ -117,6 +124,18 @@ export default function CustomerDetailPage() {
       toast.error('שליחת איש הקשר נכשלה');
     } finally {
       setSendingContact(false);
+    }
+  }
+
+  async function toggleOptOut(next: boolean) {
+    try {
+      await apiFetch(`/customers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reminderOptOut: next }),
+      });
+      setCustomer((prev) => (prev ? { ...prev, reminderOptOut: next } : prev));
+    } catch {
+      toast.error(t('customers.save_failed'));
     }
   }
 
@@ -287,12 +306,27 @@ export default function CustomerDetailPage() {
         <Card className="space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted-foreground">{t('customers.phones')}</span>
-            {customer.phones.length > 0 && (
-              <Button size="sm" variant="ghost" loading={sendingContact} onClick={() => sendContactCard()}>
-                <UserPlus className="h-4 w-4" />
-                שמור אנשי קשר
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              {isAdmin && customer.phones.length > 0 && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-9 w-9"
+                  aria-label={t('reminders.send')}
+                  title={customer.reminderOptOut ? t('reminders.opt_out_on') : t('reminders.send')}
+                  disabled={customer.reminderOptOut}
+                  onClick={() => setShowSend({ customerIds: [customer.id], count: customer.phones.length })}
+                >
+                  <Send className="h-4 w-4 text-primary" />
+                </Button>
+              )}
+              {customer.phones.length > 0 && (
+                <Button size="sm" variant="ghost" loading={sendingContact} onClick={() => sendContactCard()}>
+                  <UserPlus className="h-4 w-4" />
+                  שמור אנשי קשר
+                </Button>
+              )}
+            </div>
           </div>
           {customer.phones.length === 0 && !showAddPhone && (
             <p className="text-xs text-muted-foreground italic">{t('customers.no_phones')}</p>
@@ -338,6 +372,18 @@ export default function CustomerDetailPage() {
                   </button>
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      aria-label={t('reminders.send')}
+                      title={customer.reminderOptOut ? t('reminders.opt_out_on') : t('reminders.send')}
+                      disabled={customer.reminderOptOut}
+                      onClick={() => setShowSend({ phoneId: p.id, count: 1 })}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-primary transition-all duration-150 hover:bg-primary/10 active:scale-[0.98] disabled:opacity-30"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  )}
                   <a
                     href={`https://wa.me/${toIntlPhone(p.phone)}`}
                     target="_blank"
@@ -386,6 +432,19 @@ export default function CustomerDetailPage() {
               <Plus className="h-3.5 w-3.5" />
               {t('customers.add_phone')}
             </Button>
+          )}
+          {isAdmin && (
+            <label className="flex items-center gap-2 pt-2.5 mt-1 border-t border-border text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={customer.reminderOptOut}
+                onChange={(e) => toggleOptOut(e.target.checked)}
+                className="h-4 w-4 accent-primary cursor-pointer"
+              />
+              <span className={customer.reminderOptOut ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+                {t('reminders.opt_out')}
+              </span>
+            </label>
           )}
         </Card>
 
@@ -515,6 +574,14 @@ export default function CustomerDetailPage() {
           )}
         </div>
       </div>
+      {showSend && (
+        <SendReminderSheet
+          count={showSend.count}
+          customerIds={showSend.customerIds}
+          phoneId={showSend.phoneId}
+          onClose={() => setShowSend(null)}
+        />
+      )}
     </>
   );
 }
