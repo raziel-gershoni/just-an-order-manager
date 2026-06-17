@@ -1064,7 +1064,7 @@ export default function CatalogPage() {
                             </span>
                           </button>
                           <span className="text-muted-foreground/60">·</span>
-                          <span className="inline-flex items-center font-mono text-sm text-muted-foreground">
+                          <span className="inline-flex items-center font-mono text-xs text-muted-foreground">
                             ₪
                             <input
                               type="number"
@@ -1073,7 +1073,7 @@ export default function CatalogPage() {
                               onChange={(e) => updateOverride(s.id, e.target.value)}
                               onClick={(e) => e.stopPropagation()}
                               aria-label={`מחיר · ${s.name}`}
-                              className="w-14 bg-transparent text-center text-base tabular-nums text-foreground focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              className="w-12 bg-transparent text-center tabular-nums text-foreground focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             />
                           </span>
                         </div>

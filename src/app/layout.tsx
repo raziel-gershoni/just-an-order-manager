@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Assistant, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
@@ -23,6 +23,14 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Sourdough Order Manager",
   description: "Manage your bakery orders",
+};
+
+// Lock zoom so focusing a small input doesn't auto-zoom the page (app-like, Telegram Mini App).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
