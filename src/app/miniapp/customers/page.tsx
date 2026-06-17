@@ -9,7 +9,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle } from 'lucide-react';
+import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { cn } from '@/lib/utils';
@@ -20,12 +21,14 @@ interface Customer {
   id: number;
   name: string;
   isActive: boolean;
+  reminderOptOut?: boolean;
   phones: CustomerPhone[];
 }
 
 export default function CustomersPage() {
   const { apiFetch } = useApi();
-  const { activeGroupId } = useGroup();
+  const { activeGroupId, activeGroupRole } = useGroup();
+  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
   const t = useT();
   const lang = useLang();
   const toast = useToast();
@@ -36,6 +39,24 @@ export default function CustomersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [showSend, setShowSend] = useState(false);
+
+  function toggleSelect(id: number, optOut?: boolean) {
+    if (optOut) return; // opted-out customers can't be selected
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
 
   const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
 
@@ -82,17 +103,35 @@ export default function CustomersPage() {
         c.phones.some((p) => p.phone.replace(/\D/g, '').includes(phoneQuery)))
   );
   const hasSearch = search.trim() !== '';
+  const selectedPhoneCount = [...selected].reduce(
+    (sum, id) => sum + (customers.find((c) => c.id === id)?.phones.length ?? 0),
+    0
+  );
 
   return (
     <div className="p-5 space-y-4 animate-fade-in">
       <div className="flex justify-between items-center gap-2">
         <h1 className="text-xl font-bold tracking-tight">{t('customers.title')}</h1>
-        {!showAdd && (
-          <Button size="sm" onClick={() => setShowAdd(true)}>
-            <UserPlus className="h-4 w-4" />
-            {t('form.add_customer')}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && !showAdd && (
+            selectMode ? (
+              <Button size="sm" variant="ghost" onClick={exitSelect}>
+                {t('reminders.cancel')}
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => setSelectMode(true)}>
+                <CheckSquare className="h-4 w-4" />
+                {t('reminders.select')}
+              </Button>
+            )
+          )}
+          {!showAdd && !selectMode && (
+            <Button size="sm" onClick={() => setShowAdd(true)}>
+              <UserPlus className="h-4 w-4" />
+              {t('form.add_customer')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {showAdd && (
@@ -155,37 +194,84 @@ export default function CustomersPage() {
           {filtered.map((c, idx) => {
             const firstPhone = c.phones[0]?.phone;
             const extraCount = c.phones.length - 1;
-            return (
-              <Link key={c.id} href={`/miniapp/customers/${c.id}`}>
-                <div
-                  className={cn(
-                    'flex items-stretch hover:bg-muted/40 transition-colors',
-                    idx > 0 && 'border-t border-dashed border-border'
+            const rowInner = (
+              <div
+                className={cn(
+                  'flex items-stretch transition-colors',
+                  selectMode && selected.has(c.id) ? 'bg-primary/5' : 'hover:bg-muted/40',
+                  idx > 0 && 'border-t border-dashed border-border',
+                  selectMode && c.reminderOptOut && 'opacity-40'
+                )}
+              >
+                <DocketStub id={c.id} width={idW} />
+                <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
+                  {selectMode && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      readOnly
+                      disabled={c.reminderOptOut}
+                      className="h-4 w-4 accent-primary shrink-0"
+                    />
                   )}
-                >
-                  <DocketStub id={c.id} width={idW} />
-                  <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                      {getInitial(c.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block font-medium truncate">{c.name}</span>
-                      {firstPhone && (
-                        <span className="block text-sm text-muted-foreground truncate">
-                          {firstPhone}
-                          {extraCount > 0 && (
-                            <span className="text-muted-foreground/60"> +{extraCount}</span>
-                          )}
-                        </span>
-                      )}
-                    </div>
-                    <Chevron className="ms-auto h-4 w-4 text-muted-foreground/30 shrink-0" />
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    {getInitial(c.name)}
                   </div>
+                  <div className="min-w-0">
+                    <span className="block font-medium truncate">{c.name}</span>
+                    {firstPhone && (
+                      <span className="block text-sm text-muted-foreground truncate">
+                        {firstPhone}
+                        {extraCount > 0 && (
+                          <span className="text-muted-foreground/60"> +{extraCount}</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  {selectMode ? (
+                    c.reminderOptOut && (
+                      <span className="ms-auto text-[10px] font-medium text-destructive/70 shrink-0">
+                        {t('reminders.opt_out_on')}
+                      </span>
+                    )
+                  ) : (
+                    <Chevron className="ms-auto h-4 w-4 text-muted-foreground/30 shrink-0" />
+                  )}
                 </div>
+              </div>
+            );
+            return selectMode ? (
+              <div key={c.id} onClick={() => toggleSelect(c.id, c.reminderOptOut)} className="cursor-pointer">
+                {rowInner}
+              </div>
+            ) : (
+              <Link key={c.id} href={`/miniapp/customers/${c.id}`}>
+                {rowInner}
               </Link>
             );
           })}
         </Card>
+      )}
+
+      {selectMode && (
+        <div className="sticky bottom-14 -mx-5 flex items-center justify-between gap-3 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
+          <span className="text-sm text-muted-foreground">
+            {t('reminders.selected_count').replace('{n}', String(selected.size))}
+          </span>
+          <Button size="sm" disabled={selected.size === 0} onClick={() => setShowSend(true)}>
+            <Send className="h-4 w-4" />
+            {t('reminders.send')}
+          </Button>
+        </div>
+      )}
+
+      {showSend && (
+        <SendReminderSheet
+          customerIds={[...selected]}
+          count={selectedPhoneCount}
+          onClose={() => setShowSend(false)}
+          onSent={exitSelect}
+        />
       )}
     </div>
   );
