@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function parsePath(url: string): { groupId: number; typeId: number } {
@@ -70,4 +70,67 @@ export const PUT = withAuth(async (request, auth) => {
   }
 
   return jsonResponse({ success: true, count: parsed.data.enabled.length });
+});
+
+const addSchema = z.object({
+  breadSizeId: z.number().int().positive(),
+});
+
+/**
+ * Additively enable a single size for a bread type, appended at the end. Unlike
+ * the clean-slate PUT above, this leaves existing enabled sizes and their price
+ * overrides untouched — used when an admin creates a size from the order screen.
+ */
+export const POST = withAuth(async (request, auth) => {
+  const { groupId, typeId } = parsePath(request.url);
+
+  const membership = auth.memberships.find((m) => m.groupId === groupId);
+  if (!membership) return errorResponse('Not a member', 403);
+  if (membership.role === 'baker') {
+    return errorResponse('Bakers cannot manage bread types', 403);
+  }
+
+  const [breadType] = await db
+    .select()
+    .from(breadTypes)
+    .where(and(eq(breadTypes.id, typeId), eq(breadTypes.groupId, groupId)))
+    .limit(1);
+  if (!breadType) return errorResponse('Bread type not found', 404);
+
+  const body = await request.json();
+  const parsed = addSchema.safeParse(body);
+  if (!parsed.success) return errorResponse(parsed.error.message);
+
+  const [size] = await db
+    .select({ id: breadSizes.id })
+    .from(breadSizes)
+    .where(and(eq(breadSizes.id, parsed.data.breadSizeId), eq(breadSizes.groupId, groupId)))
+    .limit(1);
+  if (!size) return errorResponse('Size does not belong to this group', 400);
+
+  const [existing] = await db
+    .select({ breadSizeId: breadTypeSizes.breadSizeId })
+    .from(breadTypeSizes)
+    .where(
+      and(
+        eq(breadTypeSizes.breadTypeId, typeId),
+        eq(breadTypeSizes.breadSizeId, parsed.data.breadSizeId)
+      )
+    )
+    .limit(1);
+  if (existing) return jsonResponse({ success: true, alreadyEnabled: true });
+
+  const [{ maxSort }] = await db
+    .select({ maxSort: sql<number>`coalesce(max(${breadTypeSizes.sortOrder}), -1)` })
+    .from(breadTypeSizes)
+    .where(eq(breadTypeSizes.breadTypeId, typeId));
+
+  await db.insert(breadTypeSizes).values({
+    breadTypeId: typeId,
+    breadSizeId: parsed.data.breadSizeId,
+    priceOverride: null,
+    sortOrder: maxSort + 1,
+  });
+
+  return jsonResponse({ success: true });
 });

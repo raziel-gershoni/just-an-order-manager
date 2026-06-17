@@ -44,7 +44,8 @@ const deliveryIcons: Record<DeliveryType, typeof Calendar> = {
 
 function OrderFormContent() {
   const { apiFetch } = useApi();
-  const { activeGroupId } = useGroup();
+  const { activeGroupId, activeGroupRole } = useGroup();
+  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useT();
@@ -74,6 +75,11 @@ function OrderFormContent() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
+  const [addSizeForIdx, setAddSizeForIdx] = useState<number | null>(null);
+  const [newSizeName, setNewSizeName] = useState('');
+  const [newSizeWeight, setNewSizeWeight] = useState('');
+  const [newSizePrice, setNewSizePrice] = useState('');
+  const [addingSize, setAddingSize] = useState(false);
 
   useEffect(() => {
     const loads: Promise<unknown>[] = [
@@ -157,6 +163,66 @@ function OrderFormContent() {
     setCustomerId(customer.id);
     setShowNewCustomer(false);
     setNewCustomerName('');
+  }
+
+  function openAddSize(idx: number) {
+    setAddSizeForIdx(idx);
+    setNewSizeName('');
+    setNewSizeWeight('');
+    setNewSizePrice('');
+  }
+
+  function cancelAddSize() {
+    setAddSizeForIdx(null);
+    setNewSizeName('');
+    setNewSizeWeight('');
+    setNewSizePrice('');
+  }
+
+  // Create a size on the fly and enable it for the bread type being ordered, then
+  // select it for this line item. Two calls: create the global size, then additively
+  // link it to the type (keeps the type's other sizes and price overrides intact).
+  async function handleCreateSize(idx: number) {
+    const item = items[idx];
+    if (!item || !newSizeName.trim() || !newSizePrice || !activeGroupId) return;
+    setAddingSize(true);
+    try {
+      const { size } = await apiFetch<{ size: BreadSize }>(
+        `/groups/${activeGroupId}/bread-sizes`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: newSizeName.trim(),
+            weightGrams: newSizeWeight ? Number(newSizeWeight) : null,
+            price: newSizePrice,
+          }),
+        }
+      );
+      await apiFetch(`/groups/${activeGroupId}/bread-types/${item.breadTypeId}/sizes`, {
+        method: 'POST',
+        body: JSON.stringify({ breadSizeId: size.id }),
+      });
+      setBreadTypes((prev) =>
+        prev.map((bt) =>
+          bt.id === item.breadTypeId
+            ? {
+                ...bt,
+                enabledSizes: [
+                  ...(bt.enabledSizes ?? []),
+                  { id: size.id, name: size.name, weightGrams: size.weightGrams, price: size.price },
+                ],
+              }
+            : bt
+        )
+      );
+      updateItem(idx, { breadSizeId: size.id });
+      cancelAddSize();
+      toast.success(t('form.size_added'));
+    } catch {
+      toast.error(t('form.size_add_failed'));
+    } finally {
+      setAddingSize(false);
+    }
   }
 
   async function handleSubmit() {
@@ -344,31 +410,84 @@ function OrderFormContent() {
                   </select>
 
                   {/* Size chips — secondary */}
-                  {sizes.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {sizes.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          className={cn(
-                            'px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border',
-                            item.breadSizeId === s.id
-                              ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
-                              : 'bg-card border-border hover:bg-muted text-muted-foreground'
-                          )}
-                          onClick={() => updateItem(idx, { breadSizeId: s.id })}
-                        >
-                          {s.name}
-                          {s.weightGrams != null && (
-                            <span className="tabular-nums opacity-70"> {s.weightGrams}g</span>
-                          )}
-                          <span className="tabular-nums opacity-70"> ₪{s.price}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-destructive/80 px-1 py-1.5">
-                      {t('form.no_sizes_for_type')}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {sizes.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={cn(
+                          'px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border',
+                          item.breadSizeId === s.id
+                            ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
+                            : 'bg-card border-border hover:bg-muted text-muted-foreground'
+                        )}
+                        onClick={() => updateItem(idx, { breadSizeId: s.id })}
+                      >
+                        {s.name}
+                        {s.weightGrams != null && (
+                          <span className="tabular-nums opacity-70"> {s.weightGrams}g</span>
+                        )}
+                        <span className="tabular-nums opacity-70"> ₪{s.price}</span>
+                      </button>
+                    ))}
+                    {isAdmin && addSizeForIdx !== idx && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-md border border-dashed border-primary/40 px-2.5 py-1.5 text-xs font-medium text-primary transition-all hover:bg-primary/5 active:scale-95"
+                        onClick={() => openAddSize(idx)}
+                      >
+                        <Plus className="h-3 w-3" />
+                        {t('form.add_size')}
+                      </button>
+                    )}
+                    {sizes.length === 0 && !isAdmin && (
+                      <span className="px-1 py-1.5 text-xs text-destructive/80">
+                        {t('form.no_sizes_for_type')}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Inline create-size form (admin only) */}
+                  {isAdmin && addSizeForIdx === idx && (
+                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-2 animate-expand">
+                      <Input
+                        autoFocus
+                        placeholder={t('form.size_name')}
+                        value={newSizeName}
+                        onChange={(e) => setNewSizeName(e.target.value)}
+                        className="flex-1 min-w-[5rem]"
+                      />
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder={t('form.size_weight')}
+                        value={newSizeWeight}
+                        onChange={(e) => setNewSizeWeight(e.target.value)}
+                        className="w-[4.5rem]"
+                      />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder={t('form.size_price')}
+                        value={newSizePrice}
+                        onChange={(e) => setNewSizePrice(e.target.value)}
+                        className="w-[4.5rem]"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleCreateSize(idx)}
+                        loading={addingSize}
+                        disabled={!newSizeName.trim() || !newSizePrice}
+                      >
+                        {t('form.add')}
+                      </Button>
+                      <button
+                        type="button"
+                        className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={cancelAddSize}
+                      >
+                        {t('form.cancel')}
+                      </button>
                     </div>
                   )}
 
