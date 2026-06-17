@@ -1,7 +1,7 @@
 # Customer Reminders (WhatsApp) — Design Spec
 
 - **Date:** 2026-06-17
-- **Status:** Design approved by owner. Implementation **paused** (owner pivoted to a smaller urgent task). Review this doc before resuming.
+- **Status:** **Implemented** 2026-06-17 (plan: `docs/superpowers/plans/2026-06-17-customer-reminders.md`). Out-of-scope/future items below remain unbuilt. Pending: owner must register the Meta templates and add them in the תזכורות tab, then run the manual smoke test.
 - **Author:** Claude (with Raziel)
 
 ## 1. Context & Goal
