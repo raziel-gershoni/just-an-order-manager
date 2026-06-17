@@ -1043,60 +1043,58 @@ export default function CatalogPage() {
                     {t('settings.no_enabled_sizes')}
                   </p>
                 ) : (
-                  <>
-                    <div className="flex flex-wrap gap-2">
-                      {typeDetailSizes.map((s) => (
+                  <div className="flex flex-wrap gap-2">
+                    {typeDetailSizes.map((s) =>
+                      s.enabled ? (
+                        <div
+                          key={s.id}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-primary/50 bg-primary/15 px-3 py-1.5 text-sm font-medium text-foreground"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleEnabled(s.id)}
+                            className="inline-flex items-center gap-1.5"
+                          >
+                            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span>
+                              {s.name}
+                              {s.weightGrams != null && (
+                                <span className="text-xs text-muted-foreground tabular-nums ms-0.5">{s.weightGrams}g</span>
+                              )}
+                            </span>
+                          </button>
+                          <span className="text-muted-foreground/60">·</span>
+                          <span className="inline-flex items-center font-mono text-xs text-muted-foreground">
+                            ₪
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              value={s.priceOverride ?? s.price}
+                              onChange={(e) => updateOverride(s.id, e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`מחיר · ${s.name}`}
+                              className="w-12 bg-transparent text-center tabular-nums text-foreground focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                          </span>
+                        </div>
+                      ) : (
                         <button
                           key={s.id}
                           type="button"
                           onClick={() => toggleEnabled(s.id)}
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
-                            s.enabled
-                              ? 'bg-primary/15 border-primary/50 text-foreground font-medium'
-                              : 'border-border text-muted-foreground hover:border-muted-foreground/40'
-                          )}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-muted-foreground/40"
                         >
-                          {s.enabled && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
                           <span>
                             {s.name}
                             {s.weightGrams != null && (
                               <span className="text-xs text-muted-foreground tabular-nums ms-0.5">{s.weightGrams}g</span>
                             )}
                           </span>
-                          <span className="font-mono text-xs text-muted-foreground tabular-nums">· ₪{s.priceOverride ?? s.price}</span>
+                          <span className="font-mono text-xs text-muted-foreground tabular-nums">· ₪{s.price}</span>
                         </button>
-                      ))}
-                    </div>
-                    {typeDetailSizes.some((s) => s.enabled) && (
-                      <div className="mt-3">
-                        <div className="text-xs text-muted-foreground mb-1.5">מחיר מותאם · אופציונלי</div>
-                        <div className="space-y-1.5">
-                          {typeDetailSizes
-                            .filter((s) => s.enabled)
-                            .map((s) => (
-                              <div key={s.id} className="flex items-center gap-2 text-sm">
-                                <span className="min-w-0 flex-1 truncate">
-                                  {s.name}
-                                  {s.weightGrams != null && (
-                                    <span className="text-xs text-muted-foreground ms-1 tabular-nums">{s.weightGrams}g</span>
-                                  )}
-                                </span>
-                                <span className="text-muted-foreground shrink-0">₪</span>
-                                <Input
-                                  type="number"
-                                  inputMode="decimal"
-                                  value={s.priceOverride ?? ''}
-                                  onChange={(e) => updateOverride(s.id, e.target.value)}
-                                  placeholder={s.price}
-                                  className="w-24 shrink-0"
-                                />
-                              </div>
-                            ))}
-                        </div>
-                      </div>
+                      )
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             )}
