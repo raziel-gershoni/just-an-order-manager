@@ -13,6 +13,7 @@
     "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
+    "@hebcal/hdate": "^0.22.4",
     "@neondatabase/serverless": "^1.0.2",
     "@telegram-apps/init-data-node": "^2.0.10",
     "@telegram-apps/sdk": "^3.11.8",

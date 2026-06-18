@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@hebcal/hdate':
+        specifier: ^0.22.4
+        version: 0.22.4
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
@@ -668,6 +671,9 @@ packages:
 
   '@grammyjs/types@3.25.0':
     resolution: {integrity: sha512-iN9i5p+8ZOu9OMxWNcguojQfz4K/PDyMPOnL7PPCON+SoA/F8OKMH3uR7CVUkYfdNe0GCz8QOzAWrnqusQYFOg==}
+
+  '@hebcal/hdate@0.22.4':
+    resolution: {integrity: sha512-fIFf42tqufuHsy88allovSIZv8bGWIsJyy/r8A69/yX+9XtPK9u0NVsTK40RFoZlrCUWFVHQ0eTUpgiLlQCuzw==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -3150,6 +3156,8 @@ snapshots:
       levn: 0.4.1
 
   '@grammyjs/types@3.25.0': {}
+
+  '@hebcal/hdate@0.22.4': {}
 
   '@humanfs/core@0.19.1': {}
 

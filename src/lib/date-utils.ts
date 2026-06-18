@@ -1,4 +1,5 @@
 import { nextFriday, format, startOfDay, endOfDay, addDays } from 'date-fns';
+import { HDate } from '@hebcal/hdate';
 
 export function getNextShabbatDate(): Date {
   const today = new Date();
@@ -69,50 +70,11 @@ export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
 }
 
 /**
- * Render a number as a Hebrew (gematria) numeral, e.g. 28 → "כ״ח", 786 → "תשפ״ו".
- * Years use the last three digits (mod 1000). Handles the ט״ו / ט״ז exceptions.
- */
-function hebrewNumeral(num: number): string {
-  let n = num % 1000;
-  const parts: string[] = [];
-  for (const [v, c] of [[400, 'ת'], [300, 'ש'], [200, 'ר'], [100, 'ק']] as const) {
-    while (n >= v) {
-      parts.push(c);
-      n -= v;
-    }
-  }
-  if (n === 15) parts.push('ט', 'ו');
-  else if (n === 16) parts.push('ט', 'ז');
-  else {
-    for (const [v, c] of [[90, 'צ'], [80, 'פ'], [70, 'ע'], [60, 'ס'], [50, 'נ'], [40, 'מ'], [30, 'ל'], [20, 'כ'], [10, 'י']] as const) {
-      if (n >= v) {
-        parts.push(c);
-        n -= v;
-        break;
-      }
-    }
-    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
-    if (n > 0) parts.push(ones[n]);
-  }
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0] + '׳';
-  return parts.slice(0, -1).join('') + '״' + parts[parts.length - 1];
-}
-
-/**
- * Today's date on the Hebrew (Jewish) calendar, e.g. "ג׳ בתמוז תשפ״ו". Intl gives
- * the (leap-aware) month name + the "ב" preposition; gematria supplies the
- * numerals, since ICU renders the day/year as Western digits.
+ * Today's date on the Hebrew (Jewish) calendar in gematria, e.g. "ג׳ תמוז תשפ״ו".
+ * Uses @hebcal/hdate (leap-aware months, gematria, nikud suppressed).
  */
 export function formatHebrewDate(date: Date): string {
-  const parts = new Intl.DateTimeFormat('he-u-ca-hebrew', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).formatToParts(date);
-  return parts
-    .map((p) => (p.type === 'day' || p.type === 'year' ? hebrewNumeral(Number(p.value)) : p.value))
-    .join('');
+  return new HDate(date).renderGematriya(true);
 }
 
 export function getTodayRange() {
