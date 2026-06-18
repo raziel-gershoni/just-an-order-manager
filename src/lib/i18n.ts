@@ -31,9 +31,12 @@ const translations: Record<string, string> = {
 
   // Dashboard
   'dash.welcome': '!ברוכים הבאים',
-  'dash.create_group': 'צרו את קבוצת המאפייה',
-  'dash.group_name': '…שם הקבוצה',
-  'dash.create': 'צור',
+  'dash.welcome_sub': 'כמה פרטים אחרונים ומתחילים לאפות',
+  'dash.create_group': 'הקמת המאפייה',
+  'dash.group_name': '…שם המאפייה',
+  'dash.create': 'הקמה',
+  'dash.bakery_created': '!המאפייה מוכנה',
+  'dash.bakery_create_failed': 'ההקמה נכשלה, נסו שוב',
   'dash.new_order': 'הזמנה חדשה',
   'dash.record_payment': 'רשום תשלום',
   'dash.today': 'היום',

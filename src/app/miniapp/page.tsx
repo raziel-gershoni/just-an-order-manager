@@ -52,7 +52,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { apiFetch } = useApi();
-  const { activeGroupId, setActiveGroupId } = useGroup();
+  const { activeGroupId, setActiveGroupId, setActiveGroupRole } = useGroup();
   const { user } = useTelegram();
   const t = useT();
   const lang = useLang();
@@ -92,9 +92,10 @@ export default function Dashboard() {
         body: JSON.stringify({ name: groupName.trim() }),
       });
       setActiveGroupId(group.id);
-      toast.success(t('orders.created'));
+      setActiveGroupRole('owner'); // the creator owns the bakery
+      toast.success(t('dash.bakery_created'));
     } catch {
-      toast.error(t('orders.create_failed'));
+      toast.error(t('dash.bakery_create_failed'));
     } finally {
       setCreating(false);
     }
@@ -102,27 +103,41 @@ export default function Dashboard() {
 
   if (!activeGroupId) {
     return (
-      <div className="p-6 space-y-6 animate-fade-in">
-        <div className="text-center pt-8 pb-4">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <Wheat className="h-8 w-8 text-primary" />
+      <div className="flex min-h-screen flex-col items-center justify-center px-8 animate-fade-in">
+        <div className="w-full max-w-[320px]">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+              <Wheat className="h-8 w-8 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('dash.welcome')}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">{t('dash.welcome_sub')}</p>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('dash.welcome')}</h1>
+          <Card className="p-0 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-dashed border-border px-4 py-2.5">
+              <span className="font-mono text-[10px] font-semibold tracking-widest text-primary">№ ····</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                DOCKET
+              </span>
+            </div>
+            <div className="space-y-3 p-4">
+              <label className="block text-sm font-semibold">{t('dash.create_group')}</label>
+              <Input
+                placeholder={t('dash.group_name')}
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                autoFocus
+              />
+              <Button
+                className="w-full"
+                disabled={!groupName.trim()}
+                loading={creating}
+                onClick={handleCreateGroup}
+              >
+                {t('dash.create')}
+              </Button>
+            </div>
+          </Card>
         </div>
-        <Card>
-          <h3 className="font-semibold mb-3">{t('dash.create_group')}</h3>
-          <div className="flex gap-2">
-            <Input
-              placeholder={t('dash.group_name')}
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              className="flex-1"
-            />
-            <Button disabled={!groupName.trim()} loading={creating} onClick={handleCreateGroup}>
-              {t('dash.create')}
-            </Button>
-          </div>
-        </Card>
       </div>
     );
   }
