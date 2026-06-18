@@ -40,6 +40,7 @@ const translations: Record<string, string> = {
   'dash.upcoming': 'בקרוב',
   'dash.outstanding': 'יתרות חוב',
   'dash.no_orders_today': 'אין הזמנות להיום',
+  'dash.no_scheduled_orders': 'אין הזמנות מתוכננות',
   'dash.loaves': 'כיכרות',
 
   // Orders

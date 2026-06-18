@@ -11,9 +11,12 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Plus, Banknote, Wheat, CalendarDays, AlertTriangle, ChevronRight, ChevronLeft, Repeat, StickyNote, Clock } from 'lucide-react';
+import { groupByDeliveryDate } from '@/lib/order-grouping';
+import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
+import { cn } from '@/lib/utils';
+import { Plus, Banknote, Wheat, CalendarDays, AlertTriangle, Repeat, StickyNote, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 interface DashboardData {
@@ -54,8 +57,6 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
-  const Chevron = lang === 'he' ? ChevronLeft : ChevronRight;
 
   // Onboarding
   const [groupName, setGroupName] = useState('');
@@ -152,6 +153,11 @@ export default function Dashboard() {
     );
   }
 
+  const todayOrders = data?.todayOrders ?? [];
+  const upcomingOrders = data?.upcomingOrders ?? [];
+  const schedW = docketWidth([...todayOrders, ...upcomingOrders].map((o) => o.id));
+  const nothingScheduled = todayOrders.length === 0 && upcomingOrders.length === 0;
+
   return (
     <div className="p-5 space-y-5 animate-fade-in">
       {/* Quick Actions */}
@@ -184,89 +190,86 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {/* Today's Orders */}
-      <Card className="p-0 overflow-hidden">
-        <div className="flex justify-between items-center p-4 pb-0">
-          <h2 className="font-bold text-lg tracking-tight">{t('dash.today')}</h2>
-          <span className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-            {data?.totalPendingLoaves ?? 0} {t('dash.loaves')}
-          </span>
-        </div>
-        {data?.todayOrders.length === 0 ? (
-          <EmptyState
-            icon={Wheat}
-            title={t('dash.no_orders_today')}
-            action={
-              <Link href="/miniapp/orders/new">
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4" />
-                  {t('dash.new_order')}
-                </Button>
-              </Link>
-            }
-          />
-        ) : (
-          <div className="px-4 pb-3 pt-3">
-            <div className="divide-y divide-border">
-              {data?.todayOrders.map((o) => {
-                const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
-                return (
-                  <Link
-                    key={o.id}
-                    href={`/miniapp/orders/${o.id}`}
-                    className={`flex items-center justify-between py-3 ps-3 first:pt-0 last:pb-0 border-status-${displayStatus}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium flex items-center gap-1.5">
-                        {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
-                        {o.customerName}
-                        {o.notes && <StickyNote className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{o.itemsSummary}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ms-2">
-                      <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
-                      <Chevron className="h-4 w-4 text-muted-foreground/40" />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </Card>
+      {/* Nothing scheduled — compact hint (replaces the large empty-today block) */}
+      {nothingScheduled && (
+        <Card className="flex items-center gap-3 p-4">
+          <Wheat className="h-5 w-5 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground">{t('dash.no_scheduled_orders')}</span>
+        </Card>
+      )}
 
-      {/* Upcoming */}
-      {data?.upcomingOrders && data.upcomingOrders.length > 0 && (
+      {/* Today's Orders — hidden entirely when there's nothing today */}
+      {todayOrders.length > 0 && (
         <Card className="p-0 overflow-hidden">
-          <div className="p-4 pb-0">
+          <div className="flex justify-between items-center px-4 py-3">
+            <h2 className="font-bold text-lg tracking-tight">{t('dash.today')}</h2>
+            <span className="font-mono text-xs tabular-nums text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+              {data?.totalPendingLoaves ?? 0} {t('dash.loaves')}
+            </span>
+          </div>
+          <div className="border-t border-dashed border-border">
+            {todayOrders.map((o, idx) => {
+              const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
+              return (
+                <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
+                  <div className={cn(
+                    'flex items-stretch transition-colors hover:bg-muted/40',
+                    idx > 0 && 'border-t border-dashed border-border'
+                  )}>
+                    <DocketStub id={o.id} width={schedW} />
+                    <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium flex items-center gap-1.5">
+                          {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                          <span className="truncate">{o.customerName}</span>
+                          {o.notes && <StickyNote className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                        </div>
+                        <div className="text-sm text-muted-foreground line-clamp-1">{o.itemsSummary}</div>
+                      </div>
+                      <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Upcoming — grouped by delivery date, date in the separator (not per row) */}
+      {upcomingOrders.length > 0 && (
+        <Card className="p-0 overflow-hidden">
+          <div className="px-4 py-3">
             <h2 className="font-bold text-lg tracking-tight flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-muted-foreground" />
               {t('dash.upcoming')}
             </h2>
           </div>
-          <div className="px-4 pb-3 pt-3">
-            <div className="divide-y divide-border">
-              {data.upcomingOrders.map((o) => (
-                <Link
-                  key={o.id}
-                  href={`/miniapp/orders/${o.id}`}
-                  className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <span className="font-medium inline-flex items-center gap-1.5">
-                      {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
-                      {o.customerName}
-                    </span>
-                    <span className="text-sm text-muted-foreground ms-2">{o.itemsSummary}</span>
+          {groupByDeliveryDate(upcomingOrders, lang).map((group) => (
+            <div key={group.key}>
+              <DateGroupHeader label={group.label} loaves={group.loaves} />
+              {group.items.map((o, idx) => (
+                <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
+                  <div className={cn(
+                    'flex items-stretch transition-colors hover:bg-muted/40',
+                    idx > 0 && 'border-t border-dashed border-border'
+                  )}>
+                    <DocketStub id={o.id} width={schedW} />
+                    <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium flex items-center gap-1.5">
+                          {o.isRecurring && <Repeat className="h-3 w-3 text-primary shrink-0" />}
+                          <span className="truncate">{o.customerName}</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground line-clamp-1">{o.itemsSummary}</div>
+                      </div>
+                      <Badge status={o.status} label={translate(`status.${o.status}`, lang)} />
+                    </div>
                   </div>
-                  <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0 ms-2">
-                    {o.deliveryDate ? formatDateRelative(o.deliveryDate, lang) : ''}
-                  </span>
                 </Link>
               ))}
             </div>
-          </div>
+          ))}
         </Card>
       )}
 

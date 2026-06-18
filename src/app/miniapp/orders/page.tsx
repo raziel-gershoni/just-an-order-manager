@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
-import { formatDateRelative } from '@/lib/date-utils';
+import { groupByDeliveryDate } from '@/lib/order-grouping';
 import { Plus, ClipboardList, Repeat, AlertCircle, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import Link from 'next/link';
 
 interface Order {
@@ -143,51 +144,49 @@ export default function OrdersPage() {
         />
       ) : (
         <Card className="p-0 overflow-hidden">
-          {orders.map((o, idx) => {
-            const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
-            return (
-              <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                <div className={cn(
-                  'flex items-stretch transition-colors hover:bg-muted/40',
-                  idx > 0 && 'border-t border-dashed border-border'
-                )}>
-                  <DocketStub id={o.id} width={idW} />
-                  <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium flex items-center gap-1.5">
-                        {o.isRecurring && (
-                          <Repeat
-                            className="h-3 w-3 text-primary shrink-0"
-                            aria-label="הזמנה קבועה"
-                            role="img"
-                          >
-                            <title>הזמנה קבועה</title>
-                          </Repeat>
-                        )}
-                        <span className="truncate">{o.customerName}</span>
-                      </div>
-                      <div className="text-sm text-muted-foreground line-clamp-1">{o.itemsSummary}</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
-                      <div className="flex items-center gap-1.5">
-                        {o.status !== 'delivered' && !o.paid && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning/10 text-warning">
-                            {t('orders.not_yet_paid')}
-                          </span>
-                        )}
-                        {o.deliveryDate && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatDateRelative(o.deliveryDate, lang)}
-                          </span>
-                        )}
+          {groupByDeliveryDate(orders, lang).map((group) => (
+            <div key={group.key}>
+              <DateGroupHeader label={group.label} loaves={group.loaves} />
+              {group.items.map((o, idx) => {
+                const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
+                return (
+                  <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
+                    <div className={cn(
+                      'flex items-stretch transition-colors hover:bg-muted/40',
+                      idx > 0 && 'border-t border-dashed border-border'
+                    )}>
+                      <DocketStub id={o.id} width={idW} />
+                      <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium flex items-center gap-1.5">
+                            {o.isRecurring && (
+                              <Repeat
+                                className="h-3 w-3 text-primary shrink-0"
+                                aria-label="הזמנה קבועה"
+                                role="img"
+                              >
+                                <title>הזמנה קבועה</title>
+                              </Repeat>
+                            )}
+                            <span className="truncate">{o.customerName}</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground line-clamp-1">{o.itemsSummary}</div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
+                          {o.status !== 'delivered' && !o.paid && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning/10 text-warning">
+                              {t('orders.not_yet_paid')}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </Card>
       )}
     </div>
