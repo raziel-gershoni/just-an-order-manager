@@ -7,14 +7,14 @@ import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { DocketRow } from '@/components/ui/DocketRow';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
-import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
+import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send } from 'lucide-react';
@@ -512,39 +512,21 @@ export default function CustomerDetailPage() {
               {groupByDeliveryDate(orders.slice(0, 10), lang).map((group) => (
                 <div key={group.key}>
                   <DateGroupHeader label={group.label} loaves={group.loaves} />
-                  {group.items.map((o, idx) => {
-                    const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
-                    return (
-                      <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                        <div className={cn(
-                          'flex items-stretch transition-colors hover:bg-muted/40',
-                          idx > 0 && 'border-t border-dashed border-border'
-                        )}>
-                          <DocketStub id={o.id} width={ordW} />
-                          <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium flex items-center gap-1.5 line-clamp-1">
-                                {o.isRecurring && (
-                                  <Repeat className="h-3 w-3 text-primary shrink-0" aria-label="הזמנה קבועה" role="img">
-                                    <title>הזמנה קבועה</title>
-                                  </Repeat>
-                                )}
-                                <span className="truncate">{o.itemsSummary}</span>
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
-                              {o.status !== 'delivered' && !o.paid && (
-                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning/10 text-warning">
-                                  {t('orders.not_yet_paid')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
+                  {group.items.map((o, idx) => (
+                    <DocketRow
+                      key={o.id}
+                      id={o.id}
+                      idWidth={ordW}
+                      href={`/miniapp/orders/${o.id}`}
+                      primary={o.itemsSummary}
+                      status={o.status}
+                      statusLabel={translate(`status.${o.status}`, lang)}
+                      paid={o.paid}
+                      showPay
+                      isRecurring={o.isRecurring}
+                      first={idx === 0}
+                    />
+                  ))}
                 </div>
               ))}
             </Card>

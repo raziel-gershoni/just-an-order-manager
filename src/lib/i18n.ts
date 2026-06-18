@@ -42,6 +42,11 @@ const translations: Record<string, string> = {
   'dash.no_orders_today': 'אין הזמנות להיום',
   'dash.no_scheduled_orders': 'אין הזמנות מתוכננות',
   'dash.loaves': 'כיכרות',
+  'dash.loaves_today': 'ככרות להיום',
+  'dash.active_orders': 'הזמנות פעילות',
+  'dash.greeting_morning': 'בוקר טוב',
+  'dash.greeting_afternoon': 'צהריים טובים',
+  'dash.greeting_evening': 'ערב טוב',
 
   // Orders
   'orders.title': 'הזמנות',

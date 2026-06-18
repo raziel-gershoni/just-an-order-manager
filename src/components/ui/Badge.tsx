@@ -20,13 +20,14 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[11px] font-semibold tracking-wide -rotate-3',
+        'inline-flex items-center rounded-[4px] border-[1.5px] px-2.5 py-[3px] text-[11.5px] font-extrabold tracking-[0.06em] -rotate-[4deg]',
         className
       )}
       style={{
         color: v,
         borderColor: v,
-        backgroundColor: `color-mix(in oklab, ${v} 14%, var(--card))`,
+        backgroundColor: `color-mix(in oklab, ${v} 16%, var(--card))`,
+        boxShadow: 'inset 0 0 6px rgba(0,0,0,0.10)',
       }}
     >
       {label}

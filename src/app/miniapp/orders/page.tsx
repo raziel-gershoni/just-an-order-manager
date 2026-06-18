@@ -5,15 +5,15 @@ import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
-import { Plus, ClipboardList, Repeat, AlertCircle, RotateCw } from 'lucide-react';
+import { Plus, ClipboardList, AlertCircle, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
+import { docketWidth } from '@/components/ui/DocketStub';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
+import { DocketRow } from '@/components/ui/DocketRow';
 import Link from 'next/link';
 
 interface Order {
@@ -147,44 +147,23 @@ export default function OrdersPage() {
           {groupByDeliveryDate(orders, lang).map((group) => (
             <div key={group.key}>
               <DateGroupHeader label={group.label} loaves={group.loaves} />
-              {group.items.map((o, idx) => {
-                const displayStatus = o.status === 'delivered' && !o.paid ? 'to_be_paid' : o.status;
-                return (
-                  <Link key={o.id} href={`/miniapp/orders/${o.id}`}>
-                    <div className={cn(
-                      'flex items-stretch transition-colors hover:bg-muted/40',
-                      idx > 0 && 'border-t border-dashed border-border'
-                    )}>
-                      <DocketStub id={o.id} width={idW} />
-                      <div className="flex flex-1 items-center gap-3 px-3 py-3 min-w-0">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium flex items-center gap-1.5">
-                            {o.isRecurring && (
-                              <Repeat
-                                className="h-3 w-3 text-primary shrink-0"
-                                aria-label="הזמנה קבועה"
-                                role="img"
-                              >
-                                <title>הזמנה קבועה</title>
-                              </Repeat>
-                            )}
-                            <span className="truncate">{o.customerName}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground line-clamp-1">{o.itemsSummary}</div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <Badge status={displayStatus} label={translate(`status.${displayStatus}`, lang)} />
-                          {o.status !== 'delivered' && !o.paid && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning/10 text-warning">
-                              {t('orders.not_yet_paid')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
+              {group.items.map((o, idx) => (
+                <DocketRow
+                  key={o.id}
+                  id={o.id}
+                  idWidth={idW}
+                  href={`/miniapp/orders/${o.id}`}
+                  primary={o.customerName}
+                  secondary={o.itemsSummary}
+                  status={o.status}
+                  statusLabel={translate(`status.${o.status}`, lang)}
+                  paid={o.paid}
+                  showPay
+                  isRecurring={o.isRecurring}
+                  hasNotes={!!o.notes}
+                  first={idx === 0}
+                />
+              ))}
             </div>
           ))}
         </Card>
