@@ -6,6 +6,7 @@ import { TelegramProvider, useTelegram } from '@/components/providers/TelegramPr
 import { GroupCtx, type GroupRole } from '@/hooks/useGroup';
 import { ToastCtx, type Toast } from '@/hooks/useToast';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { LoadingSplash } from '@/components/ui/LoadingSplash';
 import { LangCtx } from '@/hooks/useLang';
 import { t, type Lang } from '@/lib/i18n';
 import { usePathname } from 'next/navigation';
@@ -16,6 +17,7 @@ function AppProviders({ children }: { children: ReactNode }) {
   const [activeGroupRole, setActiveGroupRole] = useState<GroupRole | null>(null);
   const [lang, setLang] = useState<Lang>('he');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [authResolved, setAuthResolved] = useState(false);
   const { initDataRaw, ready } = useTelegram();
 
   const showToast = useCallback(
@@ -57,7 +59,8 @@ function AppProviders({ children }: { children: ReactNode }) {
           setActiveGroupRole(data.groups[0].role ?? null);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setAuthResolved(true));
   }, [ready, initDataRaw]);
 
   const dir = 'rtl';
@@ -83,15 +86,21 @@ function AppProviders({ children }: { children: ReactNode }) {
                 },
               }}
             />
-            <div className="pb-20 animate-fade-in">{children}</div>
-            <BottomNav
-              labels={{
-                home: t('nav.home', lang),
-                orders: t('nav.orders', lang),
-                customers: t('nav.customers', lang),
-                settings: t('nav.settings', lang),
-              }}
-            />
+            {!authResolved ? (
+              <LoadingSplash />
+            ) : (
+              <>
+                <div className="pb-20 animate-fade-in">{children}</div>
+                <BottomNav
+                  labels={{
+                    home: t('nav.home', lang),
+                    orders: t('nav.orders', lang),
+                    customers: t('nav.customers', lang),
+                    settings: t('nav.settings', lang),
+                  }}
+                />
+              </>
+            )}
           </div>
         </GroupCtx.Provider>
       </ToastCtx.Provider>
