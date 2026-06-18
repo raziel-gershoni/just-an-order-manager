@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
+import { formatHebrewDate } from '@/lib/date-utils';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useTelegram } from '@/components/providers/TelegramProvider';
@@ -167,6 +168,7 @@ export default function Dashboard() {
     hour < 12 ? t('dash.greeting_morning') : hour < 18 ? t('dash.greeting_afternoon') : t('dash.greeting_evening');
   const dateLabel = format(now, 'd בMMMM', { locale: he });
   const dayLabel = format(now, 'EEEE', { locale: he });
+  const hebrewDate = formatHebrewDate(now);
 
   return (
     <div className="pb-6 animate-fade-in">
@@ -177,7 +179,9 @@ export default function Dashboard() {
           {user?.firstName ? `, ${user.firstName}` : ''}
         </h1>
         <div className="text-end leading-tight">
-          <div className="text-[12.5px] font-semibold text-muted-foreground">{dateLabel}</div>
+          <div className="text-[12.5px] font-semibold text-muted-foreground">
+            {dateLabel} · {hebrewDate}
+          </div>
           <div className="text-[11px] font-semibold text-muted-foreground/70">{dayLabel}</div>
         </div>
       </header>
