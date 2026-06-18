@@ -78,7 +78,7 @@ Deterministic, simple, and "cycles through" exactly as the owner described. The 
    - **A whole customer** — all that customer's numbers.
    - **Several customers** — multi-select mode on the customers list. *No "send to everyone" button — deliberate friction.*
 2. **Pick the occasion** (week-start / Shabbat).
-3. App resolves the rotated variant per customer, **skips opted-out customers**, normalizes phones (`normalizePhoneNumber`), injects the name as `{{1}}` (`inferName` / `phoneContactName`).
+3. App resolves the rotated variant per customer, **skips opted-out customers**, normalizes phones (`normalizePhoneNumber`). **No template variables for now** — templates send as-is (the `{{1}}` name slot was dropped per owner; re-add by passing a name param to `sendWhatsAppTemplate` in `/api/reminders/send`).
 4. **Confirm sheet** — "שליחת N תזכורות", a preview of the variant(s), and a note of any excluded (opted-out) recipients. Each message costs, so the count + confirm is mandatory.
 5. Send via the existing `sendWhatsAppTemplate` (reuse `notifyCustomerWhatsApp`'s pattern, `Promise.allSettled`). Write one `reminder_sends` row per number with `sent`/`failed`.
 6. Result toast: "נשלחו N • נכשלו M • לא נשלחו (חסומים) K".

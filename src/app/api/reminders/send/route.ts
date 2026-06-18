@@ -5,7 +5,6 @@ import { eq, and, asc, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 import { pickNextTemplate } from '@/lib/reminders';
-import { phoneContactName } from '@/lib/name-utils';
 
 const sendSchema = z
   .object({
@@ -49,8 +48,6 @@ export const POST = withGroup(async (request, auth, groupId) => {
     customerId: number;
     phoneId: number;
     phone: string;
-    phoneName: string | null;
-    customerName: string;
   };
   let targets: Target[] = [];
   let skippedOptOut = 0;
@@ -60,9 +57,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
       .select({
         phoneId: customerPhones.id,
         phone: customerPhones.phone,
-        phoneName: customerPhones.name,
         customerId: customers.id,
-        customerName: customers.name,
         optOut: customers.reminderOptOut,
       })
       .from(customerPhones)
@@ -71,32 +66,21 @@ export const POST = withGroup(async (request, auth, groupId) => {
       .limit(1);
     if (!row) return errorResponse('Phone not found', 404);
     if (row.optOut) skippedOptOut = 1;
-    else
-      targets = [
-        {
-          customerId: row.customerId,
-          phoneId: row.phoneId,
-          phone: row.phone,
-          phoneName: row.phoneName,
-          customerName: row.customerName,
-        },
-      ];
+    else targets = [{ customerId: row.customerId, phoneId: row.phoneId, phone: row.phone }];
   } else {
     const ids = parsed.data.customerIds!;
     const custRows = await db
-      .select({ id: customers.id, name: customers.name, optOut: customers.reminderOptOut })
+      .select({ id: customers.id, optOut: customers.reminderOptOut })
       .from(customers)
       .where(and(eq(customers.groupId, groupId), inArray(customers.id, ids)));
     const allowed = custRows.filter((c) => !c.optOut);
     skippedOptOut = custRows.length - allowed.length;
     const allowedIds = allowed.map((c) => c.id);
-    const nameById = new Map(allowed.map((c) => [c.id, c.name]));
     if (allowedIds.length > 0) {
       const phones = await db
         .select({
           phoneId: customerPhones.id,
           phone: customerPhones.phone,
-          phoneName: customerPhones.name,
           customerId: customerPhones.customerId,
         })
         .from(customerPhones)
@@ -106,8 +90,6 @@ export const POST = withGroup(async (request, auth, groupId) => {
         customerId: p.customerId,
         phoneId: p.phoneId,
         phone: p.phone,
-        phoneName: p.phoneName,
-        customerName: nameById.get(p.customerId) ?? '',
       }));
     }
   }
@@ -133,8 +115,8 @@ export const POST = withGroup(async (request, auth, groupId) => {
     targets.map(async (tgt) => {
       const template = templateByCustomer.get(tgt.customerId);
       if (!template) return;
-      const { firstName } = phoneContactName(tgt.customerName, tgt.phoneName);
-      const ok = await sendWhatsAppTemplate(tgt.phone, template.metaTemplateName, 'he', [firstName]);
+      // No template variables for now — templates send as-is, no name slot.
+      const ok = await sendWhatsAppTemplate(tgt.phone, template.metaTemplateName, 'he');
       await db.insert(reminderSends).values({
         groupId,
         customerId: tgt.customerId,
