@@ -3,12 +3,17 @@ import { db } from '@/db';
 import { breadTypes, breadTypeSizes } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { revalidatePublicSite } from '@/lib/public-site';
 
 const updateBreadTypeSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(1000).optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
+  // Public-site fields
+  badgeType: z.string().max(20).nullable().optional(),
+  badgeLabel: z.string().max(40).nullable().optional(),
+  imageId: z.number().int().nullable().optional(),
 });
 
 export const PATCH = withAuth(async (request, auth) => {
@@ -40,6 +45,7 @@ export const PATCH = withAuth(async (request, auth) => {
     .where(eq(breadTypes.id, breadTypeId))
     .returning();
 
+  revalidatePublicSite(breadType.groupId);
   return jsonResponse({ breadType: updated });
 });
 

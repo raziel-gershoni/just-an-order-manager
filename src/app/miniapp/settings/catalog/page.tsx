@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
+import { BadgePicker } from '@/components/site-editor/BadgePicker';
+import { ImagePicker } from '@/components/site-editor/ImagePicker';
+import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 
 interface BreadSize {
   id: number;
@@ -56,6 +59,8 @@ interface TypeDetailSize {
   isDefault: boolean;
   enabled: boolean;
   priceOverride: string | null;
+  badgeType: string | null;
+  badgeLabel: string | null;
 }
 
 interface TypeDetailAddition {
@@ -122,6 +127,21 @@ export default function CatalogPage() {
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [addingType, setAddingType] = useState(false);
+
+  // ---- Public-site badge + image for the expanded type ----
+  const [typeBadgeType, setTypeBadgeType] = useState<string | null>(null);
+  const [typeBadgeLabel, setTypeBadgeLabel] = useState<string | null>(null);
+  const [typeImageId, setTypeImageId] = useState<number | null>(null);
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+
+  // Media library (for image pickers) — owner/manager only.
+  useEffect(() => {
+    if (!activeGroupId || isBaker) return;
+    apiFetch<{ assets: MediaAsset[] }>('/media')
+      .then((r) => setAssets(r.assets))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId, isBaker]);
 
   useEffect(() => {
     if (!activeGroupId) return;
@@ -334,11 +354,26 @@ export default function CatalogPage() {
     const type = breadTypes.find((t) => t.id === typeId);
     if (type) setTypeNameDraft(type.name);
 
-    const { breadType } = await apiFetch<{ breadType: { sizes: TypeDetailSize[]; additions: TypeDetailAddition[] } }>(
-      `/groups/${activeGroupId}/bread-types/${typeId}`
-    );
+    const { breadType } = await apiFetch<{
+      breadType: {
+        sizes: TypeDetailSize[];
+        additions: TypeDetailAddition[];
+        badgeType: string | null;
+        badgeLabel: string | null;
+        imageId: number | null;
+      };
+    }>(`/groups/${activeGroupId}/bread-types/${typeId}`);
     setTypeDetailSizes(breadType.sizes);
     setTypeDetailAdditions(breadType.additions);
+    setTypeBadgeType(breadType.badgeType);
+    setTypeBadgeLabel(breadType.badgeLabel);
+    setTypeImageId(breadType.imageId);
+  }
+
+  function updateSizeBadge(sizeId: number, type: string | null, label: string | null) {
+    setTypeDetailSizes((prev) =>
+      prev.map((s) => (s.id === sizeId ? { ...s, badgeType: type, badgeLabel: label } : s))
+    );
   }
 
   function toggleAdditionEnabledForType(additionId: number) {
@@ -366,24 +401,32 @@ export default function CatalogPage() {
   async function saveType(typeId: number) {
     setSavingType(true);
     try {
-      // Save name if changed
+      // Save name (if changed) + the public-site badge & image in one PATCH.
       const original = breadTypes.find((t) => t.id === typeId);
+      const patch: Record<string, unknown> = {
+        badgeType: typeBadgeType,
+        badgeLabel: typeBadgeType === 'custom' ? (typeBadgeLabel?.trim() || null) : null,
+        imageId: typeImageId,
+      };
       if (original && typeNameDraft.trim() && typeNameDraft.trim() !== original.name) {
-        const { breadType } = await apiFetch<{ breadType: BreadType }>(
-          `/bread-types/${typeId}`,
-          { method: 'PATCH', body: JSON.stringify({ name: typeNameDraft.trim() }) }
-        );
-        setBreadTypes((prev) =>
-          prev.map((t) => (t.id === typeId ? { ...t, name: breadType.name } : t))
-        );
+        patch.name = typeNameDraft.trim();
       }
+      const { breadType } = await apiFetch<{ breadType: BreadType }>(
+        `/bread-types/${typeId}`,
+        { method: 'PATCH', body: JSON.stringify(patch) }
+      );
+      setBreadTypes((prev) =>
+        prev.map((t) => (t.id === typeId ? { ...t, name: breadType.name } : t))
+      );
 
-      // Save enabled sizes
+      // Save enabled sizes (+ per-size badge)
       const enabledSizes = typeDetailSizes
         .filter((s) => s.enabled)
         .map((s) => ({
           breadSizeId: s.id,
           priceOverride: s.priceOverride && s.priceOverride !== s.price ? s.priceOverride : null,
+          badgeType: s.badgeType,
+          badgeLabel: s.badgeType === 'custom' ? (s.badgeLabel?.trim() || null) : null,
         }));
       await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/sizes`, {
         method: 'PUT',
@@ -1000,6 +1043,24 @@ export default function CatalogPage() {
               />
             )}
 
+            {/* Public-site branding: badge + image (managers only) */}
+            {!isBaker && (
+              <div className="border-t border-border pt-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">{t('site.type_branding')}</span>
+                  <ImagePicker value={typeImageId} assets={assets} onChange={setTypeImageId} />
+                </div>
+                <BadgePicker
+                  badgeType={typeBadgeType}
+                  badgeLabel={typeBadgeLabel}
+                  onChange={(type, label) => {
+                    setTypeBadgeType(type);
+                    setTypeBadgeLabel(label);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Recipe — surfaced near the top (primary use case) */}
             <RecipeEditor
               breadTypeId={editingType.id}
@@ -1097,6 +1158,30 @@ export default function CatalogPage() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Per-size badges for the public pricelist (managers only) */}
+            {!isBaker && typeDetailSizes.some((s) => s.enabled) && (
+              <div className="border-t border-border pt-3 space-y-3">
+                <div className="text-sm font-medium text-muted-foreground">{t('site.size_badges')}</div>
+                {typeDetailSizes
+                  .filter((s) => s.enabled)
+                  .map((s) => (
+                    <div key={s.id} className="space-y-1.5">
+                      <div className="text-xs font-semibold">
+                        {s.name}
+                        {s.weightGrams != null && (
+                          <span className="text-muted-foreground tabular-nums"> · {s.weightGrams}g</span>
+                        )}
+                      </div>
+                      <BadgePicker
+                        badgeType={s.badgeType}
+                        badgeLabel={s.badgeLabel}
+                        onChange={(type, label) => updateSizeBadge(s.id, type, label)}
+                      />
+                    </div>
+                  ))}
               </div>
             )}
 

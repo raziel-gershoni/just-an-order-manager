@@ -49,6 +49,8 @@ export const GET = withAuth(async (request, auth) => {
       isDefault: s.isDefault,
       enabled: !!link,
       priceOverride: link?.priceOverride ?? null,
+      badgeType: link?.badgeType ?? null,
+      badgeLabel: link?.badgeLabel ?? null,
     };
   });
 

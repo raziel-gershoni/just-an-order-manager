@@ -409,6 +409,8 @@ const translations: Record<string, string> = {
   'site.image_field': 'תמונה',
   'site.image_pick': 'בחר תמונה',
   'site.image_none': 'ללא תמונה',
+  'site.type_branding': 'מיתוג באתר',
+  'site.size_badges': 'תוויות לגדלים',
 };
 
 export function t(key: string, _lang?: Lang): string {

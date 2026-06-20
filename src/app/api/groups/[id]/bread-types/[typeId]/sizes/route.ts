@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { breadTypes, breadSizes, breadTypeSizes } from '@/db/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { revalidatePublicSite } from '@/lib/public-site';
 
 function parsePath(url: string): { groupId: number; typeId: number } {
   const parts = new URL(url).pathname.split('/');
@@ -19,6 +20,8 @@ const setSchema = z.object({
     z.object({
       breadSizeId: z.number().int().positive(),
       priceOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+      badgeType: z.string().max(20).nullable().optional(),
+      badgeLabel: z.string().max(40).nullable().optional(),
     })
   ),
 });
@@ -64,11 +67,14 @@ export const PUT = withAuth(async (request, auth) => {
         breadTypeId: typeId,
         breadSizeId: e.breadSizeId,
         priceOverride: e.priceOverride ?? null,
+        badgeType: e.badgeType ?? null,
+        badgeLabel: e.badgeLabel ?? null,
         sortOrder: idx,
       }))
     );
   }
 
+  revalidatePublicSite(groupId);
   return jsonResponse({ success: true, count: parsed.data.enabled.length });
 });
 
