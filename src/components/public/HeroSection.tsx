@@ -17,12 +17,18 @@ export function HeroSection({
 
   return (
     <section className="pt-8 pb-4 text-center">
-      {!hero && (
-        <div className="relative mx-auto mb-5 grid h-[88px] w-[88px] -rotate-[4deg] place-items-center rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
-          <span className="absolute inset-1.5 rounded-full border border-dashed border-primary/50" />
-          <span className="text-[34px] leading-none">🌾</span>
-        </div>
-      )}
+      {!hero &&
+        (profile.logoUrl ? (
+          <div className="mx-auto mb-5 h-[88px] w-[88px] overflow-hidden rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={profile.logoUrl} alt={profile.displayName} className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div className="relative mx-auto mb-5 grid h-[88px] w-[88px] -rotate-[4deg] place-items-center rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
+            <span className="absolute inset-1.5 rounded-full border border-dashed border-primary/50" />
+            <span className="text-[34px] leading-none">🌾</span>
+          </div>
+        ))}
 
       <div className="flex items-center justify-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
         <span className="h-px w-6 bg-border" />

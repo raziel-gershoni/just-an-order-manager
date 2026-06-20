@@ -33,7 +33,6 @@ interface SiteProfile {
 }
 
 type FormState = {
-  displayName: string;
   tagline: string;
   heroHeadline: string;
   story: string;
@@ -48,7 +47,6 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  displayName: '',
   tagline: '',
   heroHeadline: '',
   story: '',
@@ -106,7 +104,6 @@ export default function SiteEditorPage() {
 
   function hydrate(p: SiteProfile) {
     setForm({
-      displayName: p.displayName ?? '',
       tagline: p.tagline ?? '',
       heroHeadline: p.heroHeadline ?? '',
       story: p.story ?? '',
@@ -160,7 +157,6 @@ export default function SiteEditorPage() {
     setSaving(true);
     try {
       const payload = {
-        displayName: orNull(form.displayName),
         tagline: orNull(form.tagline),
         heroHeadline: orNull(form.heroHeadline),
         story: orNull(form.story),
@@ -266,7 +262,6 @@ export default function SiteEditorPage() {
 
           {/* Content fields */}
           <Card className="space-y-3 p-4">
-            <Input label={t('site.f_display_name')} value={form.displayName} onChange={(e) => set('displayName', e.target.value)} />
             <Input label={t('site.f_tagline')} value={form.tagline} onChange={(e) => set('tagline', e.target.value)} />
             <Input label={t('site.f_headline')} value={form.heroHeadline} onChange={(e) => set('heroHeadline', e.target.value)} />
             <TextArea label={t('site.f_story')} value={form.story} onChange={(e) => set('story', e.target.value)} />

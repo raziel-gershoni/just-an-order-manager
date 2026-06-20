@@ -94,6 +94,9 @@ export const groups = pgTable('groups', {
   additionsSurcharge: decimal('additions_surcharge', { precision: 10, scale: 2 })
     .notNull()
     .default('0'),
+  // Bakery branding (uploaded from bakery settings; reused by the public site).
+  logoUrl: varchar('logo_url', { length: 1000 }),
+  logoPathname: varchar('logo_pathname', { length: 500 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

@@ -53,6 +53,7 @@ export type PublicProfile = {
   bakeDays: string | null;
   pickupArea: string | null;
   heroImage: PublicImage | null;
+  logoUrl: string | null;
 };
 
 export type PublicSite = {
@@ -148,7 +149,7 @@ function toImage(
 
 async function assembleSite(groupId: number): Promise<PublicSite | null> {
   const [group] = await db
-    .select({ id: groups.id, name: groups.name })
+    .select({ id: groups.id, name: groups.name, logoUrl: groups.logoUrl })
     .from(groups)
     .where(eq(groups.id, groupId))
     .limit(1);
@@ -245,7 +246,8 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
   }));
 
   const publicProfile: PublicProfile = {
-    displayName: profile.displayName ?? group.name,
+    // The bakery name has a single home: group settings.
+    displayName: group.name,
     tagline: profile.tagline,
     heroHeadline: profile.heroHeadline,
     story: profile.story,
@@ -258,6 +260,7 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     bakeDays: profile.bakeDays,
     pickupArea: profile.pickupArea,
     heroImage: toImage(imageById.get(profile.heroImageId ?? -1)),
+    logoUrl: group.logoUrl,
   };
 
   return {

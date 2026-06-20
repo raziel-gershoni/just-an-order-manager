@@ -53,9 +53,18 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
       {/* Sticky top bar */}
       <div className="sticky top-0 z-20 flex items-center justify-between border-b border-dashed border-border bg-background/85 px-[18px] py-2.5 backdrop-blur">
         <div className="flex items-center gap-2 font-display text-[15px] font-bold tracking-tight">
-          <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-primary text-[14px] text-primary-foreground shadow-[inset_0_0_0_2px_rgba(255,255,255,0.25)]">
-            🌾
-          </span>
+          {profile.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={profile.logoUrl}
+              alt={profile.displayName}
+              className="h-[26px] w-[26px] rounded-full object-cover"
+            />
+          ) : (
+            <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-primary text-[14px] text-primary-foreground shadow-[inset_0_0_0_2px_rgba(255,255,255,0.25)]">
+              🌾
+            </span>
+          )}
           {profile.displayName}
         </div>
         {waHref && (
