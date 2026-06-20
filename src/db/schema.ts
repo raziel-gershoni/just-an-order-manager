@@ -10,9 +10,13 @@ import {
   date,
   varchar,
   boolean,
+  jsonb,
   uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core';
+
+// Ordered list controlling section order + visibility on the public site.
+export type SectionConfig = { key: string; visible: boolean };
 
 // ---- Enums ----
 
@@ -135,6 +139,12 @@ export const breadTypes = pgTable('bread_types', {
   description: text('description'),
   isActive: boolean('is_active').notNull().default(true),
   sortOrder: integer('sort_order').notNull().default(0),
+  // Public-site fields: owner-set badge + a chosen library image (thumbnail).
+  badgeType: varchar('badge_type', { length: 20 }),
+  badgeLabel: varchar('badge_label', { length: 40 }),
+  imageId: integer('image_id').references(() => mediaAssets.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -163,6 +173,9 @@ export const breadTypeSizes = pgTable(
       .references(() => breadSizes.id),
     priceOverride: decimal('price_override', { precision: 10, scale: 2 }),
     sortOrder: integer('sort_order').notNull().default(0),
+    // Public-site: a badge can also sit on a specific (type, size) pair.
+    badgeType: varchar('badge_type', { length: 20 }),
+    badgeLabel: varchar('badge_label', { length: 40 }),
   },
   (table) => [
     primaryKey({ columns: [table.breadTypeId, table.breadSizeId] }),
@@ -333,4 +346,58 @@ export const reminderSends = pgTable('reminder_sends', {
   occasion: reminderOccasionEnum('occasion').notNull(),
   status: reminderSendStatusEnum('status').notNull(),
   sentAt: timestamp('sent_at').notNull().defaultNow(),
+});
+
+// ---- Public site (landing page / pricelist) ----
+
+// Shared media library. One upload is reusable as a bread thumbnail, the hero
+// image, and/or a gallery image. Backed by Vercel Blob.
+export const mediaAssets = pgTable('media_assets', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id')
+    .notNull()
+    .references(() => groups.id),
+  blobUrl: varchar('blob_url', { length: 1000 }).notNull(),
+  blobPathname: varchar('blob_pathname', { length: 500 }).notNull(),
+  alt: varchar('alt', { length: 255 }),
+  width: integer('width'),
+  height: integer('height'),
+  showInGallery: boolean('show_in_gallery').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Owner-editable marketing content for the public site. One row per group.
+export const bakeryProfile = pgTable('bakery_profile', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id')
+    .notNull()
+    .unique()
+    .references(() => groups.id),
+  // Reserved for future per-bakery public URLs (/[slug]); unused for now.
+  slug: varchar('slug', { length: 80 }).unique(),
+  isPublished: boolean('is_published').notNull().default(false),
+  displayName: varchar('display_name', { length: 255 }),
+  tagline: varchar('tagline', { length: 255 }),
+  heroHeadline: varchar('hero_headline', { length: 255 }),
+  story: text('story'),
+  // Array of short strings, e.g. ["תסיסה 24 שעות", "קמח מקומי"].
+  trustItems: jsonb('trust_items').$type<string[]>(),
+  heroImageId: integer('hero_image_id').references(() => mediaAssets.id, {
+    onDelete: 'set null',
+  }),
+  logoImageId: integer('logo_image_id').references(() => mediaAssets.id, {
+    onDelete: 'set null',
+  }),
+  whatsappPhone: varchar('whatsapp_phone', { length: 32 }),
+  contactPhone: varchar('contact_phone', { length: 32 }),
+  instagram: varchar('instagram', { length: 64 }),
+  address: varchar('address', { length: 255 }),
+  mapUrl: varchar('map_url', { length: 1000 }),
+  bakeDays: varchar('bake_days', { length: 64 }),
+  pickupArea: varchar('pickup_area', { length: 120 }),
+  // Ordered list of { key, visible } controlling section order + visibility.
+  sections: jsonb('sections').$type<SectionConfig[]>(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
