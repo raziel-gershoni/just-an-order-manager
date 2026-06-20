@@ -37,5 +37,29 @@ export function useApi() {
     return res.json();
   }
 
-  return { apiFetch };
+  /** multipart/form-data upload — lets the browser set the Content-Type
+   *  boundary (don't set it manually). */
+  async function apiUpload<T = unknown>(
+    path: string,
+    formData: FormData
+  ): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (initDataRaw) headers['Authorization'] = `tma ${initDataRaw}`;
+    if (activeGroupId) headers['X-Group-Id'] = String(activeGroupId);
+
+    const res = await fetch(`/api${path}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    return res.json();
+  }
+
+  return { apiFetch, apiUpload };
 }

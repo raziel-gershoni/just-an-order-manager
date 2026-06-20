@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { SectionManager } from '@/components/site-editor/SectionManager';
+import { MediaLibrary } from '@/components/site-editor/MediaLibrary';
 import type { SectionConfig } from '@/db/schema';
 import { Eye, EyeOff, ExternalLink } from 'lucide-react';
 
@@ -73,6 +74,7 @@ export default function SiteEditorPage() {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [published, setPublished] = useState(false);
+  const [heroImageId, setHeroImageId] = useState<number | null>(null);
   const [sections, setSections] = useState<SectionConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -119,7 +121,20 @@ export default function SiteEditorPage() {
       pickupArea: p.pickupArea ?? '',
     });
     setPublished(p.isPublished);
+    setHeroImageId(p.heroImageId ?? null);
     if (Array.isArray(p.sections)) setSections(p.sections);
+  }
+
+  async function setHero(id: number | null) {
+    setHeroImageId(id); // optimistic
+    try {
+      await apiFetch('/site-profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ heroImageId: id }),
+      });
+    } catch {
+      toast.error(t('site.save_failed'));
+    }
   }
 
   async function persistSections(next: SectionConfig[]) {
@@ -259,6 +274,11 @@ export default function SiteEditorPage() {
             <Input label={t('site.f_headline')} value={form.heroHeadline} onChange={(e) => set('heroHeadline', e.target.value)} />
             <TextArea label={t('site.f_story')} value={form.story} onChange={(e) => set('story', e.target.value)} />
             <Input label={t('site.f_trust')} value={form.trustText} onChange={(e) => set('trustText', e.target.value)} />
+          </Card>
+
+          {/* Media library + hero image */}
+          <Card className="p-4">
+            <MediaLibrary heroImageId={heroImageId} onSetHero={setHero} />
           </Card>
 
           {/* Sections — reorder + hide */}
