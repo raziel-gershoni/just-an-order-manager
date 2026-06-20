@@ -10,6 +10,8 @@ import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
+import { SectionManager } from '@/components/site-editor/SectionManager';
+import type { SectionConfig } from '@/db/schema';
 import { Eye, EyeOff, ExternalLink } from 'lucide-react';
 
 interface SiteProfile {
@@ -27,6 +29,7 @@ interface SiteProfile {
   bakeDays: string | null;
   pickupArea: string | null;
   heroImageId: number | null;
+  sections: SectionConfig[];
 }
 
 type FormState = {
@@ -70,8 +73,32 @@ export default function SiteEditorPage() {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [published, setPublished] = useState(false);
+  const [sections, setSections] = useState<SectionConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const SECTION_LABELS: Record<string, string> = {
+    hero: t('site.section_hero'),
+    gallery: t('site.section_gallery'),
+    pricelist: t('site.section_pricelist'),
+    story: t('site.section_story'),
+    details: t('site.section_details'),
+    cta: t('site.section_cta'),
+  };
+
+  // Sections the editor can tell are empty (and thus auto-hidden on the site).
+  const emptyKeys = new Set<string>();
+  if (!form.story.trim()) emptyKeys.add('story');
+  if (!form.whatsappPhone.trim()) emptyKeys.add('cta');
+  if (
+    !form.bakeDays.trim() &&
+    !form.pickupArea.trim() &&
+    !form.whatsappPhone.trim() &&
+    !form.contactPhone.trim() &&
+    !form.instagram.trim() &&
+    !form.address.trim()
+  )
+    emptyKeys.add('details');
 
   const set = <K extends keyof FormState>(key: K, value: string) =>
     setForm((p) => ({ ...p, [key]: value }));
@@ -92,6 +119,19 @@ export default function SiteEditorPage() {
       pickupArea: p.pickupArea ?? '',
     });
     setPublished(p.isPublished);
+    if (Array.isArray(p.sections)) setSections(p.sections);
+  }
+
+  async function persistSections(next: SectionConfig[]) {
+    setSections(next); // optimistic
+    try {
+      await apiFetch('/site-profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ sections: next }),
+      });
+    } catch {
+      toast.error(t('site.save_failed'));
+    }
   }
 
   useEffect(() => {
@@ -219,6 +259,19 @@ export default function SiteEditorPage() {
             <Input label={t('site.f_headline')} value={form.heroHeadline} onChange={(e) => set('heroHeadline', e.target.value)} />
             <TextArea label={t('site.f_story')} value={form.story} onChange={(e) => set('story', e.target.value)} />
             <Input label={t('site.f_trust')} value={form.trustText} onChange={(e) => set('trustText', e.target.value)} />
+          </Card>
+
+          {/* Sections — reorder + hide */}
+          <Card className="p-4">
+            <div className="mb-1 text-sm font-semibold text-muted-foreground">
+              {t('site.sections_title')}
+            </div>
+            <SectionManager
+              sections={sections}
+              labels={SECTION_LABELS}
+              emptyKeys={emptyKeys}
+              onChange={persistSections}
+            />
           </Card>
 
           {/* Contact + logistics */}
