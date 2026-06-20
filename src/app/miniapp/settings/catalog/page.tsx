@@ -61,6 +61,7 @@ interface TypeDetailSize {
   priceOverride: string | null;
   badgeType: string | null;
   badgeLabel: string | null;
+  badgeIcon: string | null;
 }
 
 interface TypeDetailAddition {
@@ -131,6 +132,7 @@ export default function CatalogPage() {
   // ---- Public-site badge + image for the expanded type ----
   const [typeBadgeType, setTypeBadgeType] = useState<string | null>(null);
   const [typeBadgeLabel, setTypeBadgeLabel] = useState<string | null>(null);
+  const [typeBadgeIcon, setTypeBadgeIcon] = useState<string | null>(null);
   const [typeImageId, setTypeImageId] = useState<number | null>(null);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
 
@@ -360,6 +362,7 @@ export default function CatalogPage() {
         additions: TypeDetailAddition[];
         badgeType: string | null;
         badgeLabel: string | null;
+        badgeIcon: string | null;
         imageId: number | null;
       };
     }>(`/groups/${activeGroupId}/bread-types/${typeId}`);
@@ -367,12 +370,20 @@ export default function CatalogPage() {
     setTypeDetailAdditions(breadType.additions);
     setTypeBadgeType(breadType.badgeType);
     setTypeBadgeLabel(breadType.badgeLabel);
+    setTypeBadgeIcon(breadType.badgeIcon);
     setTypeImageId(breadType.imageId);
   }
 
-  function updateSizeBadge(sizeId: number, type: string | null, label: string | null) {
+  function updateSizeBadge(
+    sizeId: number,
+    type: string | null,
+    label: string | null,
+    icon: string | null
+  ) {
     setTypeDetailSizes((prev) =>
-      prev.map((s) => (s.id === sizeId ? { ...s, badgeType: type, badgeLabel: label } : s))
+      prev.map((s) =>
+        s.id === sizeId ? { ...s, badgeType: type, badgeLabel: label, badgeIcon: icon } : s
+      )
     );
   }
 
@@ -406,6 +417,7 @@ export default function CatalogPage() {
       const patch: Record<string, unknown> = {
         badgeType: typeBadgeType,
         badgeLabel: typeBadgeType === 'custom' ? (typeBadgeLabel?.trim() || null) : null,
+        badgeIcon: typeBadgeType ? typeBadgeIcon : null,
         imageId: typeImageId,
       };
       if (original && typeNameDraft.trim() && typeNameDraft.trim() !== original.name) {
@@ -427,6 +439,7 @@ export default function CatalogPage() {
           priceOverride: s.priceOverride && s.priceOverride !== s.price ? s.priceOverride : null,
           badgeType: s.badgeType,
           badgeLabel: s.badgeType === 'custom' ? (s.badgeLabel?.trim() || null) : null,
+          badgeIcon: s.badgeType ? s.badgeIcon : null,
         }));
       await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/sizes`, {
         method: 'PUT',
@@ -1053,9 +1066,11 @@ export default function CatalogPage() {
                 <BadgePicker
                   badgeType={typeBadgeType}
                   badgeLabel={typeBadgeLabel}
-                  onChange={(type, label) => {
+                  badgeIcon={typeBadgeIcon}
+                  onChange={(type, label, icon) => {
                     setTypeBadgeType(type);
                     setTypeBadgeLabel(label);
+                    setTypeBadgeIcon(icon);
                   }}
                 />
               </div>
@@ -1178,7 +1193,8 @@ export default function CatalogPage() {
                       <BadgePicker
                         badgeType={s.badgeType}
                         badgeLabel={s.badgeLabel}
-                        onChange={(type, label) => updateSizeBadge(s.id, type, label)}
+                        badgeIcon={s.badgeIcon}
+                        onChange={(type, label, icon) => updateSizeBadge(s.id, type, label, icon)}
                       />
                     </div>
                   ))}

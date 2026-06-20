@@ -411,6 +411,7 @@ const translations: Record<string, string> = {
   'site.image_none': 'ללא תמונה',
   'site.type_branding': 'מיתוג באתר',
   'site.size_badges': 'תוויות לגדלים',
+  'site.icon_field': 'אייקון',
 };
 
 export function t(key: string, _lang?: Lang): string {

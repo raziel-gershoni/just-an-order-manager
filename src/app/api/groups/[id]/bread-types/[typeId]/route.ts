@@ -51,6 +51,7 @@ export const GET = withAuth(async (request, auth) => {
       priceOverride: link?.priceOverride ?? null,
       badgeType: link?.badgeType ?? null,
       badgeLabel: link?.badgeLabel ?? null,
+      badgeIcon: link?.badgeIcon ?? null,
     };
   });
 

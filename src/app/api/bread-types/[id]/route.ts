@@ -13,6 +13,7 @@ const updateBreadTypeSchema = z.object({
   // Public-site fields
   badgeType: z.string().max(20).nullable().optional(),
   badgeLabel: z.string().max(40).nullable().optional(),
+  badgeIcon: z.string().max(20).nullable().optional(),
   imageId: z.number().int().nullable().optional(),
 });
 

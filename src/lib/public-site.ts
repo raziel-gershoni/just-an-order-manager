@@ -183,6 +183,7 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
           priceOverride: breadTypeSizes.priceOverride,
           badgeType: breadTypeSizes.badgeType,
           badgeLabel: breadTypeSizes.badgeLabel,
+          badgeIcon: breadTypeSizes.badgeIcon,
           sortOrder: breadTypeSizes.sortOrder,
         })
         .from(breadTypeSizes)
@@ -232,14 +233,14 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     id: t.id,
     name: t.name,
     description: t.description,
-    badge: resolveBadge(t.badgeType, t.badgeLabel),
+    badge: resolveBadge(t.badgeType, t.badgeLabel, t.badgeIcon),
     image: toImage(imageById.get(t.imageId ?? -1)),
     sizes: (sizesByType.get(t.id) ?? []).map((l) => ({
       id: l.breadSizeId,
       name: l.name,
       weightGrams: l.weightGrams,
       price: formatPrice(l.priceOverride ?? l.price),
-      badge: resolveBadge(l.badgeType, l.badgeLabel),
+      badge: resolveBadge(l.badgeType, l.badgeLabel, l.badgeIcon),
     })),
   }));
 

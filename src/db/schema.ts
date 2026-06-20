@@ -142,6 +142,7 @@ export const breadTypes = pgTable('bread_types', {
   // Public-site fields: owner-set badge + a chosen library image (thumbnail).
   badgeType: varchar('badge_type', { length: 20 }),
   badgeLabel: varchar('badge_label', { length: 40 }),
+  badgeIcon: varchar('badge_icon', { length: 20 }),
   imageId: integer('image_id').references(() => mediaAssets.id, {
     onDelete: 'set null',
   }),
@@ -176,6 +177,7 @@ export const breadTypeSizes = pgTable(
     // Public-site: a badge can also sit on a specific (type, size) pair.
     badgeType: varchar('badge_type', { length: 20 }),
     badgeLabel: varchar('badge_label', { length: 40 }),
+    badgeIcon: varchar('badge_icon', { length: 20 }),
   },
   (table) => [
     primaryKey({ columns: [table.breadTypeId, table.breadSizeId] }),

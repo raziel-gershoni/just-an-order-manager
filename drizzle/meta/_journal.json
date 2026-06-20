@@ -85,6 +85,13 @@
       "when": 1781900000000,
       "tag": "0011_public_site",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781986400000,
+      "tag": "0012_badge_icons",
+      "breakpoints": true
     }
   ]
 }

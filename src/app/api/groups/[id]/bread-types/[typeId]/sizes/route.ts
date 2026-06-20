@@ -22,6 +22,7 @@ const setSchema = z.object({
       priceOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
       badgeType: z.string().max(20).nullable().optional(),
       badgeLabel: z.string().max(40).nullable().optional(),
+      badgeIcon: z.string().max(20).nullable().optional(),
     })
   ),
 });
@@ -69,6 +70,7 @@ export const PUT = withAuth(async (request, auth) => {
         priceOverride: e.priceOverride ?? null,
         badgeType: e.badgeType ?? null,
         badgeLabel: e.badgeLabel ?? null,
+        badgeIcon: e.badgeIcon ?? null,
         sortOrder: idx,
       }))
     );
