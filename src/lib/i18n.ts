@@ -343,6 +343,7 @@ const translations: Record<string, string> = {
   'site.eyebrow': 'מחמצת · NATURALLY LEAVENED',
   'site.default_headline': 'לחם מחמצת, נאפה טרי',
   'site.order_whatsapp': 'הזמנה בוואטסאפ',
+  'site.order_short': 'הזמנה',
   'site.order_telegram': 'בטלגרם',
   'site.open_whatsapp': 'פתיחת וואטסאפ',
   'site.pricelist': 'המחירון',

@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Assistant, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -23,6 +22,9 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Sourdough Order Manager",
   description: "Manage your bakery orders",
+  // Noindex by default; the public route group overrides this with index:true.
+  // Keeps /miniapp and all app routes out of search results.
+  robots: { index: false, follow: false },
 };
 
 // Lock zoom so focusing a small input doesn't auto-zoom the page (app-like, Telegram Mini App).
@@ -45,10 +47,6 @@ export default function RootLayout({
       className={`${assistant.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Script
-          src="https://telegram.org/js/telegram-web-app.js"
-          strategy="beforeInteractive"
-        />
         {children}
       </body>
     </html>

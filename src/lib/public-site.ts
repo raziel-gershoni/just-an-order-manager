@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { revalidatePath } from 'next/cache';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { db } from '@/db';
@@ -276,6 +277,23 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
 /** Public-site view-model for a group. Null if the group doesn't exist or the
  *  site isn't published. Cached at the route level via `export const revalidate`
  *  and purged on owner edits via {@link revalidatePublicSite}. */
-export function getPublicSite(groupId: number): Promise<PublicSite | null> {
-  return assembleSite(groupId);
+export async function getPublicSite(
+  groupId: number
+): Promise<PublicSite | null> {
+  try {
+    return await assembleSite(groupId);
+  } catch (err) {
+    // No DB at build time / transient error → render the "coming soon" state
+    // rather than crashing the route. ISR retries on the next revalidation.
+    console.error('[public-site] assemble failed:', err);
+    return null;
+  }
 }
+
+/** The group whose site is served at "/". */
+export function publicGroupId(): number {
+  return Number(process.env.PUBLIC_SITE_GROUP_ID) || 0;
+}
+
+/** Request-deduped variant: the layout (metadata) and the page both read it. */
+export const getPublicSiteRequest = cache(getPublicSite);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import Script from 'next/script';
 import { Toaster, toast as sonnerToast } from 'sonner';
 import { TelegramProvider, useTelegram } from '@/components/providers/TelegramProvider';
 import { GroupCtx, type GroupRole } from '@/hooks/useGroup';
@@ -77,6 +78,12 @@ function AppProviders({ children }: { children: ReactNode }) {
             dir={dir}
             className={cn('min-h-screen bg-background text-foreground', dark && 'theme-dark')}
           >
+            {/* Telegram Mini App SDK — only loaded inside the gated app, not on
+                the public site. The provider polls for window.Telegram (~2s). */}
+            <Script
+              src="https://telegram.org/js/telegram-web-app.js"
+              strategy="afterInteractive"
+            />
             <Toaster
               position="top-center"
               toastOptions={{
