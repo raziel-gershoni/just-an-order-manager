@@ -417,7 +417,7 @@ export default function CatalogPage() {
       const patch: Record<string, unknown> = {
         badgeType: typeBadgeType,
         badgeLabel: typeBadgeType === 'custom' ? (typeBadgeLabel?.trim() || null) : null,
-        badgeIcon: typeBadgeType ? typeBadgeIcon : null,
+        badgeIcon: typeBadgeIcon,
         imageId: typeImageId,
       };
       if (original && typeNameDraft.trim() && typeNameDraft.trim() !== original.name) {
@@ -439,7 +439,7 @@ export default function CatalogPage() {
           priceOverride: s.priceOverride && s.priceOverride !== s.price ? s.priceOverride : null,
           badgeType: s.badgeType,
           badgeLabel: s.badgeType === 'custom' ? (s.badgeLabel?.trim() || null) : null,
-          badgeIcon: s.badgeType ? s.badgeIcon : null,
+          badgeIcon: s.badgeIcon,
         }));
       await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/sizes`, {
         method: 'PUT',

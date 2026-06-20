@@ -53,8 +53,10 @@ export function BadgePicker({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        <Chip selected={!badgeType} label={t('site.badge_none')} onClick={() => onChange(null, null, null)} />
+      {/* Text: a preset, a custom label, or none (icon can still stand alone) */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="me-0.5 text-[11px] text-muted-foreground">{t('site.text_field')}</span>
+        <Chip selected={!badgeType} label={t('site.badge_none')} onClick={() => onChange(null, null, badgeIcon)} />
         {BADGE_PRESET_KEYS.map((key) => (
           <Chip
             key={key}
@@ -81,40 +83,38 @@ export function BadgePicker({
         />
       )}
 
-      {/* Optional icon — only relevant once a badge has text */}
-      {badgeType && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-          <span className="text-[11px] text-muted-foreground">{t('site.icon_field')}</span>
-          <button
-            type="button"
-            aria-label="no-icon"
-            onClick={() => onChange(badgeType, badgeLabel, null)}
-            className={
-              'grid h-7 w-7 place-items-center rounded-md border text-sm ' +
-              (!badgeIcon ? 'border-primary text-primary' : 'border-border text-muted-foreground')
-            }
-          >
-            —
-          </button>
-          {BADGE_ICON_KEYS.map((key) => {
-            const Icon = BADGE_ICONS[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-label={key}
-                onClick={() => onChange(badgeType, badgeLabel, key)}
-                className={
-                  'grid h-7 w-7 place-items-center rounded-md border ' +
-                  (badgeIcon === key ? 'border-primary text-primary' : 'border-border text-muted-foreground')
-                }
-              >
-                <Icon className="h-4 w-4" />
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Icon — optional, independent of the text (so an icon can stand alone) */}
+      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <span className="me-0.5 text-[11px] text-muted-foreground">{t('site.icon_field')}</span>
+        <button
+          type="button"
+          aria-label="no-icon"
+          onClick={() => onChange(badgeType, badgeLabel, null)}
+          className={
+            'grid h-7 w-7 place-items-center rounded-md border text-sm ' +
+            (!badgeIcon ? 'border-primary text-primary' : 'border-border text-muted-foreground')
+          }
+        >
+          —
+        </button>
+        {BADGE_ICON_KEYS.map((key) => {
+          const Icon = BADGE_ICONS[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-label={key}
+              onClick={() => onChange(badgeType, badgeLabel, key)}
+              className={
+                'grid h-7 w-7 place-items-center rounded-md border ' +
+                (badgeIcon === key ? 'border-primary text-primary' : 'border-border text-muted-foreground')
+              }
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -412,6 +412,7 @@ const translations: Record<string, string> = {
   'site.type_branding': 'מיתוג באתר',
   'site.size_badges': 'תוויות לגדלים',
   'site.icon_field': 'אייקון',
+  'site.text_field': 'טקסט',
 };
 
 export function t(key: string, _lang?: Lang): string {

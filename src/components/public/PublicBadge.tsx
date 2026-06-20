@@ -11,11 +11,13 @@ export function PublicBadge({
   small?: boolean;
 }) {
   const Icon = badgeIconComponent(badge.iconKey);
+  const iconOnly = !badge.text;
+  const pad = iconOnly
+    ? small ? 'p-[3px]' : 'p-1'
+    : small ? 'px-1.5 py-[2px] text-[9px]' : 'px-2 py-[3px] text-[10px]';
   return (
     <span
-      className={`inline-flex items-center gap-1 -rotate-[4deg] rounded font-mono font-bold leading-none ${
-        small ? 'px-1.5 py-[2px] text-[9px]' : 'px-2 py-[3px] text-[10px]'
-      }`}
+      className={`inline-flex items-center gap-1 -rotate-[4deg] rounded font-mono font-bold leading-none ${pad}`}
       style={{ color: badge.colorVar, border: `1.5px solid ${badge.colorVar}` }}
     >
       {Icon && <Icon className={small ? 'h-2.5 w-2.5' : 'h-3 w-3'} strokeWidth={2.5} />}

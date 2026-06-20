@@ -29,8 +29,8 @@ export type ResolvedBadge = {
 };
 
 /** Resolve stored (badgeType, badgeLabel, badgeIcon) into display text + color
- *  + icon key, or null when there's no badge. The icon is independent of the
- *  preset — a separate manual pick. */
+ *  + icon key, or null when there's neither text nor icon. Text and icon are
+ *  independent — an icon with no text is a valid (icon-only) badge. */
 export function resolveBadge(
   badgeType: string | null | undefined,
   badgeLabel: string | null | undefined,
@@ -38,12 +38,19 @@ export function resolveBadge(
   lang?: Lang
 ): ResolvedBadge | null {
   const iconKey = badgeIcon ?? null;
-  if (!badgeType) return null;
+  let text = '';
+  let colorVar = 'var(--primary)';
+
   if (badgeType === 'custom') {
-    const text = (badgeLabel ?? '').trim();
-    return text ? { text, colorVar: 'var(--primary)', iconKey } : null;
+    text = (badgeLabel ?? '').trim();
+  } else if (badgeType) {
+    const preset = BADGE_PRESETS[badgeType as BadgePreset];
+    if (preset) {
+      text = t(preset.labelKey, lang);
+      colorVar = preset.colorVar;
+    }
   }
-  const preset = BADGE_PRESETS[badgeType as BadgePreset];
-  if (!preset) return null;
-  return { text: t(preset.labelKey, lang), colorVar: preset.colorVar, iconKey };
+
+  if (!text && !iconKey) return null;
+  return { text, colorVar, iconKey };
 }
