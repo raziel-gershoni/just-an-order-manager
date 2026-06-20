@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
 
@@ -98,7 +97,6 @@ export default function RemindersPage() {
   if (isBaker) {
     return (
       <>
-        <PageHeader title={t('reminders.title')} />
         <ControlCenterTabs />
         <div className="p-5 text-sm text-muted-foreground">—</div>
       </>
@@ -107,7 +105,6 @@ export default function RemindersPage() {
 
   return (
     <>
-      <PageHeader title={t('reminders.title')} />
       <ControlCenterTabs />
       <div className="p-5 space-y-4">
         {loading ? (

@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { SectionManager } from '@/components/site-editor/SectionManager';
 import { MediaLibrary } from '@/components/site-editor/MediaLibrary';
@@ -209,7 +208,6 @@ export default function SiteEditorPage() {
   if (isBaker) {
     return (
       <>
-        <PageHeader title={t('site.editor_title')} />
         <ControlCenterTabs />
         <div className="p-5 text-sm text-muted-foreground">—</div>
       </>
@@ -218,7 +216,6 @@ export default function SiteEditorPage() {
 
   return (
     <>
-      <PageHeader title={t('site.editor_title')} />
       <ControlCenterTabs />
 
       {loading ? (
