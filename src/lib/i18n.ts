@@ -372,6 +372,8 @@ const translations: Record<string, string> = {
   'site.publish_toggle': 'פרסום האתר',
   'site.saved': '!נשמר',
   'site.save_failed': 'השמירה נכשלה',
+  'site.save': 'שמירה',
+  'site.open_public': 'פתח את האתר',
   'site.f_display_name': 'שם המאפייה',
   'site.f_tagline': 'סלוגן קצר',
   'site.f_headline': 'כותרת ראשית',
