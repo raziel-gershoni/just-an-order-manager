@@ -24,7 +24,8 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
       profile.whatsappPhone ||
       profile.contactPhone ||
       profile.instagram ||
-      profile.address
+      profile.address ||
+      profile.delivery
     );
 
   const render = (key: string) => {

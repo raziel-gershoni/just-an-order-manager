@@ -54,6 +54,7 @@ export type PublicProfile = {
   pickupArea: string | null;
   heroImage: PublicImage | null;
   logoUrl: string | null;
+  delivery: { homeCity: string | null; fee: number; freeOver: number | null } | null;
 };
 
 export type PublicSite = {
@@ -149,7 +150,15 @@ function toImage(
 
 async function assembleSite(groupId: number): Promise<PublicSite | null> {
   const [group] = await db
-    .select({ id: groups.id, name: groups.name, logoUrl: groups.logoUrl })
+    .select({
+      id: groups.id,
+      name: groups.name,
+      logoUrl: groups.logoUrl,
+      deliveryEnabled: groups.deliveryEnabled,
+      deliveryHomeCity: groups.deliveryHomeCity,
+      deliveryFee: groups.deliveryFee,
+      deliveryFreeOver: groups.deliveryFreeOver,
+    })
     .from(groups)
     .where(eq(groups.id, groupId))
     .limit(1);
@@ -261,6 +270,13 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     pickupArea: profile.pickupArea,
     heroImage: toImage(imageById.get(profile.heroImageId ?? -1)),
     logoUrl: group.logoUrl,
+    delivery: group.deliveryEnabled
+      ? {
+          homeCity: group.deliveryHomeCity,
+          fee: Number(group.deliveryFee || 0),
+          freeOver: group.deliveryFreeOver != null ? Number(group.deliveryFreeOver) : null,
+        }
+      : null,
   };
 
   return {

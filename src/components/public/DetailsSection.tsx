@@ -1,7 +1,7 @@
 import { t } from '@/lib/i18n';
 import type { PublicProfile } from '@/lib/public-site';
 import { PublicSectionHead } from './PublicSectionHead';
-import { ClockIcon, PinIcon, PhoneIcon, InstagramIcon, WhatsAppIcon } from './icons';
+import { ClockIcon, PinIcon, PhoneIcon, InstagramIcon, WhatsAppIcon, TruckIcon } from './icons';
 
 type Row = { key: string; label: string; value: string; href?: string; mono?: boolean; icon: React.ReactNode };
 
@@ -14,6 +14,17 @@ export function DetailsSection({
 }) {
   const ig = profile.instagram?.replace(/^@/, '').trim();
   const rows: Row[] = [];
+
+  const d = profile.delivery;
+  const deliveryText = d
+    ? [
+        d.homeCity ? `${t('deliv.pub_free_in')}${d.homeCity}` : null,
+        d.fee > 0 ? `₪${d.fee} ${t('deliv.pub_fee_cities')}` : null,
+        d.freeOver != null ? `${t('deliv.pub_free_over')} ₪${d.freeOver}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
 
   if (profile.bakeDays)
     rows.push({ key: 'days', label: t('site.bake_days'), value: profile.bakeDays, icon: <ClockIcon className="h-[18px] w-[18px] text-primary" /> });
@@ -31,6 +42,13 @@ export function DetailsSection({
   return (
     <section className="mt-10">
       <PublicSectionHead label={t('site.details_title')} />
+      {deliveryText && (
+        <div className="mb-3 flex items-center gap-2.5 rounded-[10px] border border-border bg-card px-4 py-3 text-[13.5px] font-semibold">
+          <TruckIcon className="h-[18px] w-[18px] shrink-0 text-primary" />
+          <span>{deliveryText}</span>
+        </div>
+      )}
+      {rows.length > 0 && (
       <div className="overflow-hidden rounded-[10px] border border-border bg-card">
         {rows.map((row, i) => {
           const value = (
@@ -60,6 +78,7 @@ export function DetailsSection({
           );
         })}
       </div>
+      )}
     </section>
   );
 }
