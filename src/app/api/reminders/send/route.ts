@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { reminderTemplates, reminderSends, customers, customerPhones } from '@/db/schema';
+import { reminderTemplates, reminderSends, customers, customerPhones, mediaAssets } from '@/db/schema';
 import { eq, and, asc, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
@@ -11,6 +11,8 @@ const sendSchema = z
     occasion: z.enum(['week_start', 'shabbat']),
     customerIds: z.array(z.number().int().positive()).optional(),
     phoneId: z.number().int().positive().optional(),
+    // Optional header image for IMAGE-header templates (a group media asset).
+    mediaId: z.number().int().positive().optional(),
   })
   .refine((d) => d.phoneId != null || (d.customerIds && d.customerIds.length > 0), {
     message: 'Provide phoneId or customerIds',
@@ -26,6 +28,19 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const parsed = sendSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
   const { occasion } = parsed.data;
+
+  // Resolve the optional header image to a public URL — group-scoped so a
+  // caller can't send an arbitrary asset.
+  let headerImageUrl: string | undefined;
+  if (parsed.data.mediaId != null) {
+    const [asset] = await db
+      .select({ blobUrl: mediaAssets.blobUrl })
+      .from(mediaAssets)
+      .where(and(eq(mediaAssets.id, parsed.data.mediaId), eq(mediaAssets.groupId, groupId)))
+      .limit(1);
+    if (!asset) return errorResponse('Image not found', 404);
+    headerImageUrl = asset.blobUrl;
+  }
 
   // Active templates for this occasion, in rotation order.
   const templates = await db
@@ -116,7 +131,13 @@ export const POST = withGroup(async (request, auth, groupId) => {
       const template = templateByCustomer.get(tgt.customerId);
       if (!template) return;
       // No template variables for now — templates send as-is, no name slot.
-      const ok = await sendWhatsAppTemplate(tgt.phone, template.metaTemplateName, 'he');
+      const ok = await sendWhatsAppTemplate(
+        tgt.phone,
+        template.metaTemplateName,
+        'he',
+        undefined,
+        headerImageUrl
+      );
       await db.insert(reminderSends).values({
         groupId,
         customerId: tgt.customerId,

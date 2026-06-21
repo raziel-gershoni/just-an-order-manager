@@ -25,7 +25,11 @@ export async function sendWhatsAppTemplate(
   to: string,
   templateName: string,
   lang: string = 'he',
-  params?: string[]
+  params?: string[],
+  // For templates with an IMAGE header: Meta does NOT reuse the sample image
+  // uploaded at template creation — the image must be supplied (as a public
+  // URL) on every send.
+  headerImageUrl?: string
 ): Promise<boolean> {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) return false;
 
@@ -37,13 +41,21 @@ export async function sendWhatsAppTemplate(
     language: { code: lang },
   };
 
+  const components: unknown[] = [];
+  if (headerImageUrl) {
+    components.push({
+      type: 'header',
+      parameters: [{ type: 'image', image: { link: headerImageUrl } }],
+    });
+  }
   if (params && params.length > 0) {
-    template.components = [
-      {
-        type: 'body',
-        parameters: params.map((text) => ({ type: 'text', text })),
-      },
-    ];
+    components.push({
+      type: 'body',
+      parameters: params.map((text) => ({ type: 'text', text })),
+    });
+  }
+  if (components.length > 0) {
+    template.components = components;
   }
 
   try {
