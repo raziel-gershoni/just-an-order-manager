@@ -10,8 +10,10 @@ function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
 }
 
-export const GET = withGroup(async (request, _auth, groupId) => {
+export const GET = withGroup(async (request, auth, groupId) => {
   const id = getOrderId(request.url);
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
+  const isBaker = role === 'baker';
 
   const [order] = await db
     .select({
@@ -27,6 +29,11 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       totalOverride: orders.totalOverride,
       paid: orders.paid,
       isRecurring: orders.isRecurring,
+      isDelivery: orders.isDelivery,
+      deliveryFee: orders.deliveryFee,
+      customerAddress: customers.address,
+      customerCity: customers.city,
+      customerDeliveryNotes: customers.deliveryNotes,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
@@ -119,7 +126,9 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
     0
   );
-  const totalPrice = order.totalOverride ? Number(order.totalOverride) : calculatedTotal;
+  const deliveryFee = Number(order.deliveryFee || 0);
+  const totalPrice =
+    (order.totalOverride ? Number(order.totalOverride) : calculatedTotal) + deliveryFee;
 
   // Count of customer phones — used by the order UI to decide whether to
   // show the "notify customer" checkbox on status changes.
@@ -128,8 +137,24 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     .from(customerPhones)
     .where(eq(customerPhones.customerId, order.customerId));
 
+  // Bakers don't see delivery details (navigable address / private notes).
+  const customerAddress = isBaker ? null : order.customerAddress;
+  const customerCity = isBaker ? null : order.customerCity;
+  const customerDeliveryNotes = isBaker ? null : order.customerDeliveryNotes;
+
   return jsonResponse({
-    order: { ...order, items, totalQuantity, totalPrice, calculatedTotal, customerPhoneCount: phoneCount },
+    order: {
+      ...order,
+      customerAddress,
+      customerCity,
+      customerDeliveryNotes,
+      deliveryFee,
+      items,
+      totalQuantity,
+      totalPrice,
+      calculatedTotal,
+      customerPhoneCount: phoneCount,
+    },
   });
 });
 
@@ -138,6 +163,8 @@ const updateOrderSchema = z.object({
   deliveryDate: z.string().optional(),
   notes: z.string().max(1000).optional(),
   totalOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+  isDelivery: z.boolean().optional(),
+  deliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isRecurring: z.boolean().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
@@ -189,6 +216,16 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
 
   if (parsed.data.isRecurring !== undefined) {
     updateData.isRecurring = parsed.data.isRecurring;
+  }
+
+  if (parsed.data.isDelivery !== undefined) {
+    updateData.isDelivery = parsed.data.isDelivery;
+    // Fee only meaningful when delivering; clear it on pickup.
+    updateData.deliveryFee = parsed.data.isDelivery
+      ? parsed.data.deliveryFee ?? order.deliveryFee ?? '0'
+      : '0';
+  } else if (parsed.data.deliveryFee !== undefined) {
+    updateData.deliveryFee = parsed.data.deliveryFee;
   }
 
   // Update order fields

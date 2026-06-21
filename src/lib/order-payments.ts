@@ -3,17 +3,19 @@ import { orders, orderItems, payments } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
 /**
- * Calculate the total price of an order. Honors `totalOverride` if set,
- * otherwise sums quantity × pricePerUnit across all items.
+ * Calculate the total price of an order. The goods total honors `totalOverride`
+ * if set, otherwise sums quantity × pricePerUnit across all items. The delivery
+ * fee is always added on top.
  */
 export async function calculateOrderTotal(orderId: number): Promise<number> {
   const [order] = await db
-    .select({ totalOverride: orders.totalOverride })
+    .select({ totalOverride: orders.totalOverride, deliveryFee: orders.deliveryFee })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!order) return 0;
-  if (order.totalOverride) return Number(order.totalOverride);
+  const fee = Number(order.deliveryFee || 0);
+  if (order.totalOverride) return Number(order.totalOverride) + fee;
 
   const items = await db
     .select({
@@ -23,7 +25,8 @@ export async function calculateOrderTotal(orderId: number): Promise<number> {
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
 
-  return items.reduce((s, i) => s + i.quantity * Number(i.pricePerUnit || 0), 0);
+  const goods = items.reduce((s, i) => s + i.quantity * Number(i.pricePerUnit || 0), 0);
+  return goods + fee;
 }
 
 /**

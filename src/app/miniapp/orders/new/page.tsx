@@ -11,10 +11,11 @@ import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
-import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check } from 'lucide-react';
+import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
+import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
 
-interface Customer { id: number; name: string; phones?: { id: number; phone: string }[] }
+interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string }
 interface BreadAddition { id: number; name: string }
 interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enabledAdditions?: BreadAddition[] }
@@ -72,6 +73,9 @@ function OrderFormContent() {
   const [totalOverride, setTotalOverride] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
+  const [isDelivery, setIsDelivery] = useState(false);
+  const [deliveryManualFee, setDeliveryManualFee] = useState('');
+  const [delivSettings, setDelivSettings] = useState<DeliverySettings | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -102,6 +106,13 @@ function OrderFormContent() {
         setCustomers(c.customers);
         setBreadTypes(b.breadTypes);
         setAdditionsSurcharge(Number(g?.group?.additionsSurcharge ?? 0));
+        setDelivSettings({
+          enabled: Boolean(g?.group?.deliveryEnabled),
+          homeCity: g?.group?.deliveryHomeCity ?? null,
+          fee: Number(g?.group?.deliveryFee ?? 0),
+          freeOver: g?.group?.deliveryFreeOver != null ? Number(g.group.deliveryFreeOver) : null,
+          cities: g?.group?.deliveryCities ?? [],
+        });
 
         if (isEdit && o?.order) {
           const order = o.order;
@@ -122,6 +133,10 @@ function OrderFormContent() {
           setNotes(order.notes || '');
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
           setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
+          setIsDelivery(Boolean(order.isDelivery));
+          setDeliveryManualFee(
+            order.deliveryFee && Number(order.deliveryFee) > 0 ? String(Number(order.deliveryFee)) : ''
+          );
         } else if (!isEdit && b.breadTypes.length > 0) {
           const firstType = b.breadTypes[0];
           const defaultSize = firstType.enabledSizes?.[0];
@@ -131,6 +146,14 @@ function OrderFormContent() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Auto-suggest delivery when the selected customer's city changes (create mode).
+  useEffect(() => {
+    if (isEdit || !delivSettings) return;
+    const cust = customers.find((c) => c.id === customerId);
+    setIsDelivery(classifyCity(cust?.city ?? null, delivSettings).available);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, delivSettings, customers]);
 
   const filteredCustomers = customers.filter((c) =>
     c.name.toLowerCase().includes(customerSearch.toLowerCase())
@@ -238,6 +261,8 @@ function OrderFormContent() {
             items,
             notes: notes || undefined,
             totalOverride: totalOverride || null,
+            isDelivery,
+            deliveryFee: effectiveFee.toFixed(2),
             isRecurring,
           }),
         });
@@ -253,6 +278,8 @@ function OrderFormContent() {
             items,
             notes: notes || undefined,
             totalOverride: totalOverride || null,
+            isDelivery,
+            deliveryFee: effectiveFee.toFixed(2),
             isRecurring,
             notifyCustomer,
           }),
@@ -294,6 +321,21 @@ function OrderFormContent() {
     const surcharge = item.breadAdditionIds.length > 0 ? additionsSurcharge : 0;
     return sum + (Number(size.price) + surcharge) * item.quantity;
   }, 0);
+
+  // Delivery: classify the customer's city + resolve the fee live.
+  const custCity = customers.find((c) => c.id === customerId)?.city ?? null;
+  const deliveryAvailable = delivSettings
+    ? classifyCity(custCity, delivSettings).available
+    : false;
+  const computedFee = delivSettings
+    ? resolveDeliveryFee({
+        city: custCity,
+        subtotal: liveTotal,
+        settings: delivSettings,
+        manualFee: Number(deliveryManualFee || 0),
+      })
+    : Number(deliveryManualFee || 0);
+  const effectiveFee = isDelivery ? computedFee : 0;
 
   // Earliest selectable delivery date (today, local time) as yyyy-MM-dd
   const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
@@ -626,6 +668,47 @@ function OrderFormContent() {
           )}
         </Card>
 
+        {/* Delivery (pickup vs delivery) */}
+        {delivSettings?.enabled && (
+          <Card className="space-y-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isDelivery}
+                onChange={(e) => setIsDelivery(e.target.checked)}
+                className="h-4 w-4 accent-primary cursor-pointer"
+              />
+              <span className="flex items-center gap-1.5 font-semibold">
+                <Truck className="h-4 w-4 text-primary" />
+                {t('deliv.checkbox')}
+              </span>
+            </label>
+
+            {!isDelivery && !deliveryAvailable && custCity && (
+              <p className="text-xs text-muted-foreground">{t('deliv.no_city')}</p>
+            )}
+
+            {isDelivery &&
+              (deliveryAvailable ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{t('deliv.fee_label')}</span>
+                  <span className="font-mono font-bold tabular-nums">
+                    {effectiveFee === 0 ? t('deliv.free') : `₪${effectiveFee}`}
+                  </span>
+                </div>
+              ) : (
+                <Input
+                  label={t('deliv.fee_label')}
+                  type="number"
+                  inputMode="decimal"
+                  value={deliveryManualFee}
+                  onChange={(e) => setDeliveryManualFee(e.target.value)}
+                  placeholder="0"
+                />
+              ))}
+          </Card>
+        )}
+
         {/* Notes & Custom Total */}
         <Card className="space-y-3 p-4">
           <TextArea
@@ -660,11 +743,19 @@ function OrderFormContent() {
         {/* Sticky submit footer — stays above the fixed bottom nav */}
         <div className="sticky bottom-14 -mx-5 -mb-4 mt-4 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
           {hasPricedItem && (
-            <div className="mb-2.5 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{t('orders.total')}</span>
-              <span className="font-mono text-lg font-bold tabular-nums text-primary">
-                ₪{liveTotal}
-              </span>
+            <div className="mb-2.5 space-y-1">
+              {isDelivery && effectiveFee > 0 && (
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{t('deliv.fee_label')}</span>
+                  <span className="font-mono tabular-nums">₪{effectiveFee}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{t('orders.total')}</span>
+                <span className="font-mono text-lg font-bold tabular-nums text-primary">
+                  ₪{liveTotal + effectiveFee}
+                </span>
+              </div>
             </div>
           )}
           <Button

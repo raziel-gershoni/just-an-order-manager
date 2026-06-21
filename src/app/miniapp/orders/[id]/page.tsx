@@ -13,7 +13,9 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation } from 'lucide-react';
+import { useGroup } from '@/hooks/useGroup';
+import { buildWazeLink } from '@/lib/delivery';
 import { groupByKind } from '@/lib/recipe';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -60,6 +62,11 @@ interface OrderDetail {
   totalPrice: number;
   calculatedTotal: number;
   totalOverride: string | null;
+  isDelivery: boolean;
+  deliveryFee: number;
+  customerAddress: string | null;
+  customerCity: string | null;
+  customerDeliveryNotes: string | null;
 }
 
 const statusActions: Record<string, string[]> = {
@@ -71,6 +78,8 @@ const statusActions: Record<string, string[]> = {
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { activeGroupRole } = useGroup();
+  const isAdmin = activeGroupRole === 'owner' || activeGroupRole === 'manager';
   const { apiFetch } = useApi();
   const t = useT();
   const lang = useLang();
@@ -351,6 +360,30 @@ export default function OrderDetailPage() {
               );
             })}
           </div>
+          {isAdmin && order.isDelivery && (
+            <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3 text-sm">
+              <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                <Truck className="h-4 w-4 text-primary" />
+                {t('deliv.fee_label')}
+              </span>
+              <div className="flex items-center gap-3">
+                {buildWazeLink(order.customerAddress, order.customerCity) && (
+                  <a
+                    href={buildWazeLink(order.customerAddress, order.customerCity)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary"
+                  >
+                    <Navigation className="h-4 w-4" />
+                    {t('deliv.waze')}
+                  </a>
+                )}
+                <span className="font-mono font-bold tabular-nums">
+                  {order.deliveryFee > 0 ? `₪${order.deliveryFee.toFixed(0)}` : t('deliv.free')}
+                </span>
+              </div>
+            </div>
+          )}
           {order.calculatedTotal > 0 && (
             <div className="mt-4 pt-3 border-t border-border">
               <div className="flex justify-between items-center">

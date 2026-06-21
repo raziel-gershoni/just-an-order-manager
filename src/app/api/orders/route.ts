@@ -32,6 +32,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       status: orders.status,
       paid: orders.paid,
       isRecurring: orders.isRecurring,
+      isDelivery: orders.isDelivery,
       notes: orders.notes,
       createdAt: orders.createdAt,
       customerName: customers.name,
@@ -124,6 +125,8 @@ const createOrderSchema = z.object({
   items: z.array(itemSchema).min(1),
   notes: z.string().max(1000).optional(),
   totalOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+  isDelivery: z.boolean().optional(),
+  deliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isRecurring: z.boolean().optional(),
   notifyCustomer: z.boolean().optional(),
 });
@@ -133,7 +136,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isRecurring, notifyCustomer } = parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, notifyCustomer } = parsed.data;
 
   // Verify customer
   const [customer] = await db
@@ -252,6 +255,8 @@ export const POST = withGroup(async (request, _auth, groupId) => {
       deliveryDate: resolvedDate,
       notes,
       totalOverride: totalOverride || null,
+      isDelivery: isDelivery ?? false,
+      deliveryFee: (isDelivery && deliveryFee) ? deliveryFee : '0',
       isRecurring: isRecurring ?? false,
     })
     .returning();
