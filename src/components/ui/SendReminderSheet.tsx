@@ -5,7 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
-import { Upload, X, ImageOff } from 'lucide-react';
+import { Upload, X, ImageOff, Loader2 } from 'lucide-react';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 
 type Occasion = 'week_start' | 'shabbat';
@@ -86,7 +86,10 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
   }
 
   async function send() {
-    if (!occasion) return;
+    if (!occasion) {
+      toast.error(t('reminders.choose_occasion'));
+      return;
+    }
     setSending(true);
     try {
       const res = await apiFetch<{ sent: number; failed: number; skippedOptOut: number }>('/reminders/send', {
@@ -194,16 +197,22 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className={tile + ' grid place-items-center border-dashed border-border text-muted-foreground disabled:opacity-50'}
+              className={tile + ' grid place-items-center border-dashed border-border text-muted-foreground disabled:opacity-70'}
             >
-              <Upload className="h-5 w-5" />
-              <span className="absolute bottom-1 text-[9px] font-medium">{t('reminders.upload_image')}</span>
+              {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              ) : (
+                <Upload className="h-5 w-5" />
+              )}
+              <span className="absolute bottom-1 text-[9px] font-medium">
+                {uploading ? t('reminders.uploading') : t('reminders.upload_image')}
+              </span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPick} />
           </div>
         </div>
 
-        <Button className="w-full" disabled={!occasion} loading={sending} onClick={send}>
+        <Button className="w-full" loading={sending} onClick={send}>
           {t('reminders.confirm_count').replace('{n}', String(count))}
         </Button>
         <Button variant="ghost" className="w-full" onClick={onClose}>

@@ -195,6 +195,7 @@ const translations: Record<string, string> = {
   'reminders.image_optional': 'רשות',
   'reminders.no_image': 'ללא',
   'reminders.upload_image': 'העלאה',
+  'reminders.uploading': 'מעלה…',
   'reminders.confirm_count': 'שליחת {n} תזכורות',
   'reminders.sent_result': 'נשלחו {sent} · נכשלו {failed} · חסומים {skipped}',
   'reminders.no_active_for_occasion': 'אין תבניות פעילות למועד הזה',
