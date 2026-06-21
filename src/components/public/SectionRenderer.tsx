@@ -35,7 +35,9 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
       case 'gallery':
         return gallery.length ? <GallerySection key="gallery" images={gallery} /> : null;
       case 'pricelist':
-        return catalog.length ? <PricelistSection key="pricelist" catalog={catalog} /> : null;
+        return catalog.length ? (
+          <PricelistSection key="pricelist" catalog={catalog} additionsSurcharge={site.additionsSurcharge} />
+        ) : null;
       case 'story':
         return profile.story?.trim() ? (
           <StorySection key="story" story={profile.story} signature={profile.displayName} />

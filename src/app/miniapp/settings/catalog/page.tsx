@@ -128,6 +128,7 @@ export default function CatalogPage() {
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [addingType, setAddingType] = useState(false);
+  const [savingTypeOrder, setSavingTypeOrder] = useState(false);
 
   // ---- Public-site badge + image for the expanded type ----
   const [typeBadgeType, setTypeBadgeType] = useState<string | null>(null);
@@ -372,6 +373,26 @@ export default function CatalogPage() {
     setTypeBadgeLabel(breadType.badgeLabel);
     setTypeBadgeIcon(breadType.badgeIcon);
     setTypeImageId(breadType.imageId);
+  }
+
+  async function moveType(id: number, dir: 'up' | 'down') {
+    const idx = breadTypes.findIndex((bt) => bt.id === id);
+    const target = dir === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || target < 0 || target >= breadTypes.length) return;
+    const next = [...breadTypes];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setBreadTypes(next);
+    setSavingTypeOrder(true);
+    try {
+      await apiFetch(`/groups/${activeGroupId}/bread-types/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ orderedIds: next.map((bt) => bt.id) }),
+      });
+    } catch {
+      toast.error(t('settings.reorder_failed'));
+    } finally {
+      setSavingTypeOrder(false);
+    }
   }
 
   function updateSizeBadge(
@@ -965,6 +986,30 @@ export default function CatalogPage() {
                   )}
                 >
                   <DocketStub id={bt.id} width={docketWidth(breadTypes.map((b) => b.id))} />
+                  {!isBaker && (
+                    <div className="flex flex-col justify-center shrink-0 ps-1 -my-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={savingTypeOrder || idx === 0}
+                        onClick={() => moveType(bt.id, 'up')}
+                        aria-label="up"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={savingTypeOrder || idx === breadTypes.length - 1}
+                        onClick={() => moveType(bt.id, 'down')}
+                        aria-label="down"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
                   <button
                     type="button"
                     className="flex items-center gap-2 flex-1 text-start min-w-0 px-3.5 py-3"

@@ -7,6 +7,8 @@ import {
   breadTypes,
   breadSizes,
   breadTypeSizes,
+  breadAdditions,
+  breadTypeAdditions,
   bakeryProfile,
   mediaAssets,
   type SectionConfig,
@@ -37,6 +39,7 @@ export type PublicBread = {
   badge: ResolvedBadge | null;
   image: PublicImage | null;
   sizes: PublicSize[];
+  additions: string[];
 };
 
 export type PublicProfile = {
@@ -62,6 +65,7 @@ export type PublicSite = {
   sections: SectionConfig[];
   catalog: PublicBread[];
   gallery: PublicImage[];
+  additionsSurcharge: number;
 };
 
 // ---- Section defaults (used until the owner reorders) ----
@@ -154,6 +158,7 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
       id: groups.id,
       name: groups.name,
       logoUrl: groups.logoUrl,
+      additionsSurcharge: groups.additionsSurcharge,
       deliveryEnabled: groups.deliveryEnabled,
       deliveryHomeCity: groups.deliveryHomeCity,
       deliveryFee: groups.deliveryFee,
@@ -232,6 +237,31 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     )
     .orderBy(asc(mediaAssets.sortOrder));
 
+  // Enabled additions per type (names only, ordered).
+  const additionLinks = typeIds.length
+    ? await db
+        .select({
+          breadTypeId: breadTypeAdditions.breadTypeId,
+          name: breadAdditions.name,
+          sortOrder: breadTypeAdditions.sortOrder,
+        })
+        .from(breadTypeAdditions)
+        .innerJoin(breadAdditions, eq(breadTypeAdditions.breadAdditionId, breadAdditions.id))
+        .where(
+          and(
+            inArray(breadTypeAdditions.breadTypeId, typeIds),
+            eq(breadAdditions.isActive, true)
+          )
+        )
+        .orderBy(asc(breadTypeAdditions.sortOrder))
+    : [];
+  const additionsByType = new Map<number, string[]>();
+  for (const a of additionLinks) {
+    const arr = additionsByType.get(a.breadTypeId) ?? [];
+    arr.push(a.name);
+    additionsByType.set(a.breadTypeId, arr);
+  }
+
   const sizesByType = new Map<number, typeof sizeLinks>();
   for (const link of sizeLinks) {
     const arr = sizesByType.get(link.breadTypeId) ?? [];
@@ -245,13 +275,17 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     description: t.description,
     badge: resolveBadge(t.badgeType, t.badgeLabel, t.badgeIcon),
     image: toImage(imageById.get(t.imageId ?? -1)),
-    sizes: (sizesByType.get(t.id) ?? []).map((l) => ({
-      id: l.breadSizeId,
-      name: l.name,
-      weightGrams: l.weightGrams,
-      price: formatPrice(l.priceOverride ?? l.price),
-      badge: resolveBadge(l.badgeType, l.badgeLabel, l.badgeIcon),
-    })),
+    // Sizes sorted by effective price, low → high.
+    sizes: (sizesByType.get(t.id) ?? [])
+      .map((l) => ({
+        id: l.breadSizeId,
+        name: l.name,
+        weightGrams: l.weightGrams,
+        price: formatPrice(l.priceOverride ?? l.price),
+        badge: resolveBadge(l.badgeType, l.badgeLabel, l.badgeIcon),
+      }))
+      .sort((a, b) => Number(a.price) - Number(b.price)),
+    additions: additionsByType.get(t.id) ?? [],
   }));
 
   const publicProfile: PublicProfile = {
@@ -283,6 +317,7 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     profile: publicProfile,
     sections: normalizeSections(profile.sections),
     catalog,
+    additionsSurcharge: Number(group.additionsSurcharge || 0),
     gallery: galleryRows.map(
       (r): PublicImage => ({
         url: r.blobUrl,
