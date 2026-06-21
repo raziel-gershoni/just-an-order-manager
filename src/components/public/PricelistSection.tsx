@@ -50,7 +50,8 @@ function PricelistTicket({
   const sizes = bread.sizes; // sorted low → high
   const min = sizes[0]?.price;
   const max = sizes[sizes.length - 1]?.price;
-  const rangeText = sizes.length === 0 ? null : min === max ? `₪${min}` : `₪${min}–${max}`;
+  // ₪ on each number + natural RTL order → reads right-to-left as ₪min → ₪max.
+  const rangeText = sizes.length === 0 ? null : min === max ? `₪${min}` : `₪${min} – ₪${max}`;
   const sizeIdWidth = docketWidth(sizes.map((s) => s.id));
 
   return (
@@ -69,7 +70,7 @@ function PricelistTicket({
               {bread.badge && <PublicBadge badge={bread.badge} small />}
             </span>
             {rangeText && (
-              <span dir="ltr" className="whitespace-nowrap font-mono text-[13px] font-bold text-primary">
+              <span className="whitespace-nowrap font-mono text-[13px] font-bold text-primary">
                 {rangeText}
               </span>
             )}
@@ -120,9 +121,7 @@ function PricelistTicket({
                   {s.name}
                   {s.badge && <PublicBadge badge={s.badge} small />}
                 </span>
-                <span dir="ltr" className="font-mono font-bold tabular-nums">
-                  ₪{s.price}
-                </span>
+                <span className="font-mono font-bold tabular-nums">₪{s.price}</span>
               </div>
             </div>
           ))}
