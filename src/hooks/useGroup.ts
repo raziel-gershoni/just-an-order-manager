@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from 'react';
 
-export type GroupRole = 'owner' | 'manager' | 'baker';
+export type GroupRole = 'owner' | 'manager' | 'baker' | 'driver';
 
 interface GroupContext {
   activeGroupId: number | null;

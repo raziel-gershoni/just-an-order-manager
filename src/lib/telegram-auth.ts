@@ -28,7 +28,7 @@ export interface AuthContext {
   };
   memberships: {
     groupId: number;
-    role: 'owner' | 'manager' | 'baker';
+    role: 'owner' | 'manager' | 'baker' | 'driver';
   }[];
 }
 

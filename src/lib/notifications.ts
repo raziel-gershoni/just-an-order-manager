@@ -6,7 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { t } from './i18n';
 import { sendWhatsAppTemplate } from './whatsapp';
 
-type Role = 'owner' | 'manager' | 'baker';
+type Role = 'owner' | 'manager' | 'baker' | 'driver';
 
 interface Recipient {
   chatId: string;

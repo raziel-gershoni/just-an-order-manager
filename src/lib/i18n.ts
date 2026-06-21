@@ -22,6 +22,7 @@ const translations: Record<string, string> = {
   'role.owner': 'בעלים',
   'role.manager': 'מנהל',
   'role.baker': 'אופה',
+  'role.driver': 'שליח',
 
   // Navigation
   'nav.home': 'בית',
@@ -417,6 +418,39 @@ const translations: Record<string, string> = {
   'site.size_badges': 'תוויות לגדלים',
   'site.icon_field': 'אייקון',
   'site.text_field': 'טקסט',
+
+  // Delivery — settings
+  'deliv.title': 'משלוחים',
+  'deliv.enable': 'משלוחים פעילים',
+  'deliv.home_city': '(עיר הבית (משלוח חינם',
+  'deliv.fee': '(מחיר משלוח (₪',
+  'deliv.free_over': '(חינם מעל (₪',
+  'deliv.cities': 'ערים למשלוח בתשלום',
+  'deliv.add_city': 'הוספת עיר',
+  'deliv.city_placeholder': 'שם עיר',
+  // Delivery — order form
+  'deliv.checkbox': 'משלוח',
+  'deliv.no_city': 'אין משלוח מוגדר לעיר זו — אפשר לסמן ידני',
+  'deliv.fee_label': 'מחיר משלוח',
+  'deliv.free': 'חינם',
+  'deliv.pickup': 'איסוף',
+  'deliv.badge': 'משלוח',
+  // Delivery — Waze + customer
+  'deliv.waze': 'פתח ב-Waze',
+  'deliv.notes': '(הערות משלוח (קוד כניסה, קומה, דירה',
+  // Delivery — deliveries view
+  'deliv.today': 'משלוחים היום',
+  'deliv.upcoming': 'משלוחים קרובים',
+  'deliv.none': 'אין משלוחים',
+  'deliv.collect': 'לגבייה',
+  'deliv.mark_delivered': 'נמסר',
+  'deliv.deliver_collect': 'מסר ונגבה',
+  'deliv.delivered_done': '!נמסר',
+  'deliv.collected_done': '!נמסר ונגבה',
+  // Delivery — public site
+  'deliv.pub_free_in': 'משלוח חינם ב',
+  'deliv.pub_fee_cities': 'לערים נבחרות',
+  'deliv.pub_free_over': 'חינם מעל',
 };
 
 export function t(key: string, _lang?: Lang): string {

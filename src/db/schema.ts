@@ -26,6 +26,7 @@ export const memberRoleEnum = pgEnum('member_role', [
   'owner',
   'manager',
   'baker',
+  'driver',
 ]);
 
 export const inviteStatusEnum = pgEnum('invite_status', [
@@ -97,6 +98,14 @@ export const groups = pgTable('groups', {
   // Bakery branding (uploaded from bakery settings; reused by the public site).
   logoUrl: varchar('logo_url', { length: 1000 }),
   logoPathname: varchar('logo_pathname', { length: 500 }),
+  // Delivery settings (zoned pricing).
+  deliveryEnabled: boolean('delivery_enabled').notNull().default(false),
+  deliveryHomeCity: varchar('delivery_home_city', { length: 255 }),
+  deliveryFee: decimal('delivery_fee', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0'),
+  deliveryFreeOver: decimal('delivery_free_over', { precision: 10, scale: 2 }),
+  deliveryCities: jsonb('delivery_cities').$type<string[]>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -241,6 +250,7 @@ export const customers = pgTable('customers', {
   city: varchar('city', { length: 255 }),
   telegramChatId: varchar('telegram_chat_id', { length: 50 }),
   notes: text('notes'),
+  deliveryNotes: text('delivery_notes'),
   isActive: boolean('is_active').notNull().default(true),
   reminderOptOut: boolean('reminder_opt_out').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -272,6 +282,10 @@ export const orders = pgTable('orders', {
   notes: text('notes'),
   totalOverride: decimal('total_override', { precision: 10, scale: 2 }),
   paid: boolean('paid').notNull().default(false),
+  isDelivery: boolean('is_delivery').notNull().default(false),
+  deliveryFee: decimal('delivery_fee', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0'),
   isRecurring: boolean('is_recurring').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
