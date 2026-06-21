@@ -34,6 +34,7 @@ const updateCustomerSchema = z.object({
   city: z.string().max(255).optional(),
   telegramChatId: z.string().max(50).optional(),
   notes: z.string().max(1000).optional(),
+  deliveryNotes: z.string().max(1000).optional(),
   isActive: z.boolean().optional(),
   reminderOptOut: z.boolean().optional(),
 });

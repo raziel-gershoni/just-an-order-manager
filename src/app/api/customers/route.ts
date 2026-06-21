@@ -48,6 +48,7 @@ const createCustomerSchema = z.object({
   city: z.string().max(255).optional(),
   telegramChatId: z.string().max(50).optional(),
   notes: z.string().max(1000).optional(),
+  deliveryNotes: z.string().max(1000).optional(),
 });
 
 export const POST = withGroup(async (request, _auth, groupId) => {

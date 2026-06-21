@@ -17,7 +17,8 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation } from 'lucide-react';
+import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
 
 interface CustomerPhone {
@@ -33,6 +34,7 @@ interface Customer {
   address: string | null;
   city: string | null;
   notes: string | null;
+  deliveryNotes: string | null;
   reminderOptOut: boolean;
   phones: CustomerPhone[];
 }
@@ -62,6 +64,7 @@ export default function CustomerDetailPage() {
   const [editAddress, setEditAddress] = useState('');
   const [editCity, setEditCity] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editDeliveryNotes, setEditDeliveryNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Phone management state
@@ -146,6 +149,7 @@ export default function CustomerDetailPage() {
     setEditAddress(customer.address || '');
     setEditCity(customer.city || '');
     setEditNotes(customer.notes || '');
+    setEditDeliveryNotes(customer.deliveryNotes || '');
     setEditing(true);
   }
 
@@ -162,6 +166,7 @@ export default function CustomerDetailPage() {
             address: editAddress || undefined,
             city: editCity || undefined,
             notes: editNotes || undefined,
+            deliveryNotes: editDeliveryNotes || undefined,
           }),
         }
       );
@@ -456,6 +461,7 @@ export default function CustomerDetailPage() {
               <Input label={t('form.customer_name')} value={editName} onChange={(e) => setEditName(e.target.value)} />
               <Input label={t('customers.address')} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
               <Input label={t('customers.city')} value={editCity} onChange={(e) => setEditCity(e.target.value)} />
+              <TextArea label={t('deliv.notes')} value={editDeliveryNotes} onChange={(e) => setEditDeliveryNotes(e.target.value)} />
               <TextArea label={t('notify.notes')} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
               <div className="flex gap-2">
                 <Button size="sm" disabled={!editName.trim()} loading={saving} onClick={handleSave}>
@@ -476,17 +482,38 @@ export default function CustomerDetailPage() {
                 </Button>
               </div>
               <div className="space-y-2">
-                {customer.address && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t('customers.address')}</span>
-                    <span>{customer.address}</span>
-                  </div>
-                )}
-                {customer.city && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t('customers.city')}</span>
-                    <span>{customer.city}</span>
-                  </div>
+                {isAdmin && (
+                  <>
+                    {customer.address && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{t('customers.address')}</span>
+                        <span>{customer.address}</span>
+                      </div>
+                    )}
+                    {customer.city && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{t('customers.city')}</span>
+                        <span>{customer.city}</span>
+                      </div>
+                    )}
+                    {buildWazeLink(customer.address, customer.city) && (
+                      <a
+                        href={buildWazeLink(customer.address, customer.city)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-primary hover:bg-primary/10"
+                      >
+                        <Navigation className="h-4 w-4" />
+                        {t('deliv.waze')}
+                      </a>
+                    )}
+                    {customer.deliveryNotes && (
+                      <div className="pt-2 border-t border-border text-sm">
+                        <span className="text-muted-foreground">{t('deliv.notes')}</span>
+                        <p className="mt-1">{customer.deliveryNotes}</p>
+                      </div>
+                    )}
+                  </>
                 )}
                 {customer.notes && (
                   <div className="pt-2 border-t border-border text-sm">
@@ -494,9 +521,10 @@ export default function CustomerDetailPage() {
                     <p className="mt-1">{customer.notes}</p>
                   </div>
                 )}
-                {!customer.address && !customer.city && !customer.notes && (
-                  <p className="text-sm text-muted-foreground">{t('customers.empty_hint')}</p>
-                )}
+                {!customer.notes &&
+                  (!isAdmin || (!customer.address && !customer.city && !customer.deliveryNotes)) && (
+                    <p className="text-sm text-muted-foreground">{t('customers.empty_hint')}</p>
+                  )}
               </div>
             </div>
           )}

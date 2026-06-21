@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { Copy, Check, ChevronRight, ChevronLeft, ChefHat, Upload, Trash2 } from 'lucide-react';
+import { Copy, Check, ChevronRight, ChevronLeft, ChefHat, Upload, Trash2, Truck, Plus, X } from 'lucide-react';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
@@ -34,6 +34,15 @@ export default function SettingsPage() {
   const logoRef = useRef<HTMLInputElement>(null);
   const canManage = role === 'owner' || role === 'manager';
 
+  // Delivery settings
+  const [delivEnabled, setDelivEnabled] = useState(false);
+  const [delivHomeCity, setDelivHomeCity] = useState('');
+  const [delivFee, setDelivFee] = useState('');
+  const [delivFreeOver, setDelivFreeOver] = useState('');
+  const [delivCities, setDelivCities] = useState<string[]>([]);
+  const [newCity, setNewCity] = useState('');
+  const [savingDeliv, setSavingDeliv] = useState(false);
+
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -43,7 +52,18 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!activeGroupId) return;
     Promise.all([
-      apiFetch<{ group: { name: string; logoUrl: string | null }; role: string }>(`/groups/${activeGroupId}`),
+      apiFetch<{
+        group: {
+          name: string;
+          logoUrl: string | null;
+          deliveryEnabled: boolean;
+          deliveryHomeCity: string | null;
+          deliveryFee: string;
+          deliveryFreeOver: string | null;
+          deliveryCities: string[] | null;
+        };
+        role: string;
+      }>(`/groups/${activeGroupId}`),
       apiFetch<{ members: Member[] }>(`/groups/${activeGroupId}/members`),
       apiFetch<{ invites: Invite[] }>(`/groups/${activeGroupId}/invites`),
     ])
@@ -51,6 +71,11 @@ export default function SettingsPage() {
         setGroupName(g.group.name);
         setLogoUrl(g.group.logoUrl ?? null);
         setRole(g.role);
+        setDelivEnabled(g.group.deliveryEnabled ?? false);
+        setDelivHomeCity(g.group.deliveryHomeCity ?? '');
+        setDelivFee(g.group.deliveryFee && g.group.deliveryFee !== '0' ? g.group.deliveryFee : '');
+        setDelivFreeOver(g.group.deliveryFreeOver ?? '');
+        setDelivCities(g.group.deliveryCities ?? []);
         setMembers(m.members);
         setInvites(i.invites);
       })
@@ -81,6 +106,31 @@ export default function SettingsPage() {
     try {
       await apiFetch(`/groups/${activeGroupId}/logo`, { method: 'DELETE' });
     } catch {}
+  }
+
+  async function saveDelivery() {
+    if (!activeGroupId) return;
+    setSavingDeliv(true);
+    try {
+      await apiFetch(`/groups/${activeGroupId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          deliveryEnabled: delivEnabled,
+          deliveryHomeCity: delivHomeCity.trim() || null,
+          deliveryFee: delivFee.trim() || '0',
+          deliveryFreeOver: delivFreeOver.trim() || null,
+          deliveryCities: delivCities,
+        }),
+      });
+    } catch {}
+    setSavingDeliv(false);
+  }
+
+  function addCity() {
+    const c = newCity.trim();
+    if (!c || delivCities.includes(c)) return;
+    setDelivCities((p) => [...p, c]);
+    setNewCity('');
   }
 
   async function createInvite() {
@@ -181,6 +231,69 @@ export default function SettingsPage() {
           </div>
         </Card>
       </section>
+
+      {/* Delivery settings (owner/manager) */}
+      {canManage && (
+        <section>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+            {t('deliv.title')}
+          </h2>
+          <Card className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 font-medium">
+                <Truck className="h-4 w-4 text-primary" />
+                {t('deliv.enable')}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={delivEnabled}
+                onClick={() => setDelivEnabled((v) => !v)}
+                className={'relative h-7 w-12 flex-none rounded-full transition-colors ' + (delivEnabled ? 'bg-success' : 'bg-muted')}
+              >
+                <span className={'absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-all ' + (delivEnabled ? 'start-6' : 'start-1')} />
+              </button>
+            </div>
+
+            {delivEnabled && (
+              <>
+                <Input label={t('deliv.home_city')} value={delivHomeCity} onChange={(e) => setDelivHomeCity(e.target.value)} />
+                <div className="flex gap-2">
+                  <Input label={t('deliv.fee')} inputMode="decimal" value={delivFee} onChange={(e) => setDelivFee(e.target.value)} className="flex-1" />
+                  <Input label={t('deliv.free_over')} inputMode="decimal" value={delivFreeOver} onChange={(e) => setDelivFreeOver(e.target.value)} className="flex-1" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground mb-1.5">{t('deliv.cities')}</div>
+                  {delivCities.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {delivCities.map((c) => (
+                        <span key={c} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-sm">
+                          {c}
+                          <button type="button" aria-label="remove" onClick={() => setDelivCities((p) => p.filter((x) => x !== c))} className="text-muted-foreground hover:text-destructive">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder={t('deliv.city_placeholder')}
+                      value={newCity}
+                      onChange={(e) => setNewCity(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCity(); } }}
+                      className="flex-1"
+                    />
+                    <Button size="icon" variant="outline" onClick={addCity}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <Button size="sm" loading={savingDeliv} onClick={saveDelivery}>{t('settings.save')}</Button>
+          </Card>
+        </section>
+      )}
 
       {/* Baker page link */}
       <section>
