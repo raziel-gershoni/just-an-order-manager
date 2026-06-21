@@ -45,7 +45,7 @@ export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { apiFetch } = useApi();
   const { activeGroupRole } = useGroup();
-  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
+  const isAdmin = (activeGroupRole === 'owner' || activeGroupRole === 'manager');
   const t = useT();
   const lang = useLang();
   const toast = useToast();

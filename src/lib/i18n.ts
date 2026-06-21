@@ -29,6 +29,7 @@ const translations: Record<string, string> = {
   'nav.orders': 'הזמנות',
   'nav.customers': 'לקוחות',
   'nav.settings': 'הגדרות',
+  'nav.deliveries': 'משלוחים',
 
   // Dashboard
   'dash.welcome': '!ברוכים הבאים',

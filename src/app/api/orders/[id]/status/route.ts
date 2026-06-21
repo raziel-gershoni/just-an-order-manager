@@ -28,8 +28,9 @@ const updateStatusSchema = z.object({
   notifyCustomer: z.boolean().optional(),
 });
 
-export const PATCH = withGroup(async (request, _auth, groupId) => {
+export const PATCH = withGroup(async (request, auth, groupId) => {
   const orderId = getOrderId(request.url);
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
 
   const body = await request.json();
   const parsed = updateStatusSchema.safeParse(body);
@@ -45,6 +46,9 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
     .limit(1);
 
   if (!order) return errorResponse('Order not found', 404);
+
+  // Drivers may only act on delivery orders.
+  if (role === 'driver' && !order.isDelivery) return errorResponse('Forbidden', 403);
 
   const allowed = ORDER_STATUS_TRANSITIONS[order.status];
   if (!allowed?.includes(newStatus)) {

@@ -23,7 +23,7 @@ const createSchema = z.object({
 
 export const POST = withGroup(async (request, auth, groupId) => {
   const membership = auth.memberships.find((m) => m.groupId === groupId);
-  if (membership?.role === 'baker') {
+  if ((membership?.role === 'baker' || membership?.role === 'driver')) {
     return errorResponse('Bakers cannot manage reminders', 403);
   }
 

@@ -21,8 +21,9 @@ const paySchema = z.object({
   amount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
 });
 
-export const POST = withGroup(async (request, _auth, groupId) => {
+export const POST = withGroup(async (request, auth, groupId) => {
   const id = getOrderId(request.url);
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
 
   const body = await request.json();
   const parsed = paySchema.safeParse(body);
@@ -32,6 +33,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .select({
       id: orders.id,
       status: orders.status,
+      isDelivery: orders.isDelivery,
       customerId: orders.customerId,
       customerName: customers.name,
     })
@@ -41,6 +43,9 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .limit(1);
 
   if (!order) return errorResponse('Order not found', 404);
+
+  // Drivers may only collect on delivery orders.
+  if (role === 'driver' && !order.isDelivery) return errorResponse('Forbidden', 403);
   if (order.status !== 'delivered') return errorResponse('Order must be delivered', 400);
 
   const { action, amount } = parsed.data;

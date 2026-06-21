@@ -28,7 +28,7 @@ interface Customer {
 export default function CustomersPage() {
   const { apiFetch } = useApi();
   const { activeGroupId, activeGroupRole } = useGroup();
-  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
+  const isAdmin = (activeGroupRole === 'owner' || activeGroupRole === 'manager');
   const t = useT();
   const lang = useLang();
   const toast = useToast();

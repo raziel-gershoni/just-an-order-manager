@@ -18,8 +18,9 @@ import { DocketRow } from '@/components/ui/DocketRow';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
-import { Plus, Banknote, Wheat, AlertTriangle, Clock } from 'lucide-react';
+import { Plus, Banknote, Wheat, AlertTriangle, Clock, Truck } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface DashboardData {
   todayOrders: {
@@ -27,6 +28,7 @@ interface DashboardData {
     status: string;
     paid: boolean;
     isRecurring?: boolean;
+    isDelivery?: boolean;
     notes: string | null;
     customerName: string;
     totalQuantity: number;
@@ -37,6 +39,7 @@ interface DashboardData {
     deliveryDate: string | null;
     status: string;
     isRecurring?: boolean;
+    isDelivery?: boolean;
     customerName: string;
     totalQuantity: number;
     itemsSummary: string;
@@ -52,8 +55,25 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { apiFetch } = useApi();
-  const { activeGroupId, setActiveGroupId, setActiveGroupRole } = useGroup();
+  const { activeGroupId, activeGroupRole, setActiveGroupId, setActiveGroupRole } = useGroup();
   const { user } = useTelegram();
+  const router = useRouter();
+  const canManage = activeGroupRole === 'owner' || activeGroupRole === 'manager';
+  const [deliveryCount, setDeliveryCount] = useState(0);
+
+  // Drivers don't have a dashboard — their home is the deliveries view.
+  useEffect(() => {
+    if (activeGroupRole === 'driver') router.replace('/miniapp/deliveries');
+  }, [activeGroupRole, router]);
+
+  // Active-deliveries count for the dashboard entry-point (owner/manager).
+  useEffect(() => {
+    if (!canManage) return;
+    apiFetch<{ deliveries: unknown[] }>('/deliveries')
+      .then((r) => setDeliveryCount(r.deliveries.length))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManage]);
   const t = useT();
   const lang = useLang();
   const toast = useToast();
@@ -261,6 +281,21 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Deliveries-today entry-point (owner/manager) */}
+      {canManage && deliveryCount > 0 && (
+        <div className="mx-4 mt-3">
+          <Link href="/miniapp/deliveries" className="inline-flex">
+            <span className="inline-flex items-center gap-2 rounded-[6px] bg-primary/10 px-3 py-2 text-sm font-bold text-primary">
+              <Truck className="h-4 w-4" />
+              {t('deliv.today')}
+              <span className="rounded-[4px] bg-primary px-1.5 py-0.5 font-mono text-xs text-white tabular-nums">
+                {deliveryCount}
+              </span>
+            </span>
+          </Link>
+        </div>
+      )}
+
       {/* Nothing scheduled — compact hint (replaces the large empty-today block) */}
       {nothingScheduled && (
         <Card className="mx-4 mt-3 flex items-center gap-3 p-4">
@@ -287,6 +322,7 @@ export default function Dashboard() {
                 paid={o.paid}
                 showPay
                 isRecurring={o.isRecurring}
+                isDelivery={o.isDelivery}
                 hasNotes={!!o.notes}
                 first={idx === 0}
               />
@@ -311,6 +347,7 @@ export default function Dashboard() {
                 status={o.status}
                 statusLabel={translate(`status.${o.status}`, lang)}
                 isRecurring={o.isRecurring}
+                isDelivery={o.isDelivery}
                 first={idx === 0}
               />
             ))}

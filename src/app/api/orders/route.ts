@@ -131,7 +131,10 @@ const createOrderSchema = z.object({
   notifyCustomer: z.boolean().optional(),
 });
 
-export const POST = withGroup(async (request, _auth, groupId) => {
+export const POST = withGroup(async (request, auth, groupId) => {
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
+  if (role === 'driver') return errorResponse('Forbidden', 403);
+
   const body = await request.json();
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);

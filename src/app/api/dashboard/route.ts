@@ -67,6 +67,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       status: orders.status,
       paid: orders.paid,
       isRecurring: orders.isRecurring,
+      isDelivery: orders.isDelivery,
       notes: orders.notes,
       customerName: customers.name,
     })
@@ -95,6 +96,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       deliveryDate: orders.deliveryDate,
       status: orders.status,
       isRecurring: orders.isRecurring,
+      isDelivery: orders.isDelivery,
       customerName: customers.name,
     })
     .from(orders)

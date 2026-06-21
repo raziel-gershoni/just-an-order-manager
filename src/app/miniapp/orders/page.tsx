@@ -23,6 +23,7 @@ interface Order {
   status: string;
   paid: boolean;
   isRecurring?: boolean;
+  isDelivery?: boolean;
   notes: string | null;
   customerName: string;
   totalQuantity: number;
@@ -160,6 +161,7 @@ export default function OrdersPage() {
                   paid={o.paid}
                   showPay
                   isRecurring={o.isRecurring}
+                  isDelivery={o.isDelivery}
                   hasNotes={!!o.notes}
                   first={idx === 0}
                 />

@@ -174,8 +174,10 @@ const updateOrderSchema = z.object({
   })).min(1).optional(),
 });
 
-export const PATCH = withGroup(async (request, _auth, groupId) => {
+export const PATCH = withGroup(async (request, auth, groupId) => {
   const id = getOrderId(request.url);
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
+  if (role === 'driver') return errorResponse('Forbidden', 403);
 
   const body = await request.json();
   const parsed = updateOrderSchema.safeParse(body);

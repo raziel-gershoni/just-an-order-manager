@@ -24,7 +24,7 @@ async function authorize(
 
   const membership = auth.memberships.find((m) => m.groupId === row.groupId);
   if (!membership) return errorResponse('Not a member', 403);
-  if (membership.role === 'baker') {
+  if ((membership.role === 'baker' || membership.role === 'driver')) {
     return errorResponse('Bakers cannot manage bread additions', 403);
   }
   return null;

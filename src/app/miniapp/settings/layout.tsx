@@ -10,7 +10,7 @@ import { useGroup } from '@/hooks/useGroup';
  */
 export default function SettingsLayout({ children }: { children: ReactNode }) {
   const { activeGroupRole } = useGroup();
-  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
+  const isAdmin = (activeGroupRole === 'owner' || activeGroupRole === 'manager');
 
   return (
     <>

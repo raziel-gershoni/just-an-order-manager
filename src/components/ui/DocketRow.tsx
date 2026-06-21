@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Repeat, StickyNote } from 'lucide-react';
+import { Repeat, StickyNote, Truck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DocketStub } from './DocketStub';
 import { Badge } from './Badge';
@@ -24,6 +24,7 @@ export function DocketRow({
   showPay,
   isRecurring,
   hasNotes,
+  isDelivery,
   first,
 }: {
   id: number;
@@ -37,6 +38,7 @@ export function DocketRow({
   showPay?: boolean;
   isRecurring?: boolean;
   hasNotes?: boolean;
+  isDelivery?: boolean;
   first?: boolean;
 }) {
   return (
@@ -57,6 +59,11 @@ export function DocketRow({
                 </Repeat>
               )}
               <span className="truncate">{primary}</span>
+              {isDelivery && (
+                <Truck className="h-3.5 w-3.5 text-primary shrink-0" aria-label="משלוח" role="img">
+                  <title>משלוח</title>
+                </Truck>
+              )}
               {hasNotes && <StickyNote className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
             </div>
             {secondary && (

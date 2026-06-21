@@ -13,7 +13,7 @@ function getGroupId(url: string): number {
 }
 
 const createInviteSchema = z.object({
-  role: z.enum(['manager', 'baker']),
+  role: z.enum(['manager', 'baker', 'driver']),
 });
 
 export const GET = withAuth(async (request, auth) => {
@@ -33,7 +33,7 @@ export const POST = withAuth(async (request, auth) => {
   const groupId = getGroupId(request.url);
   const membership = auth.memberships.find((m) => m.groupId === groupId);
   if (!membership) return errorResponse('Not a member', 403);
-  if (membership.role === 'baker') {
+  if ((membership.role === 'baker' || membership.role === 'driver')) {
     return errorResponse('Bakers cannot create invites', 403);
   }
 

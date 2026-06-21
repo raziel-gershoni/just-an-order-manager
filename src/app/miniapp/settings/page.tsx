@@ -43,7 +43,7 @@ export default function SettingsPage() {
   const [newCity, setNewCity] = useState('');
   const [savingDeliv, setSavingDeliv] = useState(false);
 
-  const [inviteRole, setInviteRole] = useState<'manager' | 'baker'>('baker');
+  const [inviteRole, setInviteRole] = useState<'manager' | 'baker' | 'driver'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -344,7 +344,7 @@ export default function SettingsPage() {
         </h2>
         <Card>
           <div className="flex gap-1 bg-muted p-1 rounded-lg mb-3">
-            {(['baker', 'manager'] as const).map((role) => (
+            {(['baker', 'manager', 'driver'] as const).map((role) => (
               <button
                 key={role}
                 className={cn(

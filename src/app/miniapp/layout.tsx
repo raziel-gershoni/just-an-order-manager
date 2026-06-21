@@ -68,7 +68,7 @@ function AppProviders({ children }: { children: ReactNode }) {
   // Dark "back-office" theme: owner/manager in the settings/catalog area. Bakers stay light.
   const pathname = usePathname();
   const isBackOffice = pathname?.startsWith('/miniapp/settings') ?? false;
-  const dark = isBackOffice && activeGroupRole !== null && activeGroupRole !== 'baker';
+  const dark = isBackOffice && (activeGroupRole === 'owner' || activeGroupRole === 'manager');
 
   return (
     <LangCtx.Provider value={lang}>
@@ -104,6 +104,7 @@ function AppProviders({ children }: { children: ReactNode }) {
                     orders: t('nav.orders', lang),
                     customers: t('nav.customers', lang),
                     settings: t('nav.settings', lang),
+                    deliveries: t('nav.deliveries', lang),
                   }}
                 />
               </>

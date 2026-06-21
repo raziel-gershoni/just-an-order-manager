@@ -46,7 +46,7 @@ const deliveryIcons: Record<DeliveryType, typeof Calendar> = {
 function OrderFormContent() {
   const { apiFetch } = useApi();
   const { activeGroupId, activeGroupRole } = useGroup();
-  const isAdmin = activeGroupRole !== null && activeGroupRole !== 'baker';
+  const isAdmin = (activeGroupRole === 'owner' || activeGroupRole === 'manager');
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useT();

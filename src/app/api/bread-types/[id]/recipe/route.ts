@@ -21,7 +21,7 @@ async function authorize(
 
   const membership = auth.memberships.find((m) => m.groupId === row.groupId);
   if (!membership) return errorResponse('Not a member', 403);
-  if (!opts.allowBaker && membership.role === 'baker') {
+  if (!opts.allowBaker && (membership.role === 'baker' || membership.role === 'driver')) {
     return errorResponse('Only managers can delete recipes', 403);
   }
   return { groupId: row.groupId };

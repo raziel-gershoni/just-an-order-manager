@@ -20,7 +20,7 @@ const updateSchema = z.object({
 
 export const PATCH = withGroup(async (request, auth, groupId) => {
   const membership = auth.memberships.find((m) => m.groupId === groupId);
-  if (membership?.role === 'baker') {
+  if ((membership?.role === 'baker' || membership?.role === 'driver')) {
     return errorResponse('Bakers cannot manage reminders', 403);
   }
   const id = getId(request.url);
@@ -39,7 +39,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
 
 export const DELETE = withGroup(async (request, auth, groupId) => {
   const membership = auth.memberships.find((m) => m.groupId === groupId);
-  if (membership?.role === 'baker') {
+  if ((membership?.role === 'baker' || membership?.role === 'driver')) {
     return errorResponse('Bakers cannot manage reminders', 403);
   }
   const id = getId(request.url);
