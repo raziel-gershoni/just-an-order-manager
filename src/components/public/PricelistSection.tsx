@@ -16,6 +16,15 @@ export function PricelistSection({
   additionsSurcharge: number;
 }) {
   const idWidth = docketWidth(catalog.map((b) => b.id));
+  // Running ticket number per (type, size) pair across the whole pricelist, so
+  // each size stub is unique and varies per bread (not the shared global size id).
+  const startNos: number[] = [];
+  let acc = 0;
+  for (const b of catalog) {
+    startNos.push(acc);
+    acc += b.sizes.length;
+  }
+  const sizeNoWidth = docketWidth([acc]);
   return (
     <section className="mt-10">
       <PublicSectionHead label={t('site.pricelist')} meta={t('site.prices_note')} />
@@ -26,6 +35,8 @@ export function PricelistSection({
             key={bread.id}
             bread={bread}
             idWidth={idWidth}
+            startNo={startNos[i]}
+            sizeNoWidth={sizeNoWidth}
             surcharge={additionsSurcharge}
             first={i === 0}
           />
@@ -38,11 +49,15 @@ export function PricelistSection({
 function PricelistTicket({
   bread,
   idWidth,
+  startNo,
+  sizeNoWidth,
   surcharge,
   first,
 }: {
   bread: PublicBread;
   idWidth: number;
+  startNo: number;
+  sizeNoWidth: number;
   surcharge: number;
   first: boolean;
 }) {
@@ -53,7 +68,6 @@ function PricelistTicket({
   // ₪ on each number + the Hebrew "עד" → reads right-to-left as ₪min עד ₪max.
   const rangeText =
     sizes.length === 0 ? null : min === max ? `₪${min}` : `₪${min} ${t('site.price_to')} ₪${max}`;
-  const sizeIdWidth = docketWidth(sizes.map((s) => s.id));
 
   return (
     <div className={cn(!first && 'border-t-[1.5px] border-dashed border-border')}>
@@ -113,7 +127,7 @@ function PricelistTicket({
               <span className="relative flex w-6 shrink-0 self-stretch border-e border-dashed border-muted-foreground/25">
                 <span className="absolute inset-0 flex items-center justify-center">
                   <span className="-rotate-90 whitespace-nowrap font-mono text-[9px] font-semibold tabular-nums text-muted-foreground/60">
-                    #{String(s.id).padStart(sizeIdWidth, '0')}
+                    #{String(startNo + i + 1).padStart(sizeNoWidth, '0')}
                   </span>
                 </span>
               </span>
