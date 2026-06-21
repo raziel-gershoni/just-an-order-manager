@@ -428,7 +428,7 @@ const translations: Record<string, string> = {
   // Delivery — settings
   'deliv.title': 'משלוחים',
   'deliv.enable': 'משלוחים פעילים',
-  'deliv.home_city': '(עיר הבית (משלוח חינם',
+  'deliv.home_city': 'עיר המאפייה (איסוף ומשלוח חינם)',
   'deliv.fee': '(מחיר משלוח (₪',
   'deliv.free_over': '(חינם מעל (₪',
   'deliv.cities': 'ערים למשלוח בתשלום',

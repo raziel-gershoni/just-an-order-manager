@@ -301,7 +301,8 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     address: profile.address,
     mapUrl: profile.mapUrl,
     bakeDays: profile.bakeDays,
-    pickupArea: profile.pickupArea,
+    // Pickup/origin city has a single home: the delivery home city.
+    pickupArea: group.deliveryHomeCity,
     heroImage: toImage(imageById.get(profile.heroImageId ?? -1)),
     logoUrl: group.logoUrl,
     delivery: group.deliveryEnabled

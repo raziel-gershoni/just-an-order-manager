@@ -43,7 +43,6 @@ type FormState = {
   address: string;
   mapUrl: string;
   bakeDays: string;
-  pickupArea: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -57,7 +56,6 @@ const EMPTY_FORM: FormState = {
   address: '',
   mapUrl: '',
   bakeDays: '',
-  pickupArea: '',
 };
 
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
@@ -91,7 +89,6 @@ export default function SiteEditorPage() {
   if (!form.whatsappPhone.trim()) emptyKeys.add('cta');
   if (
     !form.bakeDays.trim() &&
-    !form.pickupArea.trim() &&
     !form.whatsappPhone.trim() &&
     !form.contactPhone.trim() &&
     !form.instagram.trim() &&
@@ -114,7 +111,6 @@ export default function SiteEditorPage() {
       address: p.address ?? '',
       mapUrl: p.mapUrl ?? '',
       bakeDays: p.bakeDays ?? '',
-      pickupArea: p.pickupArea ?? '',
     });
     setPublished(p.isPublished);
     setHeroImageId(p.heroImageId ?? null);
@@ -171,7 +167,6 @@ export default function SiteEditorPage() {
         address: orNull(form.address),
         mapUrl: orNull(form.mapUrl),
         bakeDays: orNull(form.bakeDays),
-        pickupArea: orNull(form.pickupArea),
       };
       const { profile } = await apiFetch<{ profile: SiteProfile }>('/site-profile', {
         method: 'PATCH',
@@ -289,7 +284,6 @@ export default function SiteEditorPage() {
           {/* Contact + logistics */}
           <Card className="space-y-3 p-4">
             <Input label={t('site.f_bake_days')} value={form.bakeDays} onChange={(e) => set('bakeDays', e.target.value)} />
-            <Input label={t('site.f_pickup')} value={form.pickupArea} onChange={(e) => set('pickupArea', e.target.value)} />
             <Input label={t('site.f_whatsapp')} inputMode="tel" value={form.whatsappPhone} onChange={(e) => set('whatsappPhone', e.target.value)} />
             <Input label={t('site.f_phone')} inputMode="tel" value={form.contactPhone} onChange={(e) => set('contactPhone', e.target.value)} />
             <Input label={t('site.f_instagram')} value={form.instagram} onChange={(e) => set('instagram', e.target.value)} />

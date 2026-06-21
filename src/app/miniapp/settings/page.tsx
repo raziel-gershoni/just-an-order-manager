@@ -255,9 +255,11 @@ export default function SettingsPage() {
               </button>
             </div>
 
+            {/* Bakery city — pickup origin + free-delivery zone (always editable). */}
+            <Input label={t('deliv.home_city')} value={delivHomeCity} onChange={(e) => setDelivHomeCity(e.target.value)} />
+
             {delivEnabled && (
               <>
-                <Input label={t('deliv.home_city')} value={delivHomeCity} onChange={(e) => setDelivHomeCity(e.target.value)} />
                 <div className="flex gap-2">
                   <Input label={t('deliv.fee')} inputMode="decimal" value={delivFee} onChange={(e) => setDelivFee(e.target.value)} className="flex-1" />
                   <Input label={t('deliv.free_over')} inputMode="decimal" value={delivFreeOver} onChange={(e) => setDelivFreeOver(e.target.value)} className="flex-1" />
