@@ -70,7 +70,7 @@ export function PricelistSection({
                 style={{ background: accent }}
               />
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2.5 px-3.5 py-3">
+                <span className="flex items-center gap-2.5 px-3.5 py-[18px]">
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-display text-[16px] font-semibold">
                     <span className="truncate">{bread.name}</span>
                     {bread.badge && <PublicBadge badge={bread.badge} small />}
@@ -149,19 +149,23 @@ function PricelistModal({
           </button>
         </div>
 
-        <div className="space-y-1.5">
-          {bread.sizes.map((s) => (
+        {/* sizes: one connected, flat group divided by dashed perforations */}
+        <div
+          className="overflow-hidden border bg-card"
+          style={{ borderColor: `color-mix(in srgb, ${accent} 28%, var(--border))` }}
+        >
+          {bread.sizes.map((s, i) => (
             <div
               key={s.id}
-              className="flex items-stretch border bg-card"
-              style={{ borderColor: `color-mix(in srgb, ${accent} 28%, var(--border))` }}
+              className={cn('flex items-stretch', i > 0 && 'border-t border-dashed')}
+              style={i > 0 ? { borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))` } : undefined}
             >
               <span
                 aria-hidden
                 className="w-4 shrink-0 self-stretch border-e-[1.5px] border-dashed border-card/60"
                 style={{ background: accent }}
               />
-              <div className="flex flex-1 items-center justify-between gap-2 px-3 py-2 text-[14px]">
+              <div className="flex flex-1 items-center justify-between gap-2 px-3 py-2.5 text-[14px]">
                 <span className="flex items-center gap-1.5 font-semibold">
                   {s.name}
                   {s.badge && <PublicBadge badge={s.badge} small />}
