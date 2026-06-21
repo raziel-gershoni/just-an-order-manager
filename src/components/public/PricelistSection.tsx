@@ -19,13 +19,15 @@ export function PricelistSection({
   return (
     <section className="mt-10">
       <PublicSectionHead label={t('site.pricelist')} meta={t('site.prices_note')} />
-      <div className="space-y-2.5">
-        {catalog.map((bread) => (
+      {/* One connected docket — rows divided by perforations, like the order list. */}
+      <div className="overflow-hidden rounded-[10px] border border-border bg-card shadow-[0_8px_22px_-18px_rgba(36,31,26,0.55)]">
+        {catalog.map((bread, i) => (
           <PricelistTicket
             key={bread.id}
             bread={bread}
             idWidth={idWidth}
             surcharge={additionsSurcharge}
+            first={i === 0}
           />
         ))}
       </div>
@@ -37,17 +39,22 @@ function PricelistTicket({
   bread,
   idWidth,
   surcharge,
+  first,
 }: {
   bread: PublicBread;
   idWidth: number;
   surcharge: number;
+  first: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const multi = bread.sizes.length > 1;
-  const fromPrice = bread.sizes[0]?.price; // sizes already sorted low → high
+  const sizes = bread.sizes; // sorted low → high
+  const min = sizes[0]?.price;
+  const max = sizes[sizes.length - 1]?.price;
+  const rangeText = sizes.length === 0 ? null : min === max ? `₪${min}` : `₪${min}–${max}`;
+  const sizeIdWidth = docketWidth(sizes.map((s) => s.id));
 
   return (
-    <div className="flex items-stretch overflow-hidden rounded-[10px] border border-border bg-card shadow-[0_6px_18px_-16px_rgba(36,31,26,0.5)]">
+    <div className={cn('flex items-stretch', !first && 'border-t-[1.5px] border-dashed border-border')}>
       <DocketStub id={bread.id} width={idWidth} />
       <div className="min-w-0 flex-1">
         <button
@@ -59,11 +66,8 @@ function PricelistTicket({
             <span className="truncate">{bread.name}</span>
             {bread.badge && <PublicBadge badge={bread.badge} small />}
           </span>
-          {fromPrice && (
-            <span className="whitespace-nowrap font-mono text-[13px] font-bold text-primary">
-              {multi && <span className="font-semibold text-muted-foreground">{t('site.from_price')}</span>}₪
-              {fromPrice}
-            </span>
+          {rangeText && (
+            <span className="whitespace-nowrap font-mono text-[13px] font-bold text-primary">{rangeText}</span>
           )}
           <svg
             viewBox="0 0 24 24"
@@ -84,29 +88,29 @@ function PricelistTicket({
         )}
 
         {open && (
-          <div>
-            <div className="border-t-[1.5px] border-dashed border-border">
-              {bread.sizes.map((s, i) => (
-                <div
-                  key={s.id}
-                  className={cn(
-                    'flex items-center justify-between gap-2 px-3.5 py-2 text-[13.5px]',
-                    i > 0 && 'border-t border-dashed border-border'
-                  )}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span className="font-semibold">{s.name}</span>
-                    {s.weightGrams != null && (
-                      <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
-                        {s.weightGrams} {t('site.grams')}
-                      </span>
-                    )}
+          <div className="border-t-[1.5px] border-dashed border-border">
+            {/* nested size mini-tickets, connected by perforations */}
+            {sizes.map((s, i) => (
+              <div
+                key={s.id}
+                className={cn('flex items-stretch', i > 0 && 'border-t border-dashed border-border')}
+              >
+                <span className="relative flex w-6 shrink-0 self-stretch border-e border-dashed border-muted-foreground/25 bg-primary/[0.05]">
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="-rotate-90 whitespace-nowrap font-mono text-[9px] font-semibold tabular-nums text-muted-foreground/70">
+                      #{String(s.id).padStart(sizeIdWidth, '0')}
+                    </span>
+                  </span>
+                </span>
+                <div className="flex flex-1 items-center justify-between gap-2 px-3 py-2 text-[13.5px]">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    {s.name}
                     {s.badge && <PublicBadge badge={s.badge} small />}
                   </span>
                   <span className="font-mono font-bold tabular-nums">₪{s.price}</span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
 
             {bread.additions.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 border-t-[1.5px] border-dashed border-border bg-secondary/30 px-3.5 py-2.5 text-[12px]">
@@ -120,8 +124,8 @@ function PricelistTicket({
                   </span>
                 ))}
                 {surcharge > 0 && (
-                  <span className="ms-auto font-mono text-[11px] text-muted-foreground tabular-nums">
-                    ₪{surcharge} {t('site.per_addition')}
+                  <span className="ms-auto whitespace-nowrap font-mono text-[11px] font-bold text-primary tabular-nums">
+                    +₪{surcharge} {t('site.per_addition')}
                   </span>
                 )}
               </div>

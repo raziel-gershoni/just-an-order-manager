@@ -357,7 +357,7 @@ const translations: Record<string, string> = {
   'site.from_price': 'מ־',
   'site.grams': 'גרם',
   'site.additions_label': 'תוספות:',
-  'site.per_addition': 'לתוספת',
+  'site.per_addition': 'עבור תוספות',
   'site.gallery_title': 'גלריה',
   'site.story_title': 'הסיפור שלנו',
   'site.details_title': 'פרטים',
