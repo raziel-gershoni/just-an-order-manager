@@ -50,8 +50,9 @@ function PricelistTicket({
   const sizes = bread.sizes; // sorted low → high
   const min = sizes[0]?.price;
   const max = sizes[sizes.length - 1]?.price;
-  // ₪ on each number + natural RTL order → reads right-to-left as ₪min → ₪max.
-  const rangeText = sizes.length === 0 ? null : min === max ? `₪${min}` : `₪${min} – ₪${max}`;
+  // ₪ on each number + the Hebrew "עד" → reads right-to-left as ₪min עד ₪max.
+  const rangeText =
+    sizes.length === 0 ? null : min === max ? `₪${min}` : `₪${min} ${t('site.price_to')} ₪${max}`;
   const sizeIdWidth = docketWidth(sizes.map((s) => s.id));
 
   return (

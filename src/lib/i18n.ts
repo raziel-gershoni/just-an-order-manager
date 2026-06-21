@@ -355,6 +355,7 @@ const translations: Record<string, string> = {
   'site.pricelist': 'המחירון',
   'site.prices_note': 'מחירים בש״ח',
   'site.from_price': 'מ־',
+  'site.price_to': 'עד',
   'site.grams': 'גרם',
   'site.additions_label': 'תוספות:',
   'site.per_addition': 'עבור תוספות',
