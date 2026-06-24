@@ -12,7 +12,7 @@ import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
-  Star, Check, Download,
+  Star, Check, Download, Copy,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
@@ -86,21 +86,52 @@ export default function CatalogPage() {
   const toast = useToast();
   const isBaker = activeGroupRole === 'baker';
 
-  // Export the pricelist as a Hebrew-keyed JSON file (for feeding an LLM).
+  // Export the pricelist as a Hebrew-keyed JSON (for feeding an LLM).
   const [exporting, setExporting] = useState(false);
-  async function exportCatalog() {
+  async function fetchExportJson(): Promise<string> {
+    const data = await apiFetch<Record<string, unknown>>('/catalog/export');
+    return JSON.stringify(data, null, 2);
+  }
+  async function downloadCatalog() {
     setExporting(true);
     try {
-      const data = await apiFetch<Record<string, unknown>>('/catalog/export');
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      const json = await fetchExportJson();
+      // octet-stream (not application/json) so the browser saves it instead of
+      // rendering it inline when the `download` attribute is ignored.
+      const url = URL.createObjectURL(new Blob([json], { type: 'application/octet-stream' }));
       const a = document.createElement('a');
       a.href = url;
       a.download = 'pricelist.json';
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 1500);
+    } catch {
+      toast.error(t('catalog.export_failed'));
+    } finally {
+      setExporting(false);
+    }
+  }
+  async function copyCatalog() {
+    setExporting(true);
+    try {
+      const json = await fetchExportJson();
+      try {
+        await navigator.clipboard.writeText(json);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = json;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      toast.success(t('catalog.copied'));
     } catch {
       toast.error(t('catalog.export_failed'));
     } finally {
@@ -595,16 +626,28 @@ export default function CatalogPage() {
       <div className="p-5 space-y-4 animate-fade-in">
         {/* Pricelist JSON export (managers only) */}
         {!isBaker && (
-          <div className="flex">
-            <button
-              type="button"
-              onClick={exportCatalog}
-              disabled={exporting}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? t('catalog.exporting') : t('catalog.export')}
-            </button>
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
+            <span className="text-sm font-medium text-muted-foreground">{t('catalog.export')}</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={downloadCatalog}
+                disabled={exporting}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-sm font-medium disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                {t('catalog.download')}
+              </button>
+              <button
+                type="button"
+                onClick={copyCatalog}
+                disabled={exporting}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-sm font-medium disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" />
+                {t('catalog.copy')}
+              </button>
+            </div>
           </div>
         )}
 
