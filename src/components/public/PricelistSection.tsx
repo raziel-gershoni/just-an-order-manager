@@ -63,14 +63,14 @@ export function PricelistSection({
                 i > 0 && 'border-t-[1.5px] border-dashed border-border'
               )}
             >
-              {/* wide color stub + vertical dashed line between the color and the name */}
+              {/* thin color stub + vertical dashed line between the color and the name */}
               <span
                 aria-hidden
-                className="w-6 shrink-0 self-stretch border-e-2 border-dashed border-card/60"
+                className="w-[13px] shrink-0 self-stretch border-e-2 border-dashed border-card/60"
                 style={{ background: accent }}
               />
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2.5 px-3.5 py-[18px]">
+                <span className="flex items-center gap-2.5 px-3.5 py-[22px]">
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-display text-[16px] font-semibold">
                     <span className="truncate">{bread.name}</span>
                     {bread.badge && <PublicBadge badge={bread.badge} small />}
