@@ -6,10 +6,8 @@ import {
   breadSizes,
   breadTypeSizes,
   breadAdditions,
-  breadTypeAdditions,
   bakeryProfile,
 } from '@/db/schema';
-import { resolveBadge } from './badges';
 
 function num(v: string | null | undefined): number {
   const n = Number(v);
@@ -17,11 +15,11 @@ function num(v: string | null | undefined): number {
 }
 
 /**
- * A compact, Hebrew-keyed snapshot of the bakery's pricelist — bread types,
- * sizes/prices, additions, delivery terms + basic bakery info. Built for
- * feeding an LLM (e.g. to render a pricelist image), so keys are in Hebrew
- * and prices are plain numbers. Owner/manager only; reflects the live catalog
- * regardless of whether the public site is published.
+ * A compact, Hebrew-keyed snapshot of the bakery's pricelist — bread types
+ * with sizes/prices, plus additions surcharge, delivery terms and basic
+ * bakery info. Built for feeding an LLM (e.g. to render a pricelist image),
+ * so keys are in Hebrew and prices are plain numbers. Owner/manager only;
+ * reflects the live catalog regardless of whether the public site is published.
  */
 export async function buildCatalogExport(groupId: number): Promise<Record<string, unknown> | null> {
   const [group] = await db
@@ -62,27 +60,14 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
         .select({
           breadTypeId: breadTypeSizes.breadTypeId,
           name: breadSizes.name,
-          weightGrams: breadSizes.weightGrams,
           price: breadSizes.price,
           priceOverride: breadTypeSizes.priceOverride,
-          badgeType: breadTypeSizes.badgeType,
-          badgeLabel: breadTypeSizes.badgeLabel,
-          badgeIcon: breadTypeSizes.badgeIcon,
           sortOrder: breadTypeSizes.sortOrder,
         })
         .from(breadTypeSizes)
         .innerJoin(breadSizes, eq(breadTypeSizes.breadSizeId, breadSizes.id))
         .where(and(inArray(breadTypeSizes.breadTypeId, typeIds), eq(breadSizes.isActive, true)))
         .orderBy(asc(breadTypeSizes.sortOrder))
-    : [];
-
-  const additionLinks = typeIds.length
-    ? await db
-        .select({ breadTypeId: breadTypeAdditions.breadTypeId, name: breadAdditions.name })
-        .from(breadTypeAdditions)
-        .innerJoin(breadAdditions, eq(breadTypeAdditions.breadAdditionId, breadAdditions.id))
-        .where(and(inArray(breadTypeAdditions.breadTypeId, typeIds), eq(breadAdditions.isActive, true)))
-        .orderBy(asc(breadTypeAdditions.sortOrder))
     : [];
 
   const allAdditions = await db
@@ -96,12 +81,6 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
     const arr = sizesByType.get(l.breadTypeId) ?? [];
     arr.push(l);
     sizesByType.set(l.breadTypeId, arr);
-  }
-  const addsByType = new Map<number, string[]>();
-  for (const a of additionLinks) {
-    const arr = addsByType.get(a.breadTypeId) ?? [];
-    arr.push(a.name);
-    addsByType.set(a.breadTypeId, arr);
   }
 
   const out: Record<string, unknown> = { מאפייה: group.name };
@@ -129,24 +108,12 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
 
   out.סוגי_לחם = types.map((t) => {
     const sizes = (sizesByType.get(t.id) ?? [])
-      .map((s) => {
-        const sizeBadge = resolveBadge(s.badgeType, s.badgeLabel, s.badgeIcon, 'he')?.text;
-        return {
-          שם: s.name,
-          ...(s.weightGrams != null ? { משקל_גרם: s.weightGrams } : {}),
-          מחיר: num(s.priceOverride ?? s.price),
-          ...(sizeBadge ? { תווית: sizeBadge } : {}),
-        };
-      })
+      .map((s) => ({ שם: s.name, מחיר: num(s.priceOverride ?? s.price) }))
       .sort((a, b) => a.מחיר - b.מחיר);
-    const typeBadge = resolveBadge(t.badgeType, t.badgeLabel, t.badgeIcon, 'he')?.text;
-    const adds = addsByType.get(t.id) ?? [];
     return {
       שם: t.name,
       ...(t.description ? { תיאור: t.description } : {}),
-      ...(typeBadge ? { תווית: typeBadge } : {}),
       גדלים: sizes,
-      ...(adds.length ? { תוספות_זמינות: adds } : {}),
     };
   });
 
