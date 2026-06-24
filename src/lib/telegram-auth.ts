@@ -75,11 +75,19 @@ export async function authenticateRequest(
   if (authType !== 'tma' || !authData) {
     throw new Error('Missing Telegram auth');
   }
+  return authenticateWithInitData(authData);
+}
 
+/** Validate a raw initData string (header- or query-sourced) → AuthContext.
+ *  Used by endpoints that can't receive the `tma` header (e.g. a file URL
+ *  opened by Telegram's native downloadFile). */
+export async function authenticateWithInitData(
+  initDataRaw: string
+): Promise<AuthContext> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) throw new Error('TELEGRAM_BOT_TOKEN not set');
 
-  const initData = validateInitData(authData, botToken);
+  const initData = validateInitData(initDataRaw, botToken);
   if (!initData.user) throw new Error('No user in init data');
 
   const telegramId = String(initData.user.id);
