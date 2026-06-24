@@ -92,7 +92,8 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
   out.מטבע = '₪';
 
   out.תוספות = {
-    מחיר_לתוספת: num(group.additionsSurcharge),
+    // Flat surcharge for adding toppings (any number), not per topping.
+    מחיר_עבור_תוספות: num(group.additionsSurcharge),
     אפשרויות: allAdditions.map((a) => a.name),
   };
 
