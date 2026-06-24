@@ -12,7 +12,7 @@ import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
-  Star, Check,
+  Star, Check, Download,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
@@ -85,6 +85,28 @@ export default function CatalogPage() {
   const t = useT();
   const toast = useToast();
   const isBaker = activeGroupRole === 'baker';
+
+  // Export the pricelist as a Hebrew-keyed JSON file (for feeding an LLM).
+  const [exporting, setExporting] = useState(false);
+  async function exportCatalog() {
+    setExporting(true);
+    try {
+      const data = await apiFetch<Record<string, unknown>>('/catalog/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pricelist.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(t('catalog.export_failed'));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Top-level section collapse state — bread types open by default,
   // catalogs collapsed (managers expand them when curating).
@@ -571,6 +593,21 @@ export default function CatalogPage() {
     <>
       <ControlCenterTabs />
       <div className="p-5 space-y-4 animate-fade-in">
+        {/* Pricelist JSON export (managers only) */}
+        {!isBaker && (
+          <div className="flex">
+            <button
+              type="button"
+              onClick={exportCatalog}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? t('catalog.exporting') : t('catalog.export')}
+            </button>
+          </div>
+        )}
+
         {/* SIZES CATALOG (managers only) */}
         {!isBaker && (
         <section>
