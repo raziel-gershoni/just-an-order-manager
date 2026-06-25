@@ -42,7 +42,11 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
 
   const [profile] = await db
     .select({
+      eyebrow: bakeryProfile.eyebrow,
+      heroHeadline: bakeryProfile.heroHeadline,
       tagline: bakeryProfile.tagline,
+      story: bakeryProfile.story,
+      trustItems: bakeryProfile.trustItems,
       whatsappPhone: bakeryProfile.whatsappPhone,
       contactPhone: bakeryProfile.contactPhone,
       bakeDays: bakeryProfile.bakeDays,
@@ -98,7 +102,12 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
   });
 
   const out: Record<string, unknown> = { 'מאפייה': group.name };
+  if (profile?.eyebrow) out['שורת_מותג'] = profile.eyebrow;
+  if (profile?.heroHeadline) out['כותרת_ראשית'] = profile.heroHeadline;
   if (profile?.tagline) out['סלוגן'] = profile.tagline;
+  if (profile?.story) out['סיפור'] = profile.story;
+  const trust = (profile?.trustItems ?? []).filter(Boolean);
+  if (trust.length) out['נקודות_מפתח'] = trust;
   if (profile?.bakeDays) out['ימי_אפייה'] = profile.bakeDays;
   const phone = profile?.whatsappPhone || profile?.contactPhone;
   if (phone) out['טלפון_הזמנות'] = phone;
