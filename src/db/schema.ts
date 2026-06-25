@@ -399,6 +399,7 @@ export const bakeryProfile = pgTable('bakery_profile', {
   displayName: varchar('display_name', { length: 255 }),
   tagline: varchar('tagline', { length: 255 }),
   heroHeadline: varchar('hero_headline', { length: 255 }),
+  eyebrow: varchar('eyebrow', { length: 120 }),
   story: text('story'),
   // Array of short strings, e.g. ["תסיסה 24 שעות", "קמח מקומי"].
   trustItems: jsonb('trust_items').$type<string[]>(),

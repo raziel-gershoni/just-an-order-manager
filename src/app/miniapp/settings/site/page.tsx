@@ -19,6 +19,7 @@ interface SiteProfile {
   displayName: string | null;
   tagline: string | null;
   heroHeadline: string | null;
+  eyebrow: string | null;
   story: string | null;
   trustItems: string[] | null;
   whatsappPhone: string | null;
@@ -35,6 +36,7 @@ interface SiteProfile {
 type FormState = {
   tagline: string;
   heroHeadline: string;
+  eyebrow: string;
   story: string;
   trustText: string;
   whatsappPhone: string;
@@ -48,6 +50,7 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   tagline: '',
   heroHeadline: '',
+  eyebrow: '',
   story: '',
   trustText: '',
   whatsappPhone: '',
@@ -103,6 +106,7 @@ export default function SiteEditorPage() {
     setForm({
       tagline: p.tagline ?? '',
       heroHeadline: p.heroHeadline ?? '',
+      eyebrow: p.eyebrow ?? '',
       story: p.story ?? '',
       trustText: (p.trustItems ?? []).join(', '),
       whatsappPhone: p.whatsappPhone ?? '',
@@ -155,6 +159,7 @@ export default function SiteEditorPage() {
       const payload = {
         tagline: orNull(form.tagline),
         heroHeadline: orNull(form.heroHeadline),
+        eyebrow: orNull(form.eyebrow),
         story: orNull(form.story),
         trustItems: form.trustText
           .split(',')
@@ -257,6 +262,7 @@ export default function SiteEditorPage() {
 
           {/* Content fields */}
           <Card className="space-y-3 p-4">
+            <Input label={t('site.f_eyebrow')} value={form.eyebrow} onChange={(e) => set('eyebrow', e.target.value)} />
             <Input label={t('site.f_tagline')} value={form.tagline} onChange={(e) => set('tagline', e.target.value)} />
             <Input label={t('site.f_headline')} value={form.heroHeadline} onChange={(e) => set('heroHeadline', e.target.value)} />
             <TextArea label={t('site.f_story')} value={form.story} onChange={(e) => set('story', e.target.value)} />

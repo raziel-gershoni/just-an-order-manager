@@ -46,6 +46,7 @@ export type PublicProfile = {
   displayName: string;
   tagline: string | null;
   heroHeadline: string | null;
+  eyebrow: string | null;
   story: string | null;
   trustItems: string[];
   whatsappPhone: string | null;
@@ -293,6 +294,7 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     displayName: group.name,
     tagline: profile.tagline,
     heroHeadline: profile.heroHeadline,
+    eyebrow: profile.eyebrow,
     story: profile.story,
     trustItems: profile.trustItems ?? [],
     whatsappPhone: profile.whatsappPhone,

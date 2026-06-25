@@ -11,7 +11,8 @@ export function HeroSection({
   waHref: string | null;
   tgHref: string | null;
 }) {
-  const headline = profile.heroHeadline || t('site.default_headline');
+  const headline = profile.heroHeadline?.trim() || '';
+  const eyebrow = profile.eyebrow?.trim() || '';
   const lede = profile.tagline;
   const hero = profile.heroImage;
 
@@ -30,15 +31,19 @@ export function HeroSection({
           </div>
         ))}
 
-      <div className="flex items-center justify-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-        <span className="h-px w-6 bg-border" />
-        {t('site.eyebrow')}
-        <span className="h-px w-6 bg-border" />
-      </div>
+      {eyebrow && (
+        <div className="flex items-center justify-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+          <span className="h-px w-6 bg-border" />
+          {eyebrow}
+          <span className="h-px w-6 bg-border" />
+        </div>
+      )}
 
-      <h1 className="mt-4 font-display text-[34px] font-bold leading-[1.04] tracking-tight sm:text-[40px]">
-        {headline}
-      </h1>
+      {headline && (
+        <h1 className="mt-4 font-display text-[34px] font-bold leading-[1.04] tracking-tight sm:text-[40px]">
+          {headline}
+        </h1>
+      )}
 
       {lede && (
         <p className="mx-auto mt-3 max-w-[330px] text-[15.5px] font-medium leading-relaxed text-muted-foreground">

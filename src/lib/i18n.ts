@@ -356,8 +356,6 @@ const translations: Record<string, string> = {
   'badge.sold_out': 'אזל',
 
   // Public site — page copy
-  'site.eyebrow': 'מחמצת · NATURALLY LEAVENED',
-  'site.default_headline': 'לחם מחמצת, נאפה טרי',
   'site.order_whatsapp': 'הזמנה בוואטסאפ',
   'site.order_short': 'הזמנה',
   'site.order_telegram': 'בטלגרם',
@@ -396,6 +394,7 @@ const translations: Record<string, string> = {
   'site.save': 'שמירה',
   'site.open_public': 'פתח את האתר',
   'site.f_display_name': 'שם המאפייה',
+  'site.f_eyebrow': 'שורת מותג (מעל הכותרת)',
   'site.f_tagline': 'סלוגן קצר',
   'site.f_headline': 'כותרת ראשית',
   'site.f_story': 'הסיפור שלנו',
