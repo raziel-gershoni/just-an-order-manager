@@ -93,28 +93,22 @@ export default function CatalogPage() {
     return JSON.stringify(data, null, 2);
   }
   async function downloadCatalog() {
-    // Inside Telegram, use the native downloadFile dialog — it fetches a real
-    // file URL (in-page blob downloads get "opened" instead of saved). Auth
-    // rides along as initData in the query since it can't send headers.
-    const tg = (
-      window as unknown as {
-        Telegram?: {
-          WebApp?: {
-            initData?: string;
-            downloadFile?: (p: { url: string; file_name: string }) => void;
-          };
-        };
-      }
-    ).Telegram?.WebApp;
-    if (typeof tg?.downloadFile === 'function' && tg.initData && activeGroupId) {
-      const fileUrl = `${window.location.origin}/api/catalog/export/file?gid=${activeGroupId}&tgData=${encodeURIComponent(tg.initData)}`;
-      tg.downloadFile({ url: fileUrl, file_name: 'pricelist.json' });
-      return;
-    }
-
-    // Regular browser: blob download (octet-stream forces a save).
     setExporting(true);
     try {
+      // Inside Telegram, mint a short-lived signed token + use the native
+      // download dialog (in-page blob downloads get "opened" not saved there).
+      const tg = (
+        window as unknown as {
+          Telegram?: { WebApp?: { downloadFile?: (p: { url: string; file_name: string }) => void } };
+        }
+      ).Telegram?.WebApp;
+      if (typeof tg?.downloadFile === 'function') {
+        const { url } = await apiFetch<{ url: string }>('/catalog/export/token');
+        tg.downloadFile({ url: `${window.location.origin}${url}`, file_name: 'pricelist.json' });
+        return;
+      }
+
+      // Regular browser: blob download (octet-stream forces a save).
       const json = await fetchExportJson();
       const url = URL.createObjectURL(new Blob([json], { type: 'application/octet-stream' }));
       const a = document.createElement('a');

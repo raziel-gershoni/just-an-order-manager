@@ -1,29 +1,16 @@
-import { authenticateWithInitData } from '@/lib/telegram-auth';
+import { verifyExportToken } from '@/lib/export-token';
 import { buildCatalogExport } from '@/lib/catalog-export';
 
-// Serves the pricelist JSON as a downloadable file. Auth comes from the
-// initData in the query (`tgData`) since Telegram's native downloadFile
-// can't send the `tma` Authorization header. Same validation (incl. the 1h
-// freshness window) as a normal request.
+// Serves the pricelist JSON as a downloadable file. Authorized by a
+// short-lived signed token (from /api/catalog/export/token) carried in the
+// query — Telegram's native downloadFile can't send headers, and a token
+// avoids stuffing (and mangling) initData in the URL.
 export async function GET(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const tgData = url.searchParams.get('tgData');
-  const gid = Number(url.searchParams.get('gid'));
-  if (!tgData || !Number.isInteger(gid) || gid <= 0) {
-    return new Response('Bad request', { status: 400 });
-  }
+  const token = new URL(request.url).searchParams.get('token');
+  if (!token) return new Response('Bad request', { status: 400 });
 
-  let auth;
-  try {
-    auth = await authenticateWithInitData(tgData);
-  } catch {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
-  const role = auth.memberships.find((m) => m.groupId === gid)?.role;
-  if (!role || role === 'baker' || role === 'driver') {
-    return new Response('Forbidden', { status: 403 });
-  }
+  const gid = verifyExportToken(token);
+  if (!gid) return new Response('Unauthorized', { status: 401 });
 
   const data = await buildCatalogExport(gid);
   if (!data) return new Response('Not found', { status: 404 });
