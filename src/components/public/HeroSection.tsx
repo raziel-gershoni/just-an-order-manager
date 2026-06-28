@@ -39,10 +39,14 @@ export function HeroSection({
         </div>
       )}
 
-      {headline && (
+      {headline ? (
         <h1 className="mt-4 font-display text-[34px] font-bold leading-[1.04] tracking-tight sm:text-[40px]">
           {headline}
         </h1>
+      ) : (
+        // Guarantee exactly one H1 for SEO/a11y even when the owner leaves the
+        // hero headline blank — fall back to the brand name, visually hidden.
+        <h1 className="sr-only">{profile.displayName}</h1>
       )}
 
       {lede && (

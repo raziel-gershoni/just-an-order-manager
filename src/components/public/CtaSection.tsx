@@ -7,9 +7,9 @@ export function CtaSection({ waHref }: { waHref: string | null }) {
       <span className="pointer-events-none absolute -bottom-8 left-[-6px] font-mono text-[120px] font-bold leading-none text-white/[0.06]">
         №
       </span>
-      <h3 className="relative font-display text-[23px] font-bold tracking-tight">
+      <h2 className="relative font-display text-[23px] font-bold tracking-tight">
         {t('site.cta_title')}
-      </h3>
+      </h2>
       <p className="relative mt-2 text-[14px] font-medium text-primary-foreground/80">
         {t('site.cta_sub')}
       </p>

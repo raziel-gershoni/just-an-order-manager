@@ -1,6 +1,9 @@
 import { t } from '@/lib/i18n';
 import { getPublicSiteRequest, publicGroupId } from '@/lib/public-site';
+import { buildBakeryJsonLd } from '@/lib/public-jsonld';
+import { siteBaseUrl } from '@/lib/site-url';
 import { SectionRenderer } from '@/components/public/SectionRenderer';
+import { JsonLd } from '@/components/public/JsonLd';
 import { TelegramRedirect } from '@/components/public/TelegramRedirect';
 
 // ISR: cached render, refreshed at most hourly and purged on owner edits via
@@ -26,6 +29,7 @@ export default async function PublicHome() {
 
   return (
     <>
+      <JsonLd data={buildBakeryJsonLd(site, siteBaseUrl())} />
       <TelegramRedirect />
       <SectionRenderer site={site} />
     </>

@@ -20,21 +20,42 @@ export async function generateMetadata(): Promise<Metadata> {
     return { metadataBase, robots: { index: false, follow: false } };
   }
   const { profile } = site;
-  const title = profile.displayName;
-  const description =
-    profile.tagline ?? profile.heroHeadline ?? 'מאפיית מחמצת ביתית';
+  const brand = profile.displayName;
+  const city = profile.pickupArea?.trim();
+  // Brand + product + geo: the bare brand name alone doesn't rank for local
+  // sourdough intent ("לחם מחמצת <עיר>"). Keep the brand clean in siteName.
+  const title = city
+    ? `${brand} · לחם מחמצת ב${city}`
+    : `${brand} · לחם מחמצת אמיתי`;
+  const ownerLine = profile.tagline?.trim() || profile.heroHeadline?.trim();
+  const description = [
+    ownerLine,
+    city ? `מאפיית לחם מחמצת ב${city}.` : 'מאפיית לחם מחמצת.',
+    profile.delivery ? 'הזמנות ומשלוחים בוואטסאפ.' : 'הזמנות בוואטסאפ.',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return {
     metadataBase,
     title,
     description,
-    robots: { index: true, follow: true },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
+    },
     alternates: { canonical: '/' },
     openGraph: {
       title,
       description,
       type: 'website',
       locale: 'he_IL',
-      siteName: title,
+      siteName: brand,
       url: BASE_URL,
     },
     twitter: { card: 'summary_large_image', title, description },
