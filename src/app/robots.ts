@@ -1,13 +1,15 @@
 import type { MetadataRoute } from 'next';
+import { siteBaseUrl } from '@/lib/site-url';
 
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || '';
+  const base = siteBaseUrl();
   return {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: '/miniapp',
+      disallow: ['/miniapp', '/api'],
     },
-    ...(base ? { sitemap: `${base}/sitemap.xml`, host: base } : {}),
+    sitemap: `${base}/sitemap.xml`,
+    host: base,
   };
 }
