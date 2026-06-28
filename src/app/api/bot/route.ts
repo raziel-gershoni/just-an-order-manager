@@ -34,6 +34,7 @@ import {
   getCustomerBalance,
 } from '@/lib/order-payments';
 import { getCustomerPhones } from '@/lib/customer-phones';
+import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
 
@@ -133,7 +134,7 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     // Normal /start — always show the Mini App button
     const miniAppUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/miniapp`
+      ? `${siteBaseUrl()}/miniapp`
       : undefined;
 
     if (miniAppUrl) {
@@ -196,7 +197,7 @@ function setupHandlers(bot: import('grammy').Bot) {
 
     // Show Mini App button so invitee can open the manager
     const miniAppUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/miniapp`
+      ? `${siteBaseUrl()}/miniapp`
       : undefined;
 
     if (miniAppUrl) {

@@ -14,5 +14,9 @@
 export const CANONICAL_BASE_URL = 'https://www.razeilechem.co.il';
 
 export function siteBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL || CANONICAL_BASE_URL).replace(/\/$/, '');
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || CANONICAL_BASE_URL).trim();
+  // Tolerate a scheme-less env value (e.g. "www.razeilechem.co.il") — Vercel
+  // domain fields often omit the protocol, and a bare host throws in new URL().
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withScheme.replace(/\/+$/, '');
 }
