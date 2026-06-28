@@ -20,8 +20,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sourdough Order Manager",
-  description: "Manage your bakery orders",
+  title: "רזי הלחם",
+  description: "ניהול הזמנות מאפייה",
   // Noindex by default; the public route group overrides this with index:true.
   // Keeps /miniapp and all app routes out of search results.
   robots: { index: false, follow: false },

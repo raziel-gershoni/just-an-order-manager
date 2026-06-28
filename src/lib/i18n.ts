@@ -381,6 +381,9 @@ const translations: Record<string, string> = {
   'site.wa_prefill': 'היי! אשמח להזמין לחם 🍞',
   'site.coming_soon': 'בקרוב',
   'site.coming_soon_sub': 'האתר בהקמה',
+  'site.not_found': 'הדף לא נמצא',
+  'site.not_found_sub': 'הקישור שגוי או שהדף הוסר.',
+  'site.back_home': 'חזרה לדף הבית',
 
   // Public site — editor ("האתר שלי")
   'site.nav_tab': 'האתר שלי',

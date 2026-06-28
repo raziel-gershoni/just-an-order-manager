@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { t } from '@/lib/i18n';
 import {
   type PublicSite,
@@ -33,7 +34,9 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
       case 'hero':
         return <HeroSection key="hero" profile={profile} waHref={waHref} tgHref={tgHref} />;
       case 'gallery':
-        return gallery.length ? <GallerySection key="gallery" images={gallery} /> : null;
+        return gallery.length ? (
+          <GallerySection key="gallery" images={gallery} name={profile.displayName} />
+        ) : null;
       case 'pricelist':
         return catalog.length ? (
           <PricelistSection key="pricelist" catalog={catalog} additionsSurcharge={site.additionsSurcharge} />
@@ -54,13 +57,14 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
   return (
     <>
       {/* Sticky top bar */}
-      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-dashed border-border bg-background/85 px-[18px] py-2.5 backdrop-blur">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-dashed border-border bg-background/85 px-[18px] py-2.5 backdrop-blur">
         <div className="flex items-center gap-2 font-display text-[15px] font-bold tracking-tight">
           {profile.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={profile.logoUrl}
               alt={profile.displayName}
+              width={26}
+              height={26}
               className="h-[26px] w-[26px] rounded-full object-cover"
             />
           ) : (
@@ -81,7 +85,7 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
             {t('site.order_short')}
           </a>
         )}
-      </div>
+      </header>
 
       <main className="mx-auto max-w-[480px] px-[18px] pb-12">
         {sections.filter((s) => s.visible).map((s) => render(s.key))}

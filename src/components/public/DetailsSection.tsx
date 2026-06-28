@@ -49,7 +49,7 @@ export function DetailsSection({
         </div>
       )}
       {rows.length > 0 && (
-      <div className="overflow-hidden rounded-[10px] border border-border bg-card">
+      <address className="block overflow-hidden rounded-[10px] border border-border bg-card not-italic">
         {rows.map((row, i) => {
           const value = (
             <span className={`ms-auto font-bold ${row.mono ? 'font-mono tracking-tight' : ''}`}>
@@ -77,7 +77,7 @@ export function DetailsSection({
             </div>
           );
         })}
-      </div>
+      </address>
       )}
     </section>
   );

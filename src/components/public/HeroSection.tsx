@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { t } from '@/lib/i18n';
 import type { PublicProfile } from '@/lib/public-site';
 import { WhatsAppButton } from './WhatsAppButton';
@@ -21,8 +22,13 @@ export function HeroSection({
       {!hero &&
         (profile.logoUrl ? (
           <div className="mx-auto mb-5 h-[88px] w-[88px] overflow-hidden rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={profile.logoUrl} alt={profile.displayName} className="h-full w-full object-cover" />
+            <Image
+              src={profile.logoUrl}
+              alt={profile.displayName}
+              width={88}
+              height={88}
+              className="h-full w-full object-cover"
+            />
           </div>
         ) : (
           <div className="relative mx-auto mb-5 grid h-[88px] w-[88px] -rotate-[4deg] place-items-center rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
@@ -57,12 +63,13 @@ export function HeroSection({
 
       {hero && (
         <div className="relative mx-auto mt-6 h-[210px] w-full overflow-hidden rounded-[10px] border border-border shadow-[0_10px_26px_-16px_rgba(36,31,26,0.5)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={hero.url}
-            alt={hero.alt ?? headline}
-            className="h-full w-full object-cover"
-            loading="eager"
+            alt={hero.alt || headline || profile.displayName}
+            fill
+            sizes="(max-width: 480px) 100vw, 480px"
+            className="object-cover"
+            priority
           />
         </div>
       )}

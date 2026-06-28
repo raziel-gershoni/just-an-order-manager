@@ -1,8 +1,16 @@
+import Image from 'next/image';
 import { t } from '@/lib/i18n';
 import type { PublicImage } from '@/lib/public-site';
 import { PublicSectionHead } from './PublicSectionHead';
 
-export function GallerySection({ images }: { images: PublicImage[] }) {
+export function GallerySection({
+  images,
+  name,
+}: {
+  images: PublicImage[];
+  name: string;
+}) {
+  const fallbackAlt = `${name} — לחם מחמצת`;
   return (
     <section className="mt-10">
       <PublicSectionHead label={t('site.gallery_title')} />
@@ -10,16 +18,16 @@ export function GallerySection({ images }: { images: PublicImage[] }) {
         {images.map((img, i) => (
           <div
             key={i}
-            className={`overflow-hidden rounded-[10px] border border-border bg-card ${
+            className={`relative aspect-[4/3] overflow-hidden rounded-[10px] border border-border bg-card ${
               i === 0 && images.length % 2 === 1 ? 'col-span-2' : ''
             }`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={img.url}
-              alt={img.alt ?? ''}
-              className="aspect-[4/3] h-full w-full object-cover"
-              loading="lazy"
+              alt={img.alt?.trim() || fallbackAlt}
+              fill
+              sizes="(max-width: 480px) 50vw, 240px"
+              className="object-cover"
             />
           </div>
         ))}
