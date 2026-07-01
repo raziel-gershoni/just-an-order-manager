@@ -6,7 +6,15 @@ const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
  * Handles: 050-1234567, 0501234567, +972501234567, 972501234567
  */
 export function normalizePhoneNumber(phone: string): string | null {
-  const digits = phone.replace(/[\s\-\(\)\+]/g, '');
+  // Strip every non-digit: spaces, dashes, parens, +, and — crucially —
+  // invisible bidi-control marks (U+202A–202E, U+200E/200F). Those get baked
+  // into a number when it's typed or pasted into an RTL/Hebrew field; the old
+  // character-class strip left them in place, so a valid number like
+  // "‭051-2774420‬" normalized to null and the send failed silently.
+  let digits = phone.replace(/\D/g, '');
+
+  // Tolerate an international 00 prefix: 00972… → 972…
+  if (digits.startsWith('00')) digits = digits.slice(2);
 
   // Already in international format
   if (digits.startsWith('972') && digits.length === 12) {
@@ -34,7 +42,12 @@ export async function sendWhatsAppTemplate(
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) return false;
 
   const normalized = normalizePhoneNumber(to);
-  if (!normalized) return false;
+  if (!normalized) {
+    // Was silent before — a malformed/invisible-char number just returned false
+    // with no trace. JSON.stringify surfaces any hidden bidi marks in the log.
+    console.error('WhatsApp send skipped — unrecognized phone number:', JSON.stringify(to));
+    return false;
+  }
 
   const template: Record<string, unknown> = {
     name: templateName,
