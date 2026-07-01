@@ -36,7 +36,7 @@ async function sendToRecipients(
   recipients: Recipient[],
   messageFn: (lang: 'en' | 'he') => string,
   replyMarkup?: InlineKeyboard
-) {
+): Promise<{ sent: number; failed: number }> {
   const results = await Promise.allSettled(
     recipients.map((r) =>
       getBot().api.sendMessage(r.chatId, messageFn(r.language), {
@@ -45,7 +45,23 @@ async function sendToRecipients(
       })
     )
   );
-  return results;
+  let sent = 0;
+  let failed = 0;
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') {
+      sent += 1;
+    } else {
+      failed += 1;
+      // These were silently dropped before: a blocked bot, a stale chatId, a
+      // 429 rate-limit, or a network error just vanished. Log so a missed
+      // notification leaves a trace.
+      console.error(
+        `[notify] Telegram send failed to chatId ${recipients[i].chatId}:`,
+        res.reason
+      );
+    }
+  });
+  return { sent, failed };
 }
 
 export async function notifyNewOrder(
@@ -166,11 +182,11 @@ export async function sendMorningSummary(
   groupId: number,
   orders: { customerName: string; breadTypeName: string; quantity: number }[],
   recipeBlock?: string
-) {
-  if (orders.length === 0) return;
+): Promise<{ sent: number; failed: number }> {
+  if (orders.length === 0) return { sent: 0, failed: 0 };
 
   const recipients = await getRecipientsByRole(groupId, ['baker']);
-  await sendToRecipients(recipients, (lang) => {
+  return await sendToRecipients(recipients, (lang) => {
     const lines = [`<b>📋 ${t('notify.morning_summary', lang)}</b>`, ''];
 
     // Group by bread type

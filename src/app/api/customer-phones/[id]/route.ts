@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { customers, customerPhones } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { sanitizePhoneInput } from '@/lib/customer-phones';
 
 function getPhoneId(url: string): number {
   return Number(new URL(url).pathname.split('/').pop());
@@ -43,7 +44,7 @@ export const PATCH = withAuth(async (request, auth) => {
   if (!parsed.success) return errorResponse(parsed.error.message);
 
   const updateData: Record<string, unknown> = {};
-  if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone.trim();
+  if (parsed.data.phone !== undefined) updateData.phone = sanitizePhoneInput(parsed.data.phone);
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name?.trim() || null;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
 

@@ -27,7 +27,7 @@ async function handler(request: Request) {
     return NextResponse.json({ ok: false, error: 'load-groups-failed' });
   }
 
-  const stats = { total: allGroups.length, sent: 0, skipped: 0, failed: 0 };
+  const stats = { total: allGroups.length, sent: 0, skipped: 0, failed: 0, notified: 0, notifyFailed: 0 };
 
   for (const group of allGroups) {
     try {
@@ -159,8 +159,20 @@ async function handler(request: Request) {
       }
 
       if (summaryItems.length > 0) {
-        await sendMorningSummary(group.id, summaryItems, recipeBlock);
+        const { sent: okCount, failed: failCount } = await sendMorningSummary(
+          group.id,
+          summaryItems,
+          recipeBlock
+        );
         stats.sent++;
+        stats.notified += okCount;
+        stats.notifyFailed += failCount;
+        // sendToRecipients already logs each failed send; surface the group tally too.
+        if (failCount > 0) {
+          console.warn(
+            `[cron/morning-reminder] group ${group.id}: ${failCount} baker notification(s) failed to deliver`
+          );
+        }
       } else {
         stats.skipped++;
       }

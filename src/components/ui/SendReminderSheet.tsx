@@ -92,16 +92,18 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
     }
     setSending(true);
     try {
-      const res = await apiFetch<{ sent: number; failed: number; skippedOptOut: number }>('/reminders/send', {
+      const res = await apiFetch<{ sent: number; failed: number; skippedOptOut: number; skippedNoPhone?: number }>('/reminders/send', {
         method: 'POST',
         body: JSON.stringify({ occasion, customerIds, phoneId, mediaId: mediaId ?? undefined }),
       });
-      toast.success(
+      const noPhone = res.skippedNoPhone ?? 0;
+      const message =
         t('reminders.sent_result')
           .replace('{sent}', String(res.sent))
           .replace('{failed}', String(res.failed))
-          .replace('{skipped}', String(res.skippedOptOut))
-      );
+          .replace('{skipped}', String(res.skippedOptOut)) +
+        (noPhone > 0 ? t('reminders.sent_no_phone').replace('{noPhone}', String(noPhone)) : '');
+      toast.success(message);
       onSent?.();
       onClose();
     } catch (e) {

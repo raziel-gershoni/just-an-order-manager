@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
+import { useToast } from '@/hooks/useToast';
 import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
@@ -18,6 +19,7 @@ interface Invite { id: number; inviteCode: string; role: string; status: string 
 
 export default function SettingsPage() {
   const { apiFetch, apiUpload } = useApi();
+  const toast = useToast();
   const { activeGroupId } = useGroup();
   const t = useT();
   const lang = useLang();
@@ -96,16 +98,24 @@ export default function SettingsPage() {
         fd
       );
       setLogoUrl(url);
-    } catch {}
+    } catch {
+      toast.error(t('settings.logo_upload_failed'));
+    }
     setUploadingLogo(false);
   }
 
   async function removeLogo() {
     if (!activeGroupId) return;
+    const prev = logoUrl;
     setLogoUrl(null);
     try {
       await apiFetch(`/groups/${activeGroupId}/logo`, { method: 'DELETE' });
-    } catch {}
+    } catch {
+      // The delete didn't take — roll back the optimistic clear so the UI
+      // stops diverging from the server.
+      setLogoUrl(prev);
+      toast.error(t('settings.logo_remove_failed'));
+    }
   }
 
   async function saveDelivery() {
@@ -122,7 +132,10 @@ export default function SettingsPage() {
           deliveryCities: delivCities,
         }),
       });
-    } catch {}
+      toast.success(t('settings.saved'));
+    } catch {
+      toast.error(t('settings.save_failed'));
+    }
     setSavingDeliv(false);
   }
 
@@ -186,7 +199,10 @@ export default function SettingsPage() {
                     method: 'PATCH',
                     body: JSON.stringify({ name: groupName.trim() }),
                   });
-                } catch {}
+                  toast.success(t('settings.saved'));
+                } catch {
+                  toast.error(t('settings.save_failed'));
+                }
                 setSavingName(false);
               }}
             >

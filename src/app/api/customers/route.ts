@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { customers, customerPhones } from '@/db/schema';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { sanitizePhoneInput } from '@/lib/customer-phones';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -64,13 +65,14 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .returning();
 
   // If a phone was provided at creation time, insert it as the first phone
-  if (phone && phone.trim()) {
+  const cleanPhone = phone ? sanitizePhoneInput(phone) : '';
+  if (cleanPhone) {
     await db.insert(customerPhones).values({
       customerId: customer.id,
-      phone: phone.trim(),
+      phone: cleanPhone,
       sortOrder: 0,
     });
   }
 
-  return jsonResponse({ customer: { ...customer, phones: phone ? [{ phone: phone.trim() }] : [] } }, 201);
+  return jsonResponse({ customer: { ...customer, phones: cleanPhone ? [{ phone: cleanPhone }] : [] } }, 201);
 });

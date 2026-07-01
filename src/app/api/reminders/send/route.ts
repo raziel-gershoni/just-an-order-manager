@@ -66,6 +66,9 @@ export const POST = withGroup(async (request, auth, groupId) => {
   };
   let targets: Target[] = [];
   let skippedOptOut = 0;
+  // Selected, non-opted-out customers that have no phone row at all — they
+  // produce no send target and would otherwise vanish with no sent/failed count.
+  let skippedNoPhone = 0;
 
   if (parsed.data.phoneId != null) {
     const [row] = await db
@@ -107,6 +110,9 @@ export const POST = withGroup(async (request, auth, groupId) => {
         phone: p.phone,
       }));
     }
+    // Allowed customers that produced no target had no phone on file.
+    const withTarget = new Set(targets.map((tg) => tg.customerId));
+    skippedNoPhone = allowedIds.filter((id) => !withTarget.has(id)).length;
   }
 
   // Resolve the rotated template ONCE per customer (all their phones get it).
@@ -150,8 +156,14 @@ export const POST = withGroup(async (request, auth, groupId) => {
       else failed += 1;
     })
   );
-  // Surface unexpected exceptions (DB insert failures etc.) as failures.
-  for (const r of results) if (r.status === 'rejected') failed += 1;
+  // Surface unexpected exceptions (DB insert failures etc.) as failures — and
+  // log the reason, which was previously swallowed.
+  for (const r of results) {
+    if (r.status === 'rejected') {
+      failed += 1;
+      console.error('[reminders/send] send task rejected:', r.reason);
+    }
+  }
 
-  return jsonResponse({ sent, failed, skippedOptOut });
+  return jsonResponse({ sent, failed, skippedOptOut, skippedNoPhone });
 });

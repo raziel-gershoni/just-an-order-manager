@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { customers, customerPhones } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { sanitizePhoneInput } from '@/lib/customer-phones';
 
 function getCustomerId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -39,7 +40,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .insert(customerPhones)
     .values({
       customerId,
-      phone: parsed.data.phone.trim(),
+      phone: sanitizePhoneInput(parsed.data.phone),
       name: parsed.data.name?.trim() || null,
       sortOrder: maxSort + 1,
     })
