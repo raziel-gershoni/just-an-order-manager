@@ -12,7 +12,7 @@ import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
-  Star, Check, Download, Copy,
+  Star, Check, Download, Copy, X,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
@@ -77,6 +77,15 @@ interface BreadAddition {
   isDefault: boolean;
   isActive: boolean;
   sortOrder: number;
+}
+
+// Bulk-pricing quantity tier. breadTypeId null = size-wide default.
+interface Tier {
+  id: number;
+  breadSizeId: number;
+  breadTypeId: number | null;
+  minQty: number;
+  price: string;
 }
 
 export default function CatalogPage() {
@@ -174,6 +183,35 @@ export default function CatalogPage() {
   const [newSizeDefault, setNewSizeDefault] = useState(false);
   const [savingSizeOrder, setSavingSizeOrder] = useState(false);
 
+  // ---- Bulk-pricing tiers (per size; null bread = default) ----
+  const [tiers, setTiers] = useState<Tier[]>([]);
+
+  async function saveTier(breadSizeId: number, breadTypeId: number | null, minQty: number, price: string) {
+    try {
+      const { tier } = await apiFetch<{ tier: Tier }>('/bread-size-tiers', {
+        method: 'POST',
+        body: JSON.stringify({ breadSizeId, breadTypeId, minQty, price }),
+      });
+      setTiers((prev) => [
+        ...prev.filter(
+          (x) => !(x.breadSizeId === breadSizeId && (x.breadTypeId ?? null) === breadTypeId && x.minQty === minQty)
+        ),
+        tier,
+      ]);
+    } catch {
+      toast.error(t('catalog.tier_save_failed'));
+    }
+  }
+
+  async function deleteTier(id: number) {
+    try {
+      await apiFetch(`/bread-size-tiers/${id}`, { method: 'DELETE' });
+      setTiers((prev) => prev.filter((x) => x.id !== id));
+    } catch {
+      toast.error(t('catalog.tier_save_failed'));
+    }
+  }
+
   // ---- Additions catalog state ----
   const [editingAdditionId, setEditingAdditionId] = useState<number | null>(null);
   const [editAdditionName, setEditAdditionName] = useState('');
@@ -228,6 +266,14 @@ export default function CatalogPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [activeGroupId]);
+
+  useEffect(() => {
+    if (!activeGroupId || isBaker) return;
+    apiFetch<{ tiers: Tier[] }>('/bread-size-tiers')
+      .then((r) => setTiers(r.tiers))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId, isBaker]);
 
   async function saveAdditionsSurcharge(value: string) {
     if (!activeGroupId) return;
@@ -718,6 +764,18 @@ export default function CatalogPage() {
                         value={editSizePrice}
                         onChange={(e) => setEditSizePrice(e.target.value)}
                       />
+                    </div>
+                    <div className="pt-1 border-t border-dashed border-border">
+                      <div className="pt-2">
+                        <TierEditor
+                          tiers={tiers}
+                          sizeId={s.id}
+                          breadTypeId={null}
+                          onSave={(q, p) => saveTier(s.id, null, q, p)}
+                          onDelete={deleteTier}
+                          t={t}
+                        />
+                      </div>
                     </div>
                     <div className="flex gap-2 items-center pt-1">
                       <Button size="sm" className="flex-1" onClick={() => saveSize(s.id)}>{t('settings.save')}</Button>
@@ -1257,6 +1315,11 @@ export default function CatalogPage() {
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
+                    {/* TODO(pricing): per-type tier overrides (breadTypeId set) belong here,
+                        but the enabled-size chip layout is too tight for an inline tier list.
+                        Ships with size-level default tiers only; a per-type override editor
+                        (e.g. an expandable panel per enabled size) is a follow-up. The engine
+                        + API already support per-type tiers. */}
                     {typeDetailSizes.map((s) =>
                       s.enabled ? (
                         <div
@@ -1409,5 +1472,105 @@ export default function CatalogPage() {
         </div>
       )}
     </>
+  );
+}
+
+// Compact bulk-tier editor: existing tiers as deletable chips + an add row.
+// Editing a tier = re-adding the same qty (the API upsert overwrites it).
+function TierEditor({
+  tiers,
+  sizeId,
+  breadTypeId,
+  onSave,
+  onDelete,
+  t,
+}: {
+  tiers: Tier[];
+  sizeId: number;
+  breadTypeId: number | null;
+  onSave: (minQty: number, price: string) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
+  t: (key: string) => string;
+}) {
+  const rows = tiers
+    .filter((x) => x.breadSizeId === sizeId && (x.breadTypeId ?? null) === breadTypeId)
+    .sort((a, b) => a.minQty - b.minQty);
+  const [qty, setQty] = useState('');
+  const [price, setPrice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const canAdd = Number.isInteger(Number(qty)) && Number(qty) >= 2 && /^\d+(\.\d{1,2})?$/.test(price.trim());
+
+  async function add() {
+    if (!canAdd) return;
+    setSaving(true);
+    try {
+      await onSave(parseInt(qty, 10), price.trim());
+      setQty('');
+      setPrice('');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium text-muted-foreground">{t('catalog.tiers')}</div>
+      {rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground/70">{t('catalog.tier_none')}</div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {rows.map((r) => (
+            <span
+              key={r.id}
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-medium tabular-nums"
+            >
+              {r.minQty} → ₪{r.price}
+              <button
+                type="button"
+                aria-label={t('settings.delete')}
+                onClick={() => onDelete(r.id)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+        <div className="w-16">
+          <Input
+            label={t('catalog.tier_qty')}
+            type="number"
+            inputMode="numeric"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+          />
+        </div>
+        <div className="w-24">
+          <Input
+            label={t('catalog.tier_price')}
+            type="number"
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="mb-0.5"
+          disabled={!canAdd || saving}
+          onClick={add}
+          aria-label={t('catalog.tier_add')}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {breadTypeId === null && (
+        <div className="text-[11px] text-muted-foreground/70">{t('catalog.tier_default_hint')}</div>
+      )}
+    </div>
   );
 }
