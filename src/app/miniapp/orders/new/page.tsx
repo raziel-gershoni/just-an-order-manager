@@ -788,7 +788,7 @@ function OrderFormContent() {
         <div className="sticky bottom-14 -mx-5 -mb-4 mt-4 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
           {hasPricedItem && (
             <div className="mb-2.5 space-y-1">
-              {hasDeal &&
+              {hasDeal && !totalOverride &&
                 livePricing.rows.map((row, idx) => {
                   const f = formatAllocation(row, t);
                   return (
@@ -810,7 +810,7 @@ function OrderFormContent() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">{t('orders.total')}</span>
                 <span className="font-mono text-lg font-bold tabular-nums text-primary">
-                  ₪{liveTotal + effectiveFee}
+                  ₪{(totalOverride ? Number(totalOverride) : liveTotal) + effectiveFee}
                 </span>
               </div>
             </div>

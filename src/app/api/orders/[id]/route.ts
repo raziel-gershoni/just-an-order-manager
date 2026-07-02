@@ -432,45 +432,54 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   }));
 
   const totalQuantity = updatedItems.reduce((s, i) => s + i.quantity, 0);
-
-  // Re-freeze the bulk-priced goods snapshot from the final item set (handles item,
-  // deals, fee, and override changes uniformly), then price with one consistent rule.
-  const [grpS] = await db
-    .select({ surcharge: groups.additionsSurcharge })
-    .from(groups)
-    .where(eq(groups.id, groupId))
-    .limit(1);
-  const surchargeVal = Number(grpS?.surcharge ?? 0);
-  const engineLines: WriteLine[] = updatedItems.map((i) => {
-    const hasAdd = i.additions.length > 0;
-    return {
-      breadTypeId: i.breadTypeId,
-      breadSizeId: i.breadSizeId,
-      quantity: i.quantity,
-      unitPrice: Number(i.pricePerUnit || 0) - (hasAdd ? surchargeVal : 0),
-      hasAdditions: hasAdd,
-    };
-  });
   const fee = Number(updated.deliveryFee || 0);
-  const pricing = await priceOrderForWrite(groupId, engineLines, {
-    dealsEnabled: updated.dealsEnabled,
-    deliveryFee: fee,
-    totalOverride: updated.totalOverride ? Number(updated.totalOverride) : null,
-    surcharge: surchargeVal,
-  });
-  await db
-    .update(orders)
-    .set({ goodsSnapshot: pricing.goods.toFixed(2), pricingBreakdown: pricing.rows })
-    .where(eq(orders.id, id));
 
-  const calculatedTotal = pricing.goods;
-  const totalPrice = (updated.totalOverride ? Number(updated.totalOverride) : pricing.goods) + fee;
+  // Re-price + re-freeze the goods snapshot ONLY when the items actually changed.
+  // A non-item edit (date, notes, fee, override) must never re-bundle an order
+  // against the current tier config — that would silently change a placed (or
+  // legacy, snapshot=null) order's price. On those edits we keep the frozen
+  // snapshot (or legacy Σ) via goodsForRead and never write a snapshot.
+  let calculatedTotal: number;
+  let breakdown = updated.pricingBreakdown;
+  if (parsed.data.items !== undefined) {
+    const [grpS] = await db
+      .select({ surcharge: groups.additionsSurcharge })
+      .from(groups)
+      .where(eq(groups.id, groupId))
+      .limit(1);
+    const surchargeVal = Number(grpS?.surcharge ?? 0);
+    const engineLines: WriteLine[] = updatedItems.map((i) => {
+      const hasAdd = i.additions.length > 0;
+      return {
+        breadTypeId: i.breadTypeId,
+        breadSizeId: i.breadSizeId,
+        quantity: i.quantity,
+        unitPrice: Number(i.pricePerUnit || 0) - (hasAdd ? surchargeVal : 0),
+        hasAdditions: hasAdd,
+      };
+    });
+    const pricing = await priceOrderForWrite(groupId, engineLines, {
+      dealsEnabled: updated.dealsEnabled,
+      deliveryFee: fee,
+      totalOverride: updated.totalOverride ? Number(updated.totalOverride) : null,
+      surcharge: surchargeVal,
+    });
+    await db
+      .update(orders)
+      .set({ goodsSnapshot: pricing.goods.toFixed(2), pricingBreakdown: pricing.rows })
+      .where(eq(orders.id, id));
+    breakdown = pricing.rows;
+    calculatedTotal = pricing.goods;
+  } else {
+    calculatedTotal = goodsForRead(updated, updatedItems);
+  }
+  const totalPrice = (updated.totalOverride ? Number(updated.totalOverride) : calculatedTotal) + fee;
 
   return jsonResponse({
     order: {
       ...updated,
       deliveryFee: fee,
-      pricingBreakdown: pricing.rows,
+      pricingBreakdown: breakdown,
       items: updatedItems,
       totalQuantity,
       totalPrice,
