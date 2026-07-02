@@ -120,6 +120,13 @@
       "when": 1782200200000,
       "tag": "0016_hero_eyebrow",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782200300000,
+      "tag": "0017_tiered_pricing",
+      "breakpoints": true
     }
   ]
 }

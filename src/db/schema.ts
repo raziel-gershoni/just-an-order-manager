@@ -196,6 +196,35 @@ export const breadTypeSizes = pgTable(
   ]
 );
 
+// Bulk-pricing tiers for a size (e.g. bun: 6 → ₪40, 30 → ₪150). A null
+// breadTypeId is the size-wide default; a set breadTypeId overrides the price
+// for that one bread — mirroring breadSizes.price (default) + breadTypeSizes
+// .priceOverride (per-type) for single prices. The engine (src/lib/pricing.ts)
+// charges the cheapest combination of tiers + singles per order.
+export const breadSizeTiers = pgTable(
+  'bread_size_tiers',
+  {
+    id: serial('id').primaryKey(),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    breadSizeId: integer('bread_size_id')
+      .notNull()
+      .references(() => breadSizes.id),
+    breadTypeId: integer('bread_type_id').references(() => breadTypes.id),
+    minQty: integer('min_qty').notNull(),
+    price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('bread_size_tiers_uniq').on(
+      table.breadSizeId,
+      table.breadTypeId,
+      table.minQty
+    ),
+  ]
+);
+
 export const breadAdditions = pgTable('bread_additions', {
   id: serial('id').primaryKey(),
   groupId: integer('group_id').notNull().references(() => groups.id),
@@ -287,6 +316,14 @@ export const orders = pgTable('orders', {
     .notNull()
     .default('0'),
   isRecurring: boolean('is_recurring').notNull().default(false),
+  // The "deals off" switch — when false, bulk tiers are ignored and lines
+  // charge plain single prices.
+  dealsEnabled: boolean('deals_enabled').notNull().default(true),
+  // Frozen computed goods subtotal (before delivery fee / totalOverride) at
+  // save time, so a placed order never re-prices if tiers change later.
+  goodsSnapshot: decimal('goods_snapshot', { precision: 10, scale: 2 }),
+  // Human-readable pricing breakdown rows (Allocation[]) for the detail view.
+  pricingBreakdown: jsonb('pricing_breakdown'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
