@@ -9,13 +9,20 @@ import { eq, and, sql } from 'drizzle-orm';
  */
 export async function calculateOrderTotal(orderId: number): Promise<number> {
   const [order] = await db
-    .select({ totalOverride: orders.totalOverride, deliveryFee: orders.deliveryFee })
+    .select({
+      totalOverride: orders.totalOverride,
+      deliveryFee: orders.deliveryFee,
+      goodsSnapshot: orders.goodsSnapshot,
+    })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!order) return 0;
   const fee = Number(order.deliveryFee || 0);
   if (order.totalOverride) return Number(order.totalOverride) + fee;
+  // Prefer the frozen bulk-priced goods snapshot; fall back to Σ qty×price for
+  // legacy orders (identical to before).
+  if (order.goodsSnapshot != null) return Number(order.goodsSnapshot) + fee;
 
   const items = await db
     .select({

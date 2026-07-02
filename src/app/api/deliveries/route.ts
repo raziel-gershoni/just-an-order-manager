@@ -19,6 +19,7 @@ export const GET = withGroup(async (_request, auth, groupId) => {
       paid: orders.paid,
       totalOverride: orders.totalOverride,
       deliveryFee: orders.deliveryFee,
+      goodsSnapshot: orders.goodsSnapshot,
       customerId: customers.id,
       customerName: customers.name,
       address: customers.address,
@@ -64,7 +65,11 @@ export const GET = withGroup(async (_request, auth, groupId) => {
   for (const p of phones) if (!phoneByCustomer.has(p.customerId)) phoneByCustomer.set(p.customerId, p.phone);
 
   const deliveries = rows.map((r) => {
-    const goods = r.totalOverride ? Number(r.totalOverride) : (goodsByOrder.get(r.id) ?? 0);
+    const goods = r.totalOverride
+      ? Number(r.totalOverride)
+      : r.goodsSnapshot != null
+        ? Number(r.goodsSnapshot)
+        : (goodsByOrder.get(r.id) ?? 0);
     const amount = goods + Number(r.deliveryFee || 0);
     return {
       id: r.id,

@@ -5,6 +5,7 @@ import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { scaleRecipe, type Recipe, type ScaledRecipe } from '@/lib/recipe';
+import { goodsForRead, priceOrderForWrite, type WriteLine } from '@/lib/order-pricing';
 
 function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
@@ -31,6 +32,9 @@ export const GET = withGroup(async (request, auth, groupId) => {
       isRecurring: orders.isRecurring,
       isDelivery: orders.isDelivery,
       deliveryFee: orders.deliveryFee,
+      dealsEnabled: orders.dealsEnabled,
+      goodsSnapshot: orders.goodsSnapshot,
+      pricingBreakdown: orders.pricingBreakdown,
       customerAddress: customers.address,
       customerCity: customers.city,
       customerDeliveryNotes: customers.deliveryNotes,
@@ -122,10 +126,9 @@ export const GET = withGroup(async (request, auth, groupId) => {
   });
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
-  const calculatedTotal = items.reduce(
-    (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
-    0
-  );
+  // Bundled goods total: prefers the frozen snapshot, falls back to Σ qty×price
+  // for legacy orders (identical to before).
+  const calculatedTotal = goodsForRead(order, items);
   const deliveryFee = Number(order.deliveryFee || 0);
   const totalPrice =
     (order.totalOverride ? Number(order.totalOverride) : calculatedTotal) + deliveryFee;
@@ -166,6 +169,7 @@ const updateOrderSchema = z.object({
   isDelivery: z.boolean().optional(),
   deliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isRecurring: z.boolean().optional(),
+  dealsEnabled: z.boolean().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
     breadSizeId: z.number().int().positive(),
@@ -218,6 +222,10 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
 
   if (parsed.data.isRecurring !== undefined) {
     updateData.isRecurring = parsed.data.isRecurring;
+  }
+
+  if (parsed.data.dealsEnabled !== undefined) {
+    updateData.dealsEnabled = parsed.data.dealsEnabled;
   }
 
   if (parsed.data.isDelivery !== undefined) {
@@ -374,6 +382,11 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
       customerId: customers.id,
       paid: orders.paid,
       isRecurring: orders.isRecurring,
+      isDelivery: orders.isDelivery,
+      deliveryFee: orders.deliveryFee,
+      dealsEnabled: orders.dealsEnabled,
+      goodsSnapshot: orders.goodsSnapshot,
+      pricingBreakdown: orders.pricingBreakdown,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
@@ -419,11 +432,49 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   }));
 
   const totalQuantity = updatedItems.reduce((s, i) => s + i.quantity, 0);
-  const calculatedTotal = updatedItems.reduce(
-    (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
-    0
-  );
-  const totalPrice = updated.totalOverride ? Number(updated.totalOverride) : calculatedTotal;
 
-  return jsonResponse({ order: { ...updated, items: updatedItems, totalQuantity, totalPrice, calculatedTotal } });
+  // Re-freeze the bulk-priced goods snapshot from the final item set (handles item,
+  // deals, fee, and override changes uniformly), then price with one consistent rule.
+  const [grpS] = await db
+    .select({ surcharge: groups.additionsSurcharge })
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .limit(1);
+  const surchargeVal = Number(grpS?.surcharge ?? 0);
+  const engineLines: WriteLine[] = updatedItems.map((i) => {
+    const hasAdd = i.additions.length > 0;
+    return {
+      breadTypeId: i.breadTypeId,
+      breadSizeId: i.breadSizeId,
+      quantity: i.quantity,
+      unitPrice: Number(i.pricePerUnit || 0) - (hasAdd ? surchargeVal : 0),
+      hasAdditions: hasAdd,
+    };
+  });
+  const fee = Number(updated.deliveryFee || 0);
+  const pricing = await priceOrderForWrite(groupId, engineLines, {
+    dealsEnabled: updated.dealsEnabled,
+    deliveryFee: fee,
+    totalOverride: updated.totalOverride ? Number(updated.totalOverride) : null,
+    surcharge: surchargeVal,
+  });
+  await db
+    .update(orders)
+    .set({ goodsSnapshot: pricing.goods.toFixed(2), pricingBreakdown: pricing.rows })
+    .where(eq(orders.id, id));
+
+  const calculatedTotal = pricing.goods;
+  const totalPrice = (updated.totalOverride ? Number(updated.totalOverride) : pricing.goods) + fee;
+
+  return jsonResponse({
+    order: {
+      ...updated,
+      deliveryFee: fee,
+      pricingBreakdown: pricing.rows,
+      items: updatedItems,
+      totalQuantity,
+      totalPrice,
+      calculatedTotal,
+    },
+  });
 });

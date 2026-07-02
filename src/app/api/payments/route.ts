@@ -72,7 +72,7 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     if (!existingCharge) {
       // Get order for potential override
       const [order] = await db
-        .select({ totalOverride: orders.totalOverride })
+        .select({ totalOverride: orders.totalOverride, goodsSnapshot: orders.goodsSnapshot })
         .from(orders)
         .where(eq(orders.id, orderId))
         .limit(1);
@@ -86,11 +86,14 @@ export const POST = withGroup(async (request, _auth, groupId) => {
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId));
 
-      const calculatedTotal = items.reduce(
+      const legacyTotal = items.reduce(
         (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
         0
       );
-      const orderTotal = order?.totalOverride ? Number(order.totalOverride) : calculatedTotal;
+      // Prefer the frozen bulk-priced goods snapshot; fall back to Σ qty×price
+      // for legacy orders (identical to before).
+      const goods = order?.goodsSnapshot != null ? Number(order.goodsSnapshot) : legacyTotal;
+      const orderTotal = order?.totalOverride ? Number(order.totalOverride) : goods;
 
       if (orderTotal > 0) {
         await db.insert(payments).values({

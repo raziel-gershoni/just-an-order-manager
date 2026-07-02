@@ -7,6 +7,7 @@ import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
 import { getCustomerPhones } from '@/lib/customer-phones';
+import { priceOrderForWrite, type WriteLine } from '@/lib/order-pricing';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -128,6 +129,7 @@ const createOrderSchema = z.object({
   isDelivery: z.boolean().optional(),
   deliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isRecurring: z.boolean().optional(),
+  dealsEnabled: z.boolean().optional(),
   notifyCustomer: z.boolean().optional(),
 });
 
@@ -139,7 +141,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, notifyCustomer } = parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, dealsEnabled, notifyCustomer } = parsed.data;
 
   // Verify customer
   const [customer] = await db
@@ -208,6 +210,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const surcharge = Number(grp?.surcharge ?? 0);
 
   const itemValues: typeof orderItems.$inferInsert[] = [];
+  const engineLines: WriteLine[] = [];
   for (const item of items) {
     if (!btMap[item.breadTypeId]) {
       return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
@@ -244,7 +247,24 @@ export const POST = withGroup(async (request, auth, groupId) => {
       quantity: item.quantity,
       pricePerUnit,
     });
+    engineLines.push({
+      breadTypeId: item.breadTypeId,
+      breadSizeId: item.breadSizeId,
+      quantity: item.quantity,
+      unitPrice: base,
+      hasAdditions,
+    });
   }
+
+  // Compute the bulk-priced goods total + breakdown to freeze onto the order.
+  const dealsOn = dealsEnabled ?? true;
+  const effectiveFee = isDelivery && deliveryFee ? Number(deliveryFee) : 0;
+  const pricing = await priceOrderForWrite(groupId, engineLines, {
+    dealsEnabled: dealsOn,
+    deliveryFee: effectiveFee,
+    totalOverride: totalOverride ? Number(totalOverride) : null,
+    surcharge,
+  });
 
   const resolvedDate = resolveDeliveryDate(deliveryType, deliveryDate);
 
@@ -261,6 +281,9 @@ export const POST = withGroup(async (request, auth, groupId) => {
       isDelivery: isDelivery ?? false,
       deliveryFee: (isDelivery && deliveryFee) ? deliveryFee : '0',
       isRecurring: isRecurring ?? false,
+      dealsEnabled: dealsOn,
+      goodsSnapshot: pricing.goods.toFixed(2),
+      pricingBreakdown: pricing.rows,
     })
     .returning();
 

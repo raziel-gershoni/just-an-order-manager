@@ -107,6 +107,10 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
           notes: order.notes,
           totalOverride: order.totalOverride,
           isRecurring: true,
+          // Items are copied verbatim, so the frozen pricing carries over too.
+          dealsEnabled: order.dealsEnabled,
+          goodsSnapshot: order.goodsSnapshot,
+          pricingBreakdown: order.pricingBreakdown,
         })
         .returning();
 
