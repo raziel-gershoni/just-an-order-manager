@@ -2,6 +2,7 @@ import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions } from '@/db/schema';
 import { eq, and, asc, inArray } from 'drizzle-orm';
+import { loadGroupTiers } from '@/lib/order-pricing';
 
 export const GET = withGroup(async (_request, _auth, groupId) => {
   const types = await db
@@ -65,6 +66,9 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     additionsByType[link.breadTypeId].push(link);
   }
 
+  // Effective bulk tiers per (type, size), so the order form can price deals live.
+  const tiers = await loadGroupTiers(groupId);
+
   const result = types.map((t) => ({
     ...t,
     enabledSizes: (sizesByType[t.id] ?? []).map((l) => ({
@@ -72,6 +76,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       name: l.name,
       weightGrams: l.weightGrams,
       price: l.priceOverride ?? l.price,
+      tiers: tiers.tierPricesFor(t.id, l.breadSizeId),
     })),
     enabledAdditions: (additionsByType[t.id] ?? []).map((l) => ({
       id: l.breadAdditionId,
