@@ -14,9 +14,12 @@ import { cn } from '@/lib/utils';
 import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
+import { computeOrderPricing } from '@/lib/pricing';
+import { formatAllocation } from '@/lib/pricing-format';
+import { Tag } from 'lucide-react';
 
 interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string }[] }
-interface BreadSize { id: number; name: string; weightGrams: number | null; price: string }
+interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
 interface BreadAddition { id: number; name: string }
 interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enabledAdditions?: BreadAddition[] }
 interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAdditionIds: number[]; quantity: number }
@@ -71,6 +74,7 @@ function OrderFormContent() {
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
   const [totalOverride, setTotalOverride] = useState('');
+  const [dealsEnabled, setDealsEnabled] = useState(true);
   const [isRecurring, setIsRecurring] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
   const [isDelivery, setIsDelivery] = useState(false);
@@ -133,6 +137,7 @@ function OrderFormContent() {
           setNotes(order.notes || '');
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
           setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
+          setDealsEnabled((order as { dealsEnabled?: boolean }).dealsEnabled ?? true);
           setIsDelivery(Boolean(order.isDelivery));
           setDeliveryManualFee(
             order.deliveryFee && Number(order.deliveryFee) > 0 ? String(Number(order.deliveryFee)) : ''
@@ -264,6 +269,7 @@ function OrderFormContent() {
             isDelivery,
             deliveryFee: effectiveFee.toFixed(2),
             isRecurring,
+            dealsEnabled,
           }),
         });
         toast.success(t('orders.updated'));
@@ -281,6 +287,7 @@ function OrderFormContent() {
             isDelivery,
             deliveryFee: effectiveFee.toFixed(2),
             isRecurring,
+            dealsEnabled,
             notifyCustomer,
           }),
         });
@@ -311,16 +318,38 @@ function OrderFormContent() {
     ? { id: customerId!, name: customerName }
     : customers.find((c) => c.id === customerId);
 
-  // Live order total: sum of (size price + additions surcharge when item has additions) * quantity
-  let hasPricedItem = false;
-  const liveTotal = items.reduce((sum, item) => {
-    const type = breadTypes.find((bt) => bt.id === item.breadTypeId);
-    const size = type?.enabledSizes?.find((s) => s.id === item.breadSizeId);
-    if (!size) return sum;
-    hasPricedItem = true;
-    const surcharge = item.breadAdditionIds.length > 0 ? additionsSurcharge : 0;
-    return sum + (Number(size.price) + surcharge) * item.quantity;
-  }, 0);
+  // Live order total via the shared pricing engine, so the owner sees the exact
+  // bulk-deal price the server will charge (breakdown included).
+  const pricedLines = items
+    .map((item) => {
+      const type = breadTypes.find((bt) => bt.id === item.breadTypeId);
+      const size = type?.enabledSizes?.find((s) => s.id === item.breadSizeId);
+      return size ? { item, size } : null;
+    })
+    .filter((x): x is { item: LineItem; size: BreadSize } => x !== null);
+  const hasPricedItem = pricedLines.length > 0;
+  const tierQtysBySize: Record<number, number[]> = {};
+  for (const { size } of pricedLines) {
+    const qtys = Object.keys(size.tiers ?? {}).map(Number);
+    if (qtys.length) tierQtysBySize[size.id] = qtys;
+  }
+  const livePricing = computeOrderPricing({
+    lines: pricedLines.map(({ item, size }) => ({
+      breadTypeId: item.breadTypeId,
+      breadSizeId: item.breadSizeId,
+      quantity: item.quantity,
+      unitPrice: Number(size.price),
+      hasAdditions: item.breadAdditionIds.length > 0,
+      tierPrices: size.tiers ?? {},
+    })),
+    tierQtysBySize,
+    surcharge: additionsSurcharge,
+    dealsEnabled,
+    deliveryFee: 0,
+    totalOverride: null,
+  });
+  const liveTotal = livePricing.goods;
+  const hasDeal = livePricing.rows.some((r) => r.kind === 'pack');
 
   // Delivery: classify the customer's city + resolve the fee live.
   const custCity = customers.find((c) => c.id === customerId)?.city ?? null;
@@ -725,6 +754,21 @@ function OrderFormContent() {
             onChange={(e) => setTotalOverride(e.target.value)}
             placeholder="0"
           />
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={dealsEnabled}
+              onChange={(e) => setDealsEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <Tag className="h-3.5 w-3.5" />
+                {t('order.deals_label')}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">{t('order.deals_hint')}</div>
+            </div>
+          </label>
         </Card>
 
         {/* Notify customer (only on create, only if customer has at least one phone) */}
@@ -744,6 +788,19 @@ function OrderFormContent() {
         <div className="sticky bottom-14 -mx-5 -mb-4 mt-4 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
           {hasPricedItem && (
             <div className="mb-2.5 space-y-1">
+              {hasDeal &&
+                livePricing.rows.map((row, idx) => {
+                  const f = formatAllocation(row, t);
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between text-xs text-muted-foreground"
+                    >
+                      <span>{f.label}</span>
+                      <span className="font-mono tabular-nums">₪{f.amount}</span>
+                    </div>
+                  );
+                })}
               {isDelivery && effectiveFee > 0 && (
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{t('deliv.fee_label')}</span>

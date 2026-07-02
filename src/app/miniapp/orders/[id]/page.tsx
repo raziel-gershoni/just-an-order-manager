@@ -18,6 +18,8 @@ import { useGroup } from '@/hooks/useGroup';
 import { buildWazeLink } from '@/lib/delivery';
 import { groupByKind } from '@/lib/recipe';
 import { cn } from '@/lib/utils';
+import { formatAllocation } from '@/lib/pricing-format';
+import type { Allocation } from '@/lib/pricing';
 import Link from 'next/link';
 
 interface ScaledIngredient {
@@ -62,6 +64,7 @@ interface OrderDetail {
   totalPrice: number;
   calculatedTotal: number;
   totalOverride: string | null;
+  pricingBreakdown?: Allocation[] | null;
   isDelivery: boolean;
   deliveryFee: number;
   customerAddress: string | null;
@@ -382,6 +385,20 @@ export default function OrderDetailPage() {
                   {order.deliveryFee > 0 ? `₪${order.deliveryFee.toFixed(0)}` : t('deliv.free')}
                 </span>
               </div>
+            </div>
+          )}
+          {order.pricingBreakdown && order.pricingBreakdown.some((r) => r.kind === 'pack') && (
+            <div className="mt-4 pt-3 border-t border-border space-y-1">
+              <div className="text-xs font-medium text-muted-foreground">{t('order.price_breakdown')}</div>
+              {order.pricingBreakdown.map((row, idx) => {
+                const f = formatAllocation(row, t);
+                return (
+                  <div key={idx} className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{f.label}</span>
+                    <span className="font-mono tabular-nums">₪{f.amount}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
           {order.calculatedTotal > 0 && (
