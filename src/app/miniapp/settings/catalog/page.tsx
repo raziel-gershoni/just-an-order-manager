@@ -739,12 +739,10 @@ export default function CatalogPage() {
             </Card>
           ) : (
             <Card className="p-0 overflow-hidden">
-              {sizes.map((s, idx) =>
-                editingSizeId === s.id ? (
-                  <div
-                    key={s.id}
-                    className={cn('animate-expand p-3 space-y-3', idx > 0 && 'border-t border-dashed border-border')}
-                  >
+              {sizes.map((s, idx) => (
+                <div key={s.id} className={cn(idx > 0 && 'border-t border-dashed border-border')}>
+                  {editingSizeId === s.id ? (
+                  <div className="animate-expand p-3 space-y-3">
                     <Input
                       label={t('settings.size_name')}
                       value={editSizeName}
@@ -766,18 +764,6 @@ export default function CatalogPage() {
                         onChange={(e) => setEditSizePrice(e.target.value)}
                       />
                     </div>
-                    <div className="pt-1 border-t border-dashed border-border">
-                      <div className="pt-2">
-                        <TierEditor
-                          tiers={tiers}
-                          sizeId={s.id}
-                          breadTypeId={null}
-                          onSave={(q, p) => saveTier(s.id, null, q, p)}
-                          onDelete={deleteTier}
-                          t={t}
-                        />
-                      </div>
-                    </div>
                     <div className="flex gap-2 items-center pt-1">
                       <Button size="sm" className="flex-1" onClick={() => saveSize(s.id)}>{t('settings.save')}</Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditingSizeId(null)}>{t('payments.cancel')}</Button>
@@ -787,10 +773,8 @@ export default function CatalogPage() {
                     </div>
                   </div>
                 ) : (
-                  <div
-                    key={s.id}
-                    className={cn('flex items-stretch', idx > 0 && 'border-t border-dashed border-border')}
-                  >
+                  <>
+                  <div className="flex items-stretch">
                     <DocketStub id={s.id} width={docketWidth(sizes.map((x) => x.id))} />
                     <div className="flex flex-1 items-center gap-2 px-3 py-2.5 min-w-0">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -856,8 +840,20 @@ export default function CatalogPage() {
                       </div>
                     </div>
                   </div>
-                )
-              )}
+                  <div className="px-3 pb-3 pt-2 border-t border-dashed border-border/50">
+                    <TierEditor
+                      tiers={tiers}
+                      sizeId={s.id}
+                      breadTypeId={null}
+                      onSave={(q, p) => saveTier(s.id, null, q, p)}
+                      onDelete={deleteTier}
+                      t={t}
+                    />
+                  </div>
+                  </>
+                  )}
+                </div>
+              ))}
             </Card>
           )}
 
