@@ -1550,6 +1550,7 @@ function TierEditor({
             inputMode="numeric"
             value={qty}
             onChange={(e) => setQty(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }}
           />
         </div>
         <div className="w-24">
@@ -1559,6 +1560,8 @@ function TierEditor({
             inputMode="decimal"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
+            onBlur={() => { void add(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }}
           />
         </div>
         <Button
