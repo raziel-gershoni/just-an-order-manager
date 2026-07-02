@@ -15,6 +15,7 @@ import {
   Star, Check, Download, Copy, X,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
+import { TierOverrideEditor } from '@/components/catalog/TierOverrideEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { BadgePicker } from '@/components/site-editor/BadgePicker';
 import { ImagePicker } from '@/components/site-editor/ImagePicker';
@@ -1315,11 +1316,6 @@ export default function CatalogPage() {
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {/* TODO(pricing): per-type tier overrides (breadTypeId set) belong here,
-                        but the enabled-size chip layout is too tight for an inline tier list.
-                        Ships with size-level default tiers only; a per-type override editor
-                        (e.g. an expandable panel per enabled size) is a follow-up. The engine
-                        + API already support per-type tiers. */}
                     {typeDetailSizes.map((s) =>
                       s.enabled ? (
                         <div
@@ -1373,6 +1369,14 @@ export default function CatalogPage() {
                     )}
                   </div>
                 )}
+                <TierOverrideEditor
+                  sizes={typeDetailSizes}
+                  tiers={tiers}
+                  breadTypeId={editingType.id}
+                  onSave={(breadSizeId, minQty, price) => saveTier(breadSizeId, editingType.id, minQty, price)}
+                  onDelete={deleteTier}
+                  t={t}
+                />
               </div>
             )}
 
