@@ -56,6 +56,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
       sizeWeightGrams: breadSizes.weightGrams,
       quantity: orderItems.quantity,
       pricePerUnit: orderItems.pricePerUnit,
+      additionsCharged: orderItems.additionsCharged,
     })
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
@@ -176,6 +177,7 @@ const updateOrderSchema = z.object({
     breadSizeId: z.number().int().positive(),
     breadAdditionIds: z.array(z.number().int().positive()).optional(),
     quantity: z.number().int().positive(),
+    additionsCharged: z.boolean().nullable().optional(), // null/undefined = inherit order default
   })).min(1).optional(),
 });
 
@@ -187,6 +189,17 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   const body = await request.json();
   const parsed = updateOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
+
+  // Pricing flags (deals / charge-additions) change per-line prices, so the goods
+  // snapshot is only re-frozen when items are present. Require items alongside a
+  // flag change so the snapshot can't go stale (the order form always co-sends
+  // them; this just makes that coupling an API contract).
+  if (
+    (parsed.data.dealsEnabled !== undefined || parsed.data.additionsCharged !== undefined) &&
+    parsed.data.items === undefined
+  ) {
+    return errorResponse('Pricing changes must include items', 400);
+  }
 
   // Fetch existing order
   const [order] = await db
@@ -340,12 +353,14 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
       }
       const base = Number(link.priceOverride ?? size.price);
       const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
+      const lineCharge = item.additionsCharged ?? chargeAdd; // per-line override else order default
       itemValues.push({
         orderId: id,
         breadTypeId: item.breadTypeId,
         breadSizeId: item.breadSizeId,
         quantity: item.quantity,
-        pricePerUnit: (base + (chargeAdd && hasAdditions ? surcharge : 0)).toFixed(2),
+        pricePerUnit: (base + (lineCharge && hasAdditions ? surcharge : 0)).toFixed(2),
+        additionsCharged: item.additionsCharged ?? null,
       });
     }
 
@@ -411,6 +426,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
       sizeName: breadSizes.name,
       quantity: orderItems.quantity,
       pricePerUnit: orderItems.pricePerUnit,
+      additionsCharged: orderItems.additionsCharged,
     })
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
@@ -459,19 +475,20 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     const surchargeVal = Number(grpS?.surcharge ?? 0);
     const engineLines: WriteLine[] = updatedItems.map((i) => {
       const hasAdd = i.additions.length > 0;
+      const lineCharge = i.additionsCharged ?? updated.additionsCharged; // per-line override else order default
       return {
         breadTypeId: i.breadTypeId,
         breadSizeId: i.breadSizeId,
         quantity: i.quantity,
-        // pricePerUnit only includes the surcharge when additions are charged,
-        // so only strip it back off in that case to recover the base price.
-        unitPrice: Number(i.pricePerUnit || 0) - (updated.additionsCharged && hasAdd ? surchargeVal : 0),
+        // pricePerUnit only includes the surcharge when this line's additions are
+        // charged, so only strip it back off in that case to recover the base.
+        unitPrice: Number(i.pricePerUnit || 0) - (lineCharge && hasAdd ? surchargeVal : 0),
         hasAdditions: hasAdd,
+        chargeAdditions: lineCharge,
       };
     });
     const pricing = await priceOrderForWrite(groupId, engineLines, {
       dealsEnabled: updated.dealsEnabled,
-      chargeAdditions: updated.additionsCharged,
       deliveryFee: fee,
       totalOverride: updated.totalOverride ? Number(updated.totalOverride) : null,
       surcharge: surchargeVal,

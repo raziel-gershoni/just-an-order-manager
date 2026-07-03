@@ -64,6 +64,7 @@ export type WriteLine = {
   quantity: number;
   unitPrice: number; // base single price (priceOverride ?? size.price), WITHOUT surcharge
   hasAdditions: boolean;
+  chargeAdditions: boolean; // effective per-line flag (line override ?? order default)
 };
 
 /**
@@ -75,7 +76,6 @@ export async function priceOrderForWrite(
   lines: WriteLine[],
   opts: {
     dealsEnabled: boolean;
-    chargeAdditions: boolean;
     deliveryFee: number;
     totalOverride: number | null;
     surcharge: number;
@@ -88,13 +88,13 @@ export async function priceOrderForWrite(
     quantity: l.quantity,
     unitPrice: l.unitPrice,
     hasAdditions: l.hasAdditions,
+    chargeAdditions: l.chargeAdditions,
     tierPrices: l.breadSizeId != null ? tiers.tierPricesFor(l.breadTypeId, l.breadSizeId) : {},
   }));
   const res = computeOrderPricing({
     lines: engineLines,
     tierQtysBySize: tiers.tierQtysBySize,
     surcharge: opts.surcharge,
-    chargeAdditions: opts.chargeAdditions,
     dealsEnabled: opts.dealsEnabled,
     deliveryFee: opts.deliveryFee,
     totalOverride: opts.totalOverride,

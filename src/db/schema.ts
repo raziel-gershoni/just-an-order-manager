@@ -342,6 +342,8 @@ export const orderItems = pgTable('order_items', {
   breadSizeId: integer('bread_size_id').references(() => breadSizes.id),
   quantity: integer('quantity').notNull().default(1),
   pricePerUnit: decimal('price_per_unit', { precision: 10, scale: 2 }),
+  // Per-line override of orders.additions_charged. null = inherit the order default.
+  additionsCharged: boolean('additions_charged'),
 });
 
 export const orderItemAdditions = pgTable(

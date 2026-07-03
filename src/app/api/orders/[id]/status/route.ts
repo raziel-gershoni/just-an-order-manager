@@ -79,6 +79,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
         breadSizeId: orderItems.breadSizeId,
         quantity: orderItems.quantity,
         pricePerUnit: orderItems.pricePerUnit,
+        additionsCharged: orderItems.additionsCharged,
       })
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId));
@@ -122,6 +123,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
           breadSizeId: i.breadSizeId,
           quantity: i.quantity,
           pricePerUnit: i.pricePerUnit,
+          additionsCharged: i.additionsCharged,
         }))
       ).returning();
 

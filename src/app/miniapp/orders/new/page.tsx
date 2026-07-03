@@ -22,7 +22,7 @@ interface Customer { id: number; name: string; city?: string | null; phones?: { 
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
 interface BreadAddition { id: number; name: string }
 interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enabledAdditions?: BreadAddition[] }
-interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAdditionIds: number[]; quantity: number }
+interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAdditionIds: number[]; quantity: number; additionsCharged?: boolean | null }
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
@@ -127,11 +127,12 @@ function OrderFormContent() {
           }
           setCustomerId(order.customerId);
           setCustomerName(order.customerName);
-          setItems(order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[] }) => ({
+          setItems(order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[]; additionsCharged?: boolean | null }) => ({
             breadTypeId: i.breadTypeId,
             breadSizeId: i.breadSizeId ?? null,
             breadAdditionIds: (i.additions ?? []).map((a) => a.id),
             quantity: i.quantity,
+            additionsCharged: i.additionsCharged ?? null,
           })));
           setDeliveryType(order.deliveryType as DeliveryType);
           setDeliveryDate(order.deliveryDate || '');
@@ -344,11 +345,11 @@ function OrderFormContent() {
       quantity: item.quantity,
       unitPrice: Number(size.price),
       hasAdditions: item.breadAdditionIds.length > 0,
+      chargeAdditions: item.additionsCharged ?? additionsCharged, // per-line override else order default
       tierPrices: size.tiers ?? {},
     })),
     tierQtysBySize,
     surcharge: additionsSurcharge,
-    chargeAdditions: additionsCharged,
     dealsEnabled,
     deliveryFee: 0,
     totalOverride: null,
@@ -573,11 +574,19 @@ function OrderFormContent() {
                       <div className="text-xs text-muted-foreground mb-1.5 px-1 flex items-center gap-1.5">
                         <span>{t('form.additions')}</span>
                         {additionsSurcharge > 0 && item.breadAdditionIds.length > 0 && (
-                          additionsCharged ? (
-                            <span className="text-primary tabular-nums">+₪{additionsSurcharge}</span>
-                          ) : (
-                            <span className="text-muted-foreground/60 line-through tabular-nums">+₪{additionsSurcharge}</span>
-                          )
+                          <button
+                            type="button"
+                            onClick={() => updateItem(idx, { additionsCharged: !(item.additionsCharged ?? additionsCharged) })}
+                            title={t('order.charge_additions')}
+                            className={cn(
+                              '-my-0.5 rounded border px-1.5 py-0.5 tabular-nums transition-colors',
+                              (item.additionsCharged ?? additionsCharged)
+                                ? 'border-primary/30 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground/60 line-through'
+                            )}
+                          >
+                            +₪{additionsSurcharge}
+                          </button>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1.5">

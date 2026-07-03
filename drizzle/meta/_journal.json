@@ -134,6 +134,13 @@
       "when": 1782200400000,
       "tag": "0018_additions_charged",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782200500000,
+      "tag": "0019_item_additions_charged",
+      "breakpoints": true
     }
   ]
 }

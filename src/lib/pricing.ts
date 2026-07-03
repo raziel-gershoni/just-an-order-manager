@@ -13,6 +13,7 @@ export type PricedUnit = {
   breadTypeId: number;
   unitPrice: number; // single (per-unit) shekel price for this (type, size)
   hasAdditions: boolean;
+  chargeAdditions: boolean; // whether this unit's addition surcharge is charged
   tierPrice: Record<number, number>; // minQty -> pack shekel price for this (type, size)
 };
 
@@ -41,7 +42,8 @@ export function allocateSize(
 ): { baseCents: number; additionUnits: number; rows: Allocation[] } {
   const units = [...group.units].sort((a, b) => b.unitPrice - a.unitPrice); // desc by single price
   const n = units.length;
-  const additionUnits = units.filter((u) => u.hasAdditions).length;
+  // Only units whose addition surcharge is actually charged count toward it.
+  const additionUnits = units.filter((u) => u.hasAdditions && u.chargeAdditions).length;
 
   const qtys = group.tierQtys.filter((q) => q >= 2);
   if (qtys.length === 0 || n === 0) {
@@ -162,6 +164,7 @@ export type OrderLine = {
   quantity: number;
   unitPrice: number;
   hasAdditions: boolean;
+  chargeAdditions: boolean; // per-line: false = this line's additions are free
   tierPrices: Record<number, number>; // minQty -> effective pack price for this (type, size)
 };
 
@@ -169,7 +172,6 @@ export type OrderPricingInput = {
   lines: OrderLine[];
   tierQtysBySize: Record<number, number[]>; // sizeId -> pack sizes offered; missing/[] = no bundling
   surcharge: number;
-  chargeAdditions: boolean; // false = additions are free (surcharge not added to goods)
   dealsEnabled: boolean;
   deliveryFee: number;
   totalOverride: number | null;
@@ -188,7 +190,7 @@ export type OrderPricing = {
  * folds in the order override and delivery fee with a single consistent rule.
  */
 export function computeOrderPricing(input: OrderPricingInput): OrderPricing {
-  const { lines, tierQtysBySize, surcharge, chargeAdditions, dealsEnabled, deliveryFee, totalOverride } = input;
+  const { lines, tierQtysBySize, surcharge, dealsEnabled, deliveryFee, totalOverride } = input;
 
   const bySize = new Map<number, PricedUnit[]>();
   const nullSizeUnits: PricedUnit[] = [];
@@ -198,6 +200,7 @@ export function computeOrderPricing(input: OrderPricingInput): OrderPricing {
         breadTypeId: l.breadTypeId,
         unitPrice: l.unitPrice,
         hasAdditions: l.hasAdditions,
+        chargeAdditions: l.chargeAdditions,
         tierPrice: l.tierPrices,
       };
       if (l.breadSizeId == null) nullSizeUnits.push(u);
@@ -227,7 +230,7 @@ export function computeOrderPricing(input: OrderPricingInput): OrderPricing {
     rows.push(...res.rows);
   }
 
-  const surchargeCents = chargeAdditions ? toC(surcharge) * additionUnits : 0;
+  const surchargeCents = toC(surcharge) * additionUnits;
   if (surchargeCents > 0) rows.push({ kind: 'surcharge', qty: 0, count: additionUnits, amount: surcharge });
 
   const goods = toS(baseCents + surchargeCents);

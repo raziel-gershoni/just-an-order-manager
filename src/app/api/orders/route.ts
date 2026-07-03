@@ -117,6 +117,7 @@ const itemSchema = z.object({
   breadSizeId: z.number().int().positive(),
   breadAdditionIds: z.array(z.number().int().positive()).optional(),
   quantity: z.number().int().positive().default(1),
+  additionsCharged: z.boolean().nullable().optional(), // null/undefined = inherit order default
 });
 
 const createOrderSchema = z.object({
@@ -241,13 +242,15 @@ export const POST = withGroup(async (request, auth, groupId) => {
     }
     const base = Number(link.priceOverride ?? size.price);
     const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
-    const pricePerUnit = (base + (chargeAdd && hasAdditions ? surcharge : 0)).toFixed(2);
+    const lineCharge = item.additionsCharged ?? chargeAdd; // per-line override else order default
+    const pricePerUnit = (base + (lineCharge && hasAdditions ? surcharge : 0)).toFixed(2);
     itemValues.push({
       orderId: 0, // placeholder, filled after order insert
       breadTypeId: item.breadTypeId,
       breadSizeId: item.breadSizeId,
       quantity: item.quantity,
       pricePerUnit,
+      additionsCharged: item.additionsCharged ?? null,
     });
     engineLines.push({
       breadTypeId: item.breadTypeId,
@@ -255,6 +258,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
       quantity: item.quantity,
       unitPrice: base,
       hasAdditions,
+      chargeAdditions: lineCharge,
     });
   }
 
@@ -263,7 +267,6 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const effectiveFee = isDelivery && deliveryFee ? Number(deliveryFee) : 0;
   const pricing = await priceOrderForWrite(groupId, engineLines, {
     dealsEnabled: dealsOn,
-    chargeAdditions: chargeAdd,
     deliveryFee: effectiveFee,
     totalOverride: totalOverride ? Number(totalOverride) : null,
     surcharge,
