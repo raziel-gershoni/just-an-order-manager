@@ -223,6 +223,8 @@ const translations: Record<string, string> = {
   'catalog.tier_revert': 'חזרה לברירת מחדל',
   'order.deals_label': 'מבצעי כמות',
   'order.deals_hint': 'תמחור מארזים אוטומטי לפי כמות',
+  'order.charge_additions': 'חייב תוספות',
+  'order.charge_additions_hint': 'הוסף את מחיר התוספות לסכום',
   'order.price_breakdown': 'פירוט תמחור',
   'pricing.pack_of': 'מארז {qty}',
   'pricing.single_unit': 'בודד',

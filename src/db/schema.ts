@@ -319,6 +319,9 @@ export const orders = pgTable('orders', {
   // The "deals off" switch — when false, bulk tiers are ignored and lines
   // charge plain single prices.
   dealsEnabled: boolean('deals_enabled').notNull().default(true),
+  // When false, additions are free — the additions surcharge is not added to
+  // the total.
+  additionsCharged: boolean('additions_charged').notNull().default(true),
   // Frozen computed goods subtotal (before delivery fee / totalOverride) at
   // save time, so a placed order never re-prices if tiers change later.
   goodsSnapshot: decimal('goods_snapshot', { precision: 10, scale: 2 }),

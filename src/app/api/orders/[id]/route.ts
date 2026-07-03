@@ -170,6 +170,7 @@ const updateOrderSchema = z.object({
   deliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isRecurring: z.boolean().optional(),
   dealsEnabled: z.boolean().optional(),
+  additionsCharged: z.boolean().optional(),
   items: z.array(z.object({
     breadTypeId: z.number().int().positive(),
     breadSizeId: z.number().int().positive(),
@@ -227,6 +228,13 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   if (parsed.data.dealsEnabled !== undefined) {
     updateData.dealsEnabled = parsed.data.dealsEnabled;
   }
+
+  if (parsed.data.additionsCharged !== undefined) {
+    updateData.additionsCharged = parsed.data.additionsCharged;
+  }
+
+  // Effective "charge additions" flag for recomputing per-line prices below.
+  const chargeAdd = parsed.data.additionsCharged ?? order.additionsCharged;
 
   if (parsed.data.isDelivery !== undefined) {
     updateData.isDelivery = parsed.data.isDelivery;
@@ -337,7 +345,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
         breadTypeId: item.breadTypeId,
         breadSizeId: item.breadSizeId,
         quantity: item.quantity,
-        pricePerUnit: (base + (hasAdditions ? surcharge : 0)).toFixed(2),
+        pricePerUnit: (base + (chargeAdd && hasAdditions ? surcharge : 0)).toFixed(2),
       });
     }
 
@@ -385,6 +393,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
       isDelivery: orders.isDelivery,
       deliveryFee: orders.deliveryFee,
       dealsEnabled: orders.dealsEnabled,
+      additionsCharged: orders.additionsCharged,
       goodsSnapshot: orders.goodsSnapshot,
       pricingBreakdown: orders.pricingBreakdown,
     })
@@ -454,12 +463,15 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
         breadTypeId: i.breadTypeId,
         breadSizeId: i.breadSizeId,
         quantity: i.quantity,
-        unitPrice: Number(i.pricePerUnit || 0) - (hasAdd ? surchargeVal : 0),
+        // pricePerUnit only includes the surcharge when additions are charged,
+        // so only strip it back off in that case to recover the base price.
+        unitPrice: Number(i.pricePerUnit || 0) - (updated.additionsCharged && hasAdd ? surchargeVal : 0),
         hasAdditions: hasAdd,
       };
     });
     const pricing = await priceOrderForWrite(groupId, engineLines, {
       dealsEnabled: updated.dealsEnabled,
+      chargeAdditions: updated.additionsCharged,
       deliveryFee: fee,
       totalOverride: updated.totalOverride ? Number(updated.totalOverride) : null,
       surcharge: surchargeVal,

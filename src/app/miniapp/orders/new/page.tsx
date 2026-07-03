@@ -75,6 +75,7 @@ function OrderFormContent() {
   const [notes, setNotes] = useState('');
   const [totalOverride, setTotalOverride] = useState('');
   const [dealsEnabled, setDealsEnabled] = useState(true);
+  const [additionsCharged, setAdditionsCharged] = useState(true);
   const [isRecurring, setIsRecurring] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
   const [isDelivery, setIsDelivery] = useState(false);
@@ -138,6 +139,7 @@ function OrderFormContent() {
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
           setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
           setDealsEnabled((order as { dealsEnabled?: boolean }).dealsEnabled ?? true);
+          setAdditionsCharged((order as { additionsCharged?: boolean }).additionsCharged ?? true);
           setIsDelivery(Boolean(order.isDelivery));
           setDeliveryManualFee(
             order.deliveryFee && Number(order.deliveryFee) > 0 ? String(Number(order.deliveryFee)) : ''
@@ -270,6 +272,7 @@ function OrderFormContent() {
             deliveryFee: effectiveFee.toFixed(2),
             isRecurring,
             dealsEnabled,
+            additionsCharged,
           }),
         });
         toast.success(t('orders.updated'));
@@ -288,6 +291,7 @@ function OrderFormContent() {
             deliveryFee: effectiveFee.toFixed(2),
             isRecurring,
             dealsEnabled,
+            additionsCharged,
             notifyCustomer,
           }),
         });
@@ -344,6 +348,7 @@ function OrderFormContent() {
     })),
     tierQtysBySize,
     surcharge: additionsSurcharge,
+    chargeAdditions: additionsCharged,
     dealsEnabled,
     deliveryFee: 0,
     totalOverride: null,
@@ -568,7 +573,11 @@ function OrderFormContent() {
                       <div className="text-xs text-muted-foreground mb-1.5 px-1 flex items-center gap-1.5">
                         <span>{t('form.additions')}</span>
                         {additionsSurcharge > 0 && item.breadAdditionIds.length > 0 && (
-                          <span className="text-primary tabular-nums">+₪{additionsSurcharge}</span>
+                          additionsCharged ? (
+                            <span className="text-primary tabular-nums">+₪{additionsSurcharge}</span>
+                          ) : (
+                            <span className="text-muted-foreground/60 line-through tabular-nums">+₪{additionsSurcharge}</span>
+                          )
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -769,6 +778,23 @@ function OrderFormContent() {
               <div className="text-xs text-muted-foreground mt-0.5">{t('order.deals_hint')}</div>
             </div>
           </label>
+          {additionsSurcharge > 0 && (
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={additionsCharged}
+                onChange={(e) => setAdditionsCharged(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('order.charge_additions')}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{t('order.charge_additions_hint')}</div>
+              </div>
+            </label>
+          )}
         </Card>
 
         {/* Notify customer (only on create, only if customer has at least one phone) */}

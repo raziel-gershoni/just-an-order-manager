@@ -130,6 +130,7 @@ const createOrderSchema = z.object({
   deliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   isRecurring: z.boolean().optional(),
   dealsEnabled: z.boolean().optional(),
+  additionsCharged: z.boolean().optional(),
   notifyCustomer: z.boolean().optional(),
 });
 
@@ -141,7 +142,8 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, dealsEnabled, notifyCustomer } = parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, dealsEnabled, additionsCharged, notifyCustomer } = parsed.data;
+  const chargeAdd = additionsCharged ?? true;
 
   // Verify customer
   const [customer] = await db
@@ -239,7 +241,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
     }
     const base = Number(link.priceOverride ?? size.price);
     const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
-    const pricePerUnit = (base + (hasAdditions ? surcharge : 0)).toFixed(2);
+    const pricePerUnit = (base + (chargeAdd && hasAdditions ? surcharge : 0)).toFixed(2);
     itemValues.push({
       orderId: 0, // placeholder, filled after order insert
       breadTypeId: item.breadTypeId,
@@ -261,6 +263,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const effectiveFee = isDelivery && deliveryFee ? Number(deliveryFee) : 0;
   const pricing = await priceOrderForWrite(groupId, engineLines, {
     dealsEnabled: dealsOn,
+    chargeAdditions: chargeAdd,
     deliveryFee: effectiveFee,
     totalOverride: totalOverride ? Number(totalOverride) : null,
     surcharge,
@@ -282,6 +285,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
       deliveryFee: (isDelivery && deliveryFee) ? deliveryFee : '0',
       isRecurring: isRecurring ?? false,
       dealsEnabled: dealsOn,
+      additionsCharged: chargeAdd,
       goodsSnapshot: pricing.goods.toFixed(2),
       pricingBreakdown: pricing.rows,
     })

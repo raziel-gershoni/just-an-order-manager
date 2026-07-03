@@ -73,7 +73,13 @@ export type WriteLine = {
 export async function priceOrderForWrite(
   groupId: number,
   lines: WriteLine[],
-  opts: { dealsEnabled: boolean; deliveryFee: number; totalOverride: number | null; surcharge: number }
+  opts: {
+    dealsEnabled: boolean;
+    chargeAdditions: boolean;
+    deliveryFee: number;
+    totalOverride: number | null;
+    surcharge: number;
+  }
 ): Promise<{ goods: number; total: number; rows: Allocation[] }> {
   const tiers = await loadGroupTiers(groupId);
   const engineLines: OrderLine[] = lines.map((l) => ({
@@ -88,6 +94,7 @@ export async function priceOrderForWrite(
     lines: engineLines,
     tierQtysBySize: tiers.tierQtysBySize,
     surcharge: opts.surcharge,
+    chargeAdditions: opts.chargeAdditions,
     dealsEnabled: opts.dealsEnabled,
     deliveryFee: opts.deliveryFee,
     totalOverride: opts.totalOverride,
