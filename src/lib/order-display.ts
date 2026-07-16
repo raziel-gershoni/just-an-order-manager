@@ -1,28 +1,32 @@
 /**
- * Customer-facing line — name only, no weight.
- * "{quantity} {typeName}" or "{quantity} {typeName} {sizeLabel}" or
- * "{quantity} {typeName} {sizeLabel} (עם addition, addition)"
+ * Customer-facing label — no quantity, no weight.
+ * "{typeName}" or "{typeName} {sizeLabel}" or "{typeName} {sizeLabel} (עם addition, addition)"
  */
+export function formatItemLabel(
+  typeName: string,
+  sizeLabel?: string | null,
+  additions?: string[] | null
+): string {
+  const base = sizeLabel ? `${typeName} ${sizeLabel}` : typeName;
+  return additions && additions.length ? `${base} (עם ${additions.join(', ')})` : base;
+}
+
+/** Customer-facing line — "{quantity} {label}", name only, no weight. */
 export function formatItemLine(
   quantity: number,
   typeName: string,
   sizeLabel?: string | null,
   additions?: string[] | null
 ): string {
-  const base = sizeLabel ? `${typeName} ${sizeLabel}` : typeName;
-  const withAdds = additions && additions.length
-    ? `${base} (עם ${additions.join(', ')})`
-    : base;
-  return `${quantity} ${withAdds}`;
+  return `${quantity} ${formatItemLabel(typeName, sizeLabel, additions)}`;
 }
 
 /**
- * Staff-facing line — includes the integer weight when set, useful for
- * baker production planning. Customer-facing channels MUST NOT use this.
- * "{quantity} {typeName} {sizeLabel} ({weight}g) (עם addition, addition)"
+ * Staff-facing label — no quantity, includes the integer weight when set (useful
+ * for baker production planning). Customer-facing channels MUST NOT use this.
+ * "{typeName} {sizeLabel} ({weight}g) (עם addition, addition)"
  */
-export function formatItemLineForStaff(
-  quantity: number,
+export function formatStaffItemLabel(
   typeName: string,
   sizeLabel?: string | null,
   weightGrams?: number | null,
@@ -31,5 +35,16 @@ export function formatItemLineForStaff(
   let base = sizeLabel ? `${typeName} ${sizeLabel}` : typeName;
   if (weightGrams != null) base = `${base} (${weightGrams}g)`;
   if (additions && additions.length) base = `${base} (עם ${additions.join(', ')})`;
-  return `${quantity} ${base}`;
+  return base;
+}
+
+/** Staff-facing line — "{quantity} {staff label}". */
+export function formatItemLineForStaff(
+  quantity: number,
+  typeName: string,
+  sizeLabel?: string | null,
+  weightGrams?: number | null,
+  additions?: string[] | null
+): string {
+  return `${quantity} ${formatStaffItemLabel(typeName, sizeLabel, weightGrams, additions)}`;
 }

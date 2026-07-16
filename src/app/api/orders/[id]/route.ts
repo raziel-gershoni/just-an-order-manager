@@ -1,11 +1,12 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients, groups } from '@/db/schema';
+import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients } from '@/db/schema';
 import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { scaleRecipe, type Recipe, type ScaledRecipe } from '@/lib/recipe';
-import { goodsForRead, orderTotalFromGoods, priceOrderForWrite, type WriteLine } from '@/lib/order-pricing';
+import { goodsForRead, orderTotalFromGoods, priceOrderForWrite } from '@/lib/order-pricing';
+import { resolveAndPriceOrderLines, type ResolvedOrderLine } from '@/lib/order-lines';
 
 function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
@@ -322,112 +323,27 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     updateData.deliveryFee = parsed.data.deliveryFee;
   }
 
+  // Validate + price the new lines BEFORE mutating anything, so a bad line can't
+  // leave the order header partially updated. Only runs when actually repricing;
+  // shouldReprice already implies items are present.
+  let pricedLines: ResolvedOrderLine[] | null = null;
+  let pricedSurcharge = 0;
+  if (shouldReprice && parsed.data.items) {
+    const priced = await resolveAndPriceOrderLines(groupId, parsed.data.items, chargeAdd);
+    if (!priced.ok) return errorResponse(priced.error, priced.status);
+    pricedLines = priced.lines;
+    pricedSurcharge = priced.surcharge;
+  }
+
   // Update order fields
   await db
     .update(orders)
     .set(updateData)
     .where(eq(orders.id, id));
 
-  // Rewrite items only when they (or a pricing flag) actually changed. An
-  // identical resend keeps the frozen rows + prices untouched.
-  if (parsed.data.items && shouldReprice) {
-    const validTypes = await db
-      .select({ id: breadTypes.id })
-      .from(breadTypes)
-      .where(eq(breadTypes.groupId, groupId));
-    const validTypeIds = new Set(validTypes.map((t) => t.id));
-
-    const sizeIds = parsed.data.items.map((i) => i.breadSizeId);
-    const sizesInGroup = await db
-      .select()
-      .from(breadSizes)
-      .where(and(inArray(breadSizes.id, sizeIds), eq(breadSizes.groupId, groupId)));
-    const sizeMap = Object.fromEntries(sizesInGroup.map((s) => [s.id, s]));
-
-    const typeIds = parsed.data.items.map((i) => i.breadTypeId);
-    const links = await db
-      .select()
-      .from(breadTypeSizes)
-      .where(
-        and(
-          inArray(breadTypeSizes.breadTypeId, typeIds),
-          inArray(breadTypeSizes.breadSizeId, sizeIds)
-        )
-      );
-    const linkMap = new Map(links.map((l) => [`${l.breadTypeId}:${l.breadSizeId}`, l]));
-
-    // Validate additions per item
-    const allAdditionIds = parsed.data.items.flatMap((i) => i.breadAdditionIds ?? []);
-    const additionRows = allAdditionIds.length
-      ? await db
-          .select()
-          .from(breadAdditions)
-          .where(and(inArray(breadAdditions.id, allAdditionIds), eq(breadAdditions.groupId, groupId)))
-      : [];
-    const additionMap = new Map(additionRows.map((a) => [a.id, a]));
-
-    const additionTypeLinks = allAdditionIds.length
-      ? await db
-          .select()
-          .from(breadTypeAdditions)
-          .where(
-            and(
-              inArray(breadTypeAdditions.breadTypeId, typeIds),
-              inArray(breadTypeAdditions.breadAdditionId, allAdditionIds)
-            )
-          )
-      : [];
-    const additionLinkSet = new Set(
-      additionTypeLinks.map((l) => `${l.breadTypeId}:${l.breadAdditionId}`)
-    );
-
-    const [grp] = await db
-      .select({ surcharge: groups.additionsSurcharge })
-      .from(groups)
-      .where(eq(groups.id, groupId))
-      .limit(1);
-    const surcharge = Number(grp?.surcharge ?? 0);
-
-    const itemValues: typeof orderItems.$inferInsert[] = [];
-    for (const item of parsed.data.items) {
-      if (!validTypeIds.has(item.breadTypeId)) {
-        return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
-      }
-      const size = sizeMap[item.breadSizeId];
-      if (!size) {
-        return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
-      }
-      const link = linkMap.get(`${item.breadTypeId}:${item.breadSizeId}`);
-      if (!link) {
-        return errorResponse(
-          `Size ${item.breadSizeId} not enabled for type ${item.breadTypeId}`,
-          400
-        );
-      }
-      for (const aid of item.breadAdditionIds ?? []) {
-        if (!additionMap.has(aid)) {
-          return errorResponse(`Bread addition ${aid} not found`, 404);
-        }
-        if (!additionLinkSet.has(`${item.breadTypeId}:${aid}`)) {
-          return errorResponse(
-            `Addition ${aid} not enabled for type ${item.breadTypeId}`,
-            400
-          );
-        }
-      }
-      const base = Number(link.priceOverride ?? size.price);
-      const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
-      const lineCharge = item.additionsCharged ?? chargeAdd; // per-line override else order default
-      itemValues.push({
-        orderId: id,
-        breadTypeId: item.breadTypeId,
-        breadSizeId: item.breadSizeId,
-        quantity: item.quantity,
-        pricePerUnit: (base + (lineCharge && hasAdditions ? surcharge : 0)).toFixed(2),
-        additionsCharged: item.additionsCharged ?? null,
-      });
-    }
-
+  // Rewrite items only when they (or a pricing flag) changed — an identical
+  // resend keeps the frozen rows + prices untouched. Lines are already validated.
+  if (pricedLines) {
     // Clear old item->addition junction rows first (FK to order_items would block delete)
     const oldItems = await db
       .select({ id: orderItems.id })
@@ -439,13 +355,24 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
       );
     }
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
-    const insertedItems = await db.insert(orderItems).values(itemValues).returning();
+    const insertedItems = await db
+      .insert(orderItems)
+      .values(
+        pricedLines.map((l) => ({
+          orderId: id,
+          breadTypeId: l.breadTypeId,
+          breadSizeId: l.breadSizeId,
+          quantity: l.quantity,
+          pricePerUnit: l.pricePerUnit,
+          additionsCharged: l.additionsCharged,
+        }))
+      )
+      .returning();
 
     // Persist new additions per inserted item
     const additionInserts: { orderItemId: number; breadAdditionId: number }[] = [];
-    for (let i = 0; i < parsed.data.items.length; i++) {
-      const ids = parsed.data.items[i].breadAdditionIds ?? [];
-      for (const aid of ids) {
+    for (let i = 0; i < pricedLines.length; i++) {
+      for (const aid of pricedLines[i].breadAdditionIds) {
         additionInserts.push({ orderItemId: insertedItems[i].id, breadAdditionId: aid });
       }
     }
@@ -530,32 +457,14 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   // snapshot (or legacy Σ) via goodsForRead and never write a snapshot.
   let calculatedTotal: number;
   let breakdown = updated.pricingBreakdown;
-  if (shouldReprice) {
-    const [grpS] = await db
-      .select({ surcharge: groups.additionsSurcharge })
-      .from(groups)
-      .where(eq(groups.id, groupId))
-      .limit(1);
-    const surchargeVal = Number(grpS?.surcharge ?? 0);
-    const engineLines: WriteLine[] = updatedItems.map((i) => {
-      const hasAdd = i.additions.length > 0;
-      const lineCharge = i.additionsCharged ?? updated.additionsCharged; // per-line override else order default
-      return {
-        breadTypeId: i.breadTypeId,
-        breadSizeId: i.breadSizeId,
-        quantity: i.quantity,
-        // pricePerUnit only includes the surcharge when this line's additions are
-        // charged, so only strip it back off in that case to recover the base.
-        unitPrice: Number(i.pricePerUnit || 0) - (lineCharge && hasAdd ? surchargeVal : 0),
-        hasAdditions: hasAdd,
-        chargeAdditions: lineCharge,
-      };
-    });
-    const pricing = await priceOrderForWrite(groupId, engineLines, {
+  if (pricedLines) {
+    // Reuse the write-lines the helper already built — no re-derivation of the
+    // base price by subtracting the surcharge back off.
+    const pricing = await priceOrderForWrite(groupId, pricedLines.map((l) => l.writeLine), {
       dealsEnabled: updated.dealsEnabled,
       deliveryFee: fee,
       totalOverride: updated.totalOverride ? Number(updated.totalOverride) : null,
-      surcharge: surchargeVal,
+      surcharge: pricedSurcharge,
     });
     await db
       .update(orders)

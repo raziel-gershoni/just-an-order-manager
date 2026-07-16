@@ -1,13 +1,14 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions, orderItemAdditions, groups } from '@/db/schema';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
-import { formatItemLine } from '@/lib/order-display';
+import { formatItemLine, formatItemLabel, formatStaffItemLabel } from '@/lib/order-display';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
 import { getCustomerPhones } from '@/lib/customer-phones';
-import { priceOrderForWrite, type WriteLine } from '@/lib/order-pricing';
+import { priceOrderForWrite } from '@/lib/order-pricing';
+import { resolveAndPriceOrderLines } from '@/lib/order-lines';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -154,113 +155,10 @@ export const POST = withGroup(async (request, auth, groupId) => {
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
 
-  // Validate every (type, size) pair against the junction; resolve effective price
-  const allBreadTypes = await db
-    .select({ id: breadTypes.id, name: breadTypes.name })
-    .from(breadTypes)
-    .where(eq(breadTypes.groupId, groupId));
-  const btMap = Object.fromEntries(allBreadTypes.map((bt) => [bt.id, bt]));
-
-  const sizeIds = items.map((i) => i.breadSizeId);
-  const sizesInGroup = await db
-    .select()
-    .from(breadSizes)
-    .where(and(inArray(breadSizes.id, sizeIds), eq(breadSizes.groupId, groupId)));
-  const sizeMap = Object.fromEntries(sizesInGroup.map((s) => [s.id, s]));
-
-  const typeIds = items.map((i) => i.breadTypeId);
-  const links = await db
-    .select()
-    .from(breadTypeSizes)
-    .where(
-      and(
-        inArray(breadTypeSizes.breadTypeId, typeIds),
-        inArray(breadTypeSizes.breadSizeId, sizeIds)
-      )
-    );
-  const linkMap = new Map(links.map((l) => [`${l.breadTypeId}:${l.breadSizeId}`, l]));
-
-  // Validate additions per item: must belong to the group AND be enabled on the type
-  const allAdditionIds = items.flatMap((i) => i.breadAdditionIds ?? []);
-  const additionRows = allAdditionIds.length
-    ? await db
-        .select()
-        .from(breadAdditions)
-        .where(and(inArray(breadAdditions.id, allAdditionIds), eq(breadAdditions.groupId, groupId)))
-    : [];
-  const additionMap = new Map(additionRows.map((a) => [a.id, a]));
-
-  const additionTypeLinks = allAdditionIds.length
-    ? await db
-        .select()
-        .from(breadTypeAdditions)
-        .where(
-          and(
-            inArray(breadTypeAdditions.breadTypeId, typeIds),
-            inArray(breadTypeAdditions.breadAdditionId, allAdditionIds)
-          )
-        )
-    : [];
-  const additionLinkSet = new Set(
-    additionTypeLinks.map((l) => `${l.breadTypeId}:${l.breadAdditionId}`)
-  );
-
-  const [grp] = await db
-    .select({ surcharge: groups.additionsSurcharge })
-    .from(groups)
-    .where(eq(groups.id, groupId))
-    .limit(1);
-  const surcharge = Number(grp?.surcharge ?? 0);
-
-  const itemValues: typeof orderItems.$inferInsert[] = [];
-  const engineLines: WriteLine[] = [];
-  for (const item of items) {
-    if (!btMap[item.breadTypeId]) {
-      return errorResponse(`Bread type ${item.breadTypeId} not found`, 404);
-    }
-    const size = sizeMap[item.breadSizeId];
-    if (!size) {
-      return errorResponse(`Bread size ${item.breadSizeId} not found`, 404);
-    }
-    const link = linkMap.get(`${item.breadTypeId}:${item.breadSizeId}`);
-    if (!link) {
-      return errorResponse(
-        `Size ${item.breadSizeId} not enabled for type ${item.breadTypeId}`,
-        400
-      );
-    }
-    for (const addId of item.breadAdditionIds ?? []) {
-      if (!additionMap.has(addId)) {
-        return errorResponse(`Bread addition ${addId} not found`, 404);
-      }
-      if (!additionLinkSet.has(`${item.breadTypeId}:${addId}`)) {
-        return errorResponse(
-          `Addition ${addId} not enabled for type ${item.breadTypeId}`,
-          400
-        );
-      }
-    }
-    const base = Number(link.priceOverride ?? size.price);
-    const hasAdditions = (item.breadAdditionIds ?? []).length > 0;
-    const lineCharge = item.additionsCharged ?? chargeAdd; // per-line override else order default
-    const pricePerUnit = (base + (lineCharge && hasAdditions ? surcharge : 0)).toFixed(2);
-    itemValues.push({
-      orderId: 0, // placeholder, filled after order insert
-      breadTypeId: item.breadTypeId,
-      breadSizeId: item.breadSizeId,
-      quantity: item.quantity,
-      pricePerUnit,
-      additionsCharged: item.additionsCharged ?? null,
-    });
-    engineLines.push({
-      breadTypeId: item.breadTypeId,
-      breadSizeId: item.breadSizeId,
-      quantity: item.quantity,
-      unitPrice: base,
-      hasAdditions,
-      chargeAdditions: lineCharge,
-    });
-  }
+  // Resolve + validate + price every line through the shared write-path helper.
+  const priced = await resolveAndPriceOrderLines(groupId, items, chargeAdd);
+  if (!priced.ok) return errorResponse(priced.error, priced.status);
+  const engineLines = priced.lines.map((l) => l.writeLine);
 
   // Compute the bulk-priced goods total + breakdown to freeze onto the order.
   const dealsOn = dealsEnabled ?? true;
@@ -269,7 +167,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
     dealsEnabled: dealsOn,
     deliveryFee: effectiveFee,
     totalOverride: totalOverride ? Number(totalOverride) : null,
-    surcharge,
+    surcharge: priced.surcharge,
   });
 
   const resolvedDate = resolveDeliveryDate(deliveryType, deliveryDate);
@@ -294,16 +192,25 @@ export const POST = withGroup(async (request, auth, groupId) => {
     })
     .returning();
 
-  // Stamp the orderId on each item now that we have it
-  for (const iv of itemValues) iv.orderId = order.id;
-
-  const insertedItems = await db.insert(orderItems).values(itemValues).returning();
+  // Insert the items now that we have the order id (lines stay in input order).
+  const insertedItems = await db
+    .insert(orderItems)
+    .values(
+      priced.lines.map((l) => ({
+        orderId: order.id,
+        breadTypeId: l.breadTypeId,
+        breadSizeId: l.breadSizeId,
+        quantity: l.quantity,
+        pricePerUnit: l.pricePerUnit,
+        additionsCharged: l.additionsCharged,
+      }))
+    )
+    .returning();
 
   // Persist additions per inserted item
   const additionInserts: { orderItemId: number; breadAdditionId: number }[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const ids = items[i].breadAdditionIds ?? [];
-    for (const aid of ids) {
+  for (let i = 0; i < priced.lines.length; i++) {
+    for (const aid of priced.lines[i].breadAdditionIds) {
       additionInserts.push({ orderItemId: insertedItems[i].id, breadAdditionId: aid });
     }
   }
@@ -311,30 +218,12 @@ export const POST = withGroup(async (request, auth, groupId) => {
     await db.insert(orderItemAdditions).values(additionInserts);
   }
 
-  // Build customer-facing items (name + size + additions, no weight) — for WhatsApp
-  const customerItems = items.map((item) => {
-    const typeName = btMap[item.breadTypeId].name;
-    const sizeName = sizeMap[item.breadSizeId].name;
-    const adds = (item.breadAdditionIds ?? []).map((id) => additionMap.get(id)?.name).filter(Boolean) as string[];
-    return {
-      breadTypeName: formatItemLine(1, typeName, sizeName, adds).slice(2),
-      quantity: item.quantity,
-    };
-  });
-
-  // Build staff-facing items (with weight + additions) — for Telegram
-  const staffItems = items.map((item) => {
-    const type = btMap[item.breadTypeId];
-    const size = sizeMap[item.breadSizeId];
-    let label = `${type.name} ${size.name}`;
-    if (size.weightGrams != null) label = `${label} (${size.weightGrams}g)`;
-    const adds = (item.breadAdditionIds ?? []).map((id) => additionMap.get(id)?.name).filter(Boolean) as string[];
-    if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
-    return {
-      breadTypeName: label,
-      quantity: item.quantity,
-    };
-  });
+  // Notification labels are built straight from the resolved lines — no re-fetch,
+  // one shared formatter. Staff = with weight (baker); customer = name only.
+  const staffItems = priced.lines.map((l) => ({
+    breadTypeName: formatStaffItemLabel(l.breadTypeName, l.breadSizeName, l.weightGrams, l.additionNames),
+    quantity: l.quantity,
+  }));
 
   await notifyNewOrder(groupId, order.id, {
     customerName: customer.name,
@@ -346,9 +235,11 @@ export const POST = withGroup(async (request, auth, groupId) => {
   // WhatsApp notification to customer — name only, no weight, sent to all phones
   if (notifyCustomer !== false) {
     const phones = await getCustomerPhones(customer.id);
-    const itemsSummary = customerItems.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+    const itemsSummary = priced.lines
+      .map((l) => `${l.quantity} ${formatItemLabel(l.breadTypeName, l.breadSizeName, l.additionNames)}`)
+      .join(', ');
     await notifyCustomerWhatsApp(phones, 'order_received', [`: ${itemsSummary}`]);
   }
 
-  return jsonResponse({ order, items: itemValues }, 201);
+  return jsonResponse({ order, items: insertedItems }, 201);
 });
