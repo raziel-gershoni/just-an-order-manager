@@ -197,9 +197,11 @@ function setupHandlers(bot: import('grammy').Bot) {
       .from(users)
       .where(eq(users.telegramId, telegramId))
       .limit(1);
-    if (!user) return;
-
-    await respondToInvite(inviteCode, 'decline', { id: user.id, name: user.name });
+    // Apply the lifecycle guards when we can resolve the user; always ack so the
+    // Telegram button never hangs.
+    if (user) {
+      await respondToInvite(inviteCode, 'decline', { id: user.id, name: user.name });
+    }
     await ctx.answerCallbackQuery('OK');
     await ctx.editMessageText('❌');
   });

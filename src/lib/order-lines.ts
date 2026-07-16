@@ -77,7 +77,7 @@ export async function resolveAndPriceOrderLines(
   const allAdditionIds = items.flatMap((i) => i.breadAdditionIds ?? []);
   const additionRows = allAdditionIds.length
     ? await db
-        .select({ id: breadAdditions.id, name: breadAdditions.name })
+        .select({ id: breadAdditions.id, name: breadAdditions.name, sortOrder: breadAdditions.sortOrder })
         .from(breadAdditions)
         .where(and(inArray(breadAdditions.id, allAdditionIds), eq(breadAdditions.groupId, groupId)))
     : [];
@@ -114,15 +114,18 @@ export async function resolveAndPriceOrderLines(
       return { ok: false, status: 400, error: `Size ${item.breadSizeId} not enabled for type ${item.breadTypeId}` };
     }
     const breadAdditionIds = item.breadAdditionIds ?? [];
-    const additionNames: string[] = [];
+    const lineAdditions: { name: string; sortOrder: number }[] = [];
     for (const addId of breadAdditionIds) {
       const add = additionMap.get(addId);
       if (!add) return { ok: false, status: 404, error: `Bread addition ${addId} not found` };
       if (!additionLinkSet.has(`${item.breadTypeId}:${addId}`)) {
         return { ok: false, status: 400, error: `Addition ${addId} not enabled for type ${item.breadTypeId}` };
       }
-      additionNames.push(add.name);
+      lineAdditions.push({ name: add.name, sortOrder: add.sortOrder });
     }
+    // Order the display names by catalog sortOrder, matching every other label
+    // surface (read/notification paths order additions this way).
+    const additionNames = lineAdditions.sort((a, b) => a.sortOrder - b.sortOrder).map((a) => a.name);
 
     const base = Number(link.priceOverride ?? size.price);
     const hasAdditions = breadAdditionIds.length > 0;

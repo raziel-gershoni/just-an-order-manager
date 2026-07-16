@@ -138,7 +138,7 @@ export async function recordOrderPayment(
   await db.update(orders).set({ paid, updatedAt: new Date() }).where(eq(orders.id, order.id));
 
   const balance = await getCustomerBalance(order.customerId, order.groupId);
-  if (action === 'paid' && amount) {
+  if (action === 'paid' && amount && order.customerName) {
     await notifyPrepayment(order.groupId, {
       customerName: order.customerName,
       amount,
