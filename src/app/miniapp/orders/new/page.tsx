@@ -138,7 +138,7 @@ function OrderFormContent() {
           setDeliveryDate(order.deliveryDate || '');
           setNotes(order.notes || '');
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
-          setIsRecurring(Boolean((order as { isRecurring?: boolean }).isRecurring));
+          setIsRecurring(order.deliveryType !== 'asap' && Boolean((order as { isRecurring?: boolean }).isRecurring));
           setDealsEnabled((order as { dealsEnabled?: boolean }).dealsEnabled ?? true);
           setAdditionsCharged((order as { additionsCharged?: boolean }).additionsCharged ?? true);
           setIsDelivery(Boolean(order.isDelivery));
@@ -271,7 +271,7 @@ function OrderFormContent() {
             totalOverride: totalOverride || null,
             isDelivery,
             deliveryFee: effectiveFee.toFixed(2),
-            isRecurring,
+            isRecurring: deliveryType === 'asap' ? false : isRecurring,
             dealsEnabled,
             additionsCharged,
           }),
@@ -290,7 +290,7 @@ function OrderFormContent() {
             totalOverride: totalOverride || null,
             isDelivery,
             deliveryFee: effectiveFee.toFixed(2),
-            isRecurring,
+            isRecurring: deliveryType === 'asap' ? false : isRecurring,
             dealsEnabled,
             additionsCharged,
             notifyCustomer,
@@ -677,7 +677,12 @@ function OrderFormContent() {
                       ? 'bg-primary/10 border-primary/30 text-primary'
                       : 'bg-card border-border hover:bg-muted text-foreground'
                   )}
-                  onClick={() => setDeliveryType(type)}
+                  onClick={() => {
+                    setDeliveryType(type);
+                    // "Repeat weekly" is hidden for asap; clear it so a stale flag
+                    // can't ride along on a now-asap order.
+                    if (type === 'asap') setIsRecurring(false);
+                  }}
                 >
                   <Icon className="h-4 w-4" />
                   {label}

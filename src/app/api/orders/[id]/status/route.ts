@@ -7,7 +7,7 @@ import { z } from 'zod/v4';
 import { ORDER_STATUS_TRANSITIONS } from '@/lib/constants';
 import { notifyOrderReady, notifyCustomerWhatsApp } from '@/lib/notifications';
 import { getCustomerPhones } from '@/lib/customer-phones';
-import { nextRecurringDate } from '@/lib/date-utils';
+import { createNextRecurringOrder } from '@/lib/order-recurring';
 import { ensureOrderCharge } from '@/lib/order-payments';
 
 function getOrderId(url: string): number {
@@ -88,115 +88,13 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     }
   }
 
-  // Auto-create the next recurring order once this one is delivered. Best-effort:
-  // the delivery + charge above are already committed, so a clone failure is
-  // logged rather than thrown (throwing would 500 a completed delivery, and
-  // neon-http has no interactive transaction to bind them together).
+  // Auto-create the next recurring order once this one is delivered. Shared with
+  // the Telegram bot's delivery button so recurrence fires from either surface.
+  // Best-effort inside the helper — the delivery + charge above are already
+  // committed and must not be rolled back by a clone failure.
+  let nextRecurringOrderId: number | null = null;
   if (newStatus === 'delivered' && order.isRecurring) {
-    // Tracked so the catch can unwind a partially-inserted clone (neon-http
-    // auto-commits each insert separately — no transaction to roll back).
-    let createdOrderId: number | null = null;
-    try {
-      const items = await db
-        .select({
-          id: orderItems.id,
-          breadTypeId: orderItems.breadTypeId,
-          breadSizeId: orderItems.breadSizeId,
-          quantity: orderItems.quantity,
-          pricePerUnit: orderItems.pricePerUnit,
-          additionsCharged: orderItems.additionsCharged,
-        })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId));
-
-      if (items.length > 0) {
-        // Fetch additions to copy along, keyed by old item id
-        const oldItemIds = items.map((i) => i.id);
-        const additionLinks = await db
-          .select()
-          .from(orderItemAdditions)
-          .where(inArray(orderItemAdditions.orderItemId, oldItemIds));
-        const additionsByOldItem: Record<number, number[]> = {};
-        for (const a of additionLinks) {
-          if (!additionsByOldItem[a.orderItemId]) additionsByOldItem[a.orderItemId] = [];
-          additionsByOldItem[a.orderItemId].push(a.breadAdditionId);
-        }
-
-        // Weekly cadence: advance this order's own delivery date by 7 days.
-        const nextDate = nextRecurringDate(order.deliveryType, order.deliveryDate);
-        const [nextOrder] = await db
-          .insert(orders)
-          .values({
-            groupId,
-            customerId: order.customerId,
-            deliveryType: order.deliveryType,
-            deliveryDate: nextDate,
-            notes: order.notes,
-            totalOverride: order.totalOverride,
-            isRecurring: true,
-            // Carry delivery status + fee so a recurring delivery order doesn't
-            // silently regenerate as a fee-less pickup.
-            isDelivery: order.isDelivery,
-            deliveryFee: order.deliveryFee,
-            // Items are copied verbatim, so the frozen pricing carries over too.
-            dealsEnabled: order.dealsEnabled,
-            additionsCharged: order.additionsCharged,
-            goodsSnapshot: order.goodsSnapshot,
-            pricingBreakdown: order.pricingBreakdown,
-          })
-          .returning();
-        createdOrderId = nextOrder.id;
-
-        const newItems = await db.insert(orderItems).values(
-          items.map((i) => ({
-            orderId: nextOrder.id,
-            breadTypeId: i.breadTypeId,
-            breadSizeId: i.breadSizeId,
-            quantity: i.quantity,
-            pricePerUnit: i.pricePerUnit,
-            additionsCharged: i.additionsCharged,
-          }))
-        ).returning();
-
-        // Copy each item's additions onto the new item rows in the same order
-        const newAdditionRows: { orderItemId: number; breadAdditionId: number }[] = [];
-        for (let i = 0; i < items.length; i++) {
-          const oldItemId = items[i].id;
-          const newItemId = newItems[i].id;
-          for (const aid of additionsByOldItem[oldItemId] ?? []) {
-            newAdditionRows.push({ orderItemId: newItemId, breadAdditionId: aid });
-          }
-        }
-        if (newAdditionRows.length > 0) {
-          await db.insert(orderItemAdditions).values(newAdditionRows);
-        }
-      }
-    } catch (err) {
-      console.error(
-        `Failed to create next recurring order after delivering order ${orderId}:`,
-        err
-      );
-      // Unwind a half-inserted clone (a committed order row with no items would
-      // otherwise surface in lists as a phantom priced order). Reverse-FK order;
-      // itself best-effort.
-      if (createdOrderId != null) {
-        try {
-          const orphanItems = await db
-            .select({ id: orderItems.id })
-            .from(orderItems)
-            .where(eq(orderItems.orderId, createdOrderId));
-          if (orphanItems.length > 0) {
-            await db
-              .delete(orderItemAdditions)
-              .where(inArray(orderItemAdditions.orderItemId, orphanItems.map((i) => i.id)));
-            await db.delete(orderItems).where(eq(orderItems.orderId, createdOrderId));
-          }
-          await db.delete(orders).where(eq(orders.id, createdOrderId));
-        } catch (cleanupErr) {
-          console.error(`Failed to clean up partial recurring clone ${createdOrderId}:`, cleanupErr);
-        }
-      }
-    }
+    nextRecurringOrderId = await createNextRecurringOrder(order);
   }
 
   // Notify on ready
@@ -255,5 +153,5 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     await notifyCustomerWhatsApp(phones, 'order_cancelled');
   }
 
-  return jsonResponse({ order: updated });
+  return jsonResponse({ order: updated, nextRecurringOrderId });
 });

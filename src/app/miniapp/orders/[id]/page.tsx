@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft } from 'lucide-react';
 import { useGroup } from '@/hooks/useGroup';
 import { buildWazeLink } from '@/lib/delivery';
 import { groupByKind } from '@/lib/recipe';
@@ -102,8 +102,15 @@ export default function OrderDetailPage() {
   const [showPaymentInput, setShowPaymentInput] = useState(false);
   const [submittingPay, setSubmittingPay] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
+  // Set after delivering a recurring order — the id of the auto-created next one.
+  const [nextRecurringOrderId, setNextRecurringOrderId] = useState<number | null>(null);
+  const [stoppingRecurring, setStoppingRecurring] = useState(false);
 
   useEffect(() => {
+    // Clear any prior "next recurring created" banner — the App Router reuses
+    // this component instance across /orders/[id] navigations, so without this
+    // the banner would follow you onto the freshly-created clone as a self-link.
+    setNextRecurringOrderId(null);
     apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
       .then((d) => {
         setOrder(d.order);
@@ -119,8 +126,9 @@ export default function OrderDetailPage() {
 
   async function updateStatus(status: string) {
     const willNotify = status === 'ready' || status === 'cancelled';
+    let res: { nextRecurringOrderId?: number | null };
     try {
-      await apiFetch(`/orders/${id}/status`, {
+      res = await apiFetch<{ nextRecurringOrderId?: number | null }>(`/orders/${id}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status, ...(willNotify && { notifyCustomer }) }),
       });
@@ -128,6 +136,7 @@ export default function OrderDetailPage() {
       toast.error(t('orders.update_failed'));
       throw err;
     }
+    if (res.nextRecurringOrderId) setNextRecurringOrderId(res.nextRecurringOrderId);
     setOrder((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, status };
@@ -184,6 +193,23 @@ export default function OrderDetailPage() {
       toast.error(t('orders.update_failed'));
     } finally {
       setSubmittingPay(false);
+    }
+  }
+
+  async function handleStopRecurring() {
+    if (stoppingRecurring) return;
+    setStoppingRecurring(true);
+    try {
+      await apiFetch(`/orders/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isRecurring: false }),
+      });
+      setOrder((prev) => (prev ? { ...prev, isRecurring: false } : prev));
+      toast.success(t('orders.recurring_stopped'));
+    } catch {
+      toast.error(t('orders.update_failed'));
+    } finally {
+      setStoppingRecurring(false);
     }
   }
 
@@ -249,6 +275,22 @@ export default function OrderDetailPage() {
           <StatusFlow status={order.status} labels={statusLabels} />
         </Card>
 
+        {/* Next recurring order — created just now on delivery, links to it */}
+        {nextRecurringOrderId && (
+          <Link href={`/miniapp/orders/${nextRecurringOrderId}`}>
+            <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors animate-expand">
+              <div className="flex items-center gap-2.5">
+                <Repeat className="h-4 w-4 text-primary shrink-0" />
+                <span className="flex-1 text-sm font-medium">{t('orders.next_recurring_created')}</span>
+                <span className="inline-flex items-center gap-0.5 font-mono text-sm font-bold text-primary tabular-nums">
+                  #{nextRecurringOrderId}
+                  <ChevronLeft className="h-4 w-4" />
+                </span>
+              </div>
+            </Card>
+          </Link>
+        )}
+
         {/* Details */}
         <Card>
           <div className="space-y-3">
@@ -273,10 +315,22 @@ export default function OrderDetailPage() {
             {order.isRecurring && (
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">{t('orders.recurring')}</span>
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                  <Repeat className="h-3 w-3" />
-                  {t('orders.repeat_weekly')}
-                </span>
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                    <Repeat className="h-3 w-3" />
+                    {t('orders.repeat_weekly')}
+                  </span>
+                  {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      onClick={handleStopRecurring}
+                      disabled={stoppingRecurring}
+                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-destructive transition-colors disabled:opacity-50"
+                    >
+                      {t('orders.stop_recurring')}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {order.notes && (

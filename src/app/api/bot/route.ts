@@ -34,6 +34,7 @@ import {
   getCustomerBalance,
 } from '@/lib/order-payments';
 import { getCustomerPhones } from '@/lib/customer-phones';
+import { createNextRecurringOrder } from '@/lib/order-recurring';
 import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
@@ -562,6 +563,11 @@ function setupHandlers(bot: import('grammy').Bot) {
     // Record the charge as soon as the order is delivered. Idempotent.
     if (newStatus === 'delivered') {
       await ensureOrderCharge(orderId, order.groupId, order.customerId);
+      // Same recurring roll-forward + baker heads-up the web app does, so a
+      // recurring order delivered via this button still repeats.
+      if (order.isRecurring) {
+        await createNextRecurringOrder(order);
+      }
     }
 
     // Send WhatsApp notification when order is ready

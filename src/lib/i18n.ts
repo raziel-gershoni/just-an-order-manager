@@ -278,6 +278,9 @@ const translations: Record<string, string> = {
   'orders.recurring': 'חוזר',
   'orders.repeat_weekly': 'חזרה שבועית',
   'orders.repeat_weekly_hint': 'הזמנה חדשה תיווצר אוטומטית כשתימסר',
+  'orders.stop_recurring': 'הפסק חזרה',
+  'orders.recurring_stopped': 'החזרה השבועית בוטלה',
+  'orders.next_recurring_created': 'נוצרה ההזמנה החוזרת הבאה',
   'notify.send_whatsapp': 'שלח התראה בוואטסאפ ללקוח',
 
   // Join
