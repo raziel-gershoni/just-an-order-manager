@@ -26,13 +26,10 @@ import {
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
-import { notifyMemberJoined, notifyPrepayment } from '@/lib/notifications';
-import {
-  ensureOrderPayment,
-  calculateOrderTotal,
-  getCustomerBalance,
-} from '@/lib/order-payments';
+import { calculateOrderTotal, recordOrderPayment } from '@/lib/order-payments';
 import { transitionOrderStatus } from '@/lib/order-status';
+import { resolveBotOrderAccess } from '@/lib/telegram-auth';
+import { respondToInvite } from '@/lib/invites';
 import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
@@ -161,34 +158,13 @@ function setupHandlers(bot: import('grammy').Bot) {
     if (!user) return;
     const lang = user.language as Lang;
 
-    const [invite] = await db
-      .select()
-      .from(groupInvites)
-      .where(eq(groupInvites.inviteCode, inviteCode))
-      .limit(1);
-
-    if (!invite || invite.status !== 'pending') {
+    const result = await respondToInvite(inviteCode, 'accept', { id: user.id, name: user.name });
+    if (!result.ok) {
       await ctx.answerCallbackQuery(
         lang === 'he' ? 'ההזמנה כבר לא תקפה.' : 'Invite is no longer valid.'
       );
       return;
     }
-
-    await db.insert(groupMembers).values({
-      groupId: invite.groupId,
-      userId: user.id,
-      role: invite.role,
-    });
-
-    await db
-      .update(groupInvites)
-      .set({ status: 'accepted' })
-      .where(eq(groupInvites.id, invite.id));
-
-    await notifyMemberJoined(invite.groupId, {
-      memberName: user.name,
-      role: invite.role,
-    });
 
     await ctx.answerCallbackQuery(
       lang === 'he' ? 'הצטרפת בהצלחה!' : 'Successfully joined!'
@@ -222,12 +198,15 @@ function setupHandlers(bot: import('grammy').Bot) {
 
   bot.callbackQuery(/^decline_invite:(.+)$/, async (ctx) => {
     const inviteCode = ctx.match![1];
+    const telegramId = String(ctx.from.id);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+    if (!user) return;
 
-    await db
-      .update(groupInvites)
-      .set({ status: 'declined' })
-      .where(eq(groupInvites.inviteCode, inviteCode));
-
+    await respondToInvite(inviteCode, 'decline', { id: user.id, name: user.name });
     await ctx.answerCallbackQuery('OK');
     await ctx.editMessageText('❌');
   });
@@ -538,20 +517,16 @@ function setupHandlers(bot: import('grammy').Bot) {
     const newStatus = ctx.match![2];
     const telegramId = String(ctx.from.id);
 
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.telegramId, telegramId))
-      .limit(1);
-    if (!user) return;
+    // Bot-side authorization: same group-membership scoping the web route uses.
+    const access = await resolveBotOrderAccess(telegramId, orderId);
+    if (!access) return;
+    const { user, order, role } = access;
     const lang = user.language as Lang;
-
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
-    if (!order) return;
+    // Drivers may only act on delivery orders (mirror the web route).
+    if (role === 'driver' && !order.isDelivery) {
+      await ctx.answerCallbackQuery(t('bot.status_change_failed', lang));
+      return;
+    }
 
     // Same state machine the web app runs (validation + CAS + charge + recurring
     // clone + notifications). Only the auth (above) and the Telegram reply
@@ -600,43 +575,29 @@ function setupHandlers(bot: import('grammy').Bot) {
     const action = ctx.match![2];
     const telegramId = String(ctx.from.id);
 
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.telegramId, telegramId))
-      .limit(1);
-    if (!user) return;
+    const access = await resolveBotOrderAccess(telegramId, orderId);
+    if (!access) return;
+    const { user, order, role } = access;
     const lang = user.language as Lang;
-
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
-    if (!order) return;
+    if (role === 'driver' && !order.isDelivery) {
+      await ctx.answerCallbackQuery(t('bot.status_change_failed', lang));
+      return;
+    }
 
     if (action === 'paid') {
       const total = await calculateOrderTotal(orderId);
       const amount = total.toFixed(2);
-      await ensureOrderPayment(orderId, order.groupId, order.customerId, amount);
-      await db
-        .update(orders)
-        .set({ paid: true, updatedAt: new Date() })
-        .where(eq(orders.id, orderId));
-
       const [customer] = await db
         .select({ name: customers.name })
         .from(customers)
         .where(eq(customers.id, order.customerId))
         .limit(1);
-      const balance = await getCustomerBalance(order.customerId, order.groupId);
-      if (customer) {
-        await notifyPrepayment(order.groupId, {
-          customerName: customer.name,
-          amount,
-          balance: Number(balance),
-        });
-      }
+      // Shared post-delivery payment sequence (charge + payment + paid + notify).
+      await recordOrderPayment(
+        { id: order.id, groupId: order.groupId, customerId: order.customerId, customerName: customer?.name ?? '' },
+        'paid',
+        amount
+      );
 
       await ctx.answerCallbackQuery(`✅ ${t('bot.payment_recorded', lang)}`);
       await ctx.editMessageText(

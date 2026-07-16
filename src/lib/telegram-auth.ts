@@ -1,7 +1,37 @@
 import { createHmac } from 'crypto';
 import { db } from '@/db';
-import { users, groupMembers } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, groupMembers, orders } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
+
+type OrderRow = typeof orders.$inferSelect;
+type UserRow = typeof users.$inferSelect;
+
+/**
+ * Authorize a Telegram user to act on an order — the bot-side mirror of the web
+ * `withGroup`: resolve the user by telegram id, load the order, and require a
+ * group-membership row for the order's group (order ids are global, so a bare
+ * id lookup would let a callback target any group's order). Returns the user
+ * (for language), the order, and the caller's role, or null if any check fails.
+ */
+export async function resolveBotOrderAccess(
+  telegramId: string,
+  orderId: number
+): Promise<{ user: UserRow; order: OrderRow; role: string } | null> {
+  const [user] = await db.select().from(users).where(eq(users.telegramId, telegramId)).limit(1);
+  if (!user) return null;
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order) return null;
+
+  const [membership] = await db
+    .select({ role: groupMembers.role })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.userId, user.id), eq(groupMembers.groupId, order.groupId)))
+    .limit(1);
+  if (!membership) return null;
+
+  return { user, order, role: membership.role };
+}
 
 export interface TelegramUser {
   id: number;

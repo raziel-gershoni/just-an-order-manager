@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { orders, orderItems, payments } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from './order-pricing';
+import { notifyPrepayment } from './notifications';
 
 /**
  * Calculate the total price of an order via the one read-total rule
@@ -107,6 +108,44 @@ export async function ensureOrderPayment(
     orderId,
   });
   return true;
+}
+
+/**
+ * Apply a post-delivery payment decision to an order — the one place the
+ * charge/payment/paid-flag/notify sequence lives, shared by the web pay route
+ * and the Telegram payment buttons. `mark_paid` just flips the flag; the others
+ * ensure the charge (idempotent), record the payment when the customer paid,
+ * set paid (false only for 'unpaid'), and notify. Returns the new balance +
+ * paid flag. Callers own authorization and the "must be delivered" precondition.
+ */
+export async function recordOrderPayment(
+  order: { id: number; groupId: number; customerId: number; customerName: string },
+  action: 'paid' | 'credit' | 'unpaid' | 'mark_paid',
+  amount?: string
+): Promise<{ balance: string; paid: boolean }> {
+  if (action === 'mark_paid') {
+    await db.update(orders).set({ paid: true, updatedAt: new Date() }).where(eq(orders.id, order.id));
+    const balance = await getCustomerBalance(order.customerId, order.groupId);
+    return { balance, paid: true };
+  }
+
+  await ensureOrderCharge(order.id, order.groupId, order.customerId);
+  if (action === 'paid' && amount) {
+    await ensureOrderPayment(order.id, order.groupId, order.customerId, amount);
+  }
+
+  const paid = action !== 'unpaid';
+  await db.update(orders).set({ paid, updatedAt: new Date() }).where(eq(orders.id, order.id));
+
+  const balance = await getCustomerBalance(order.customerId, order.groupId);
+  if (action === 'paid' && amount) {
+    await notifyPrepayment(order.groupId, {
+      customerName: order.customerName,
+      amount,
+      balance: Number(balance),
+    });
+  }
+  return { balance, paid };
 }
 
 /**
