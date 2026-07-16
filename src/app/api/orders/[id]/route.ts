@@ -33,6 +33,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
       isDelivery: orders.isDelivery,
       deliveryFee: orders.deliveryFee,
       dealsEnabled: orders.dealsEnabled,
+      additionsCharged: orders.additionsCharged,
       goodsSnapshot: orders.goodsSnapshot,
       pricingBreakdown: orders.pricingBreakdown,
       customerAddress: customers.address,
@@ -213,6 +214,69 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     return errorResponse('Cannot edit completed or cancelled orders', 400);
   }
 
+  // Detect whether this edit actually changes the order's pricing inputs. The
+  // order form ALWAYS co-sends the full items array even for a notes/date/fee
+  // -only edit, so "items present" alone must NOT trigger a re-price — that
+  // would silently re-bundle a placed (or legacy) order against the current tier
+  // config. We compare the submitted lines against the persisted ones and only
+  // re-price when they (or a pricing flag) genuinely differ. The fingerprint
+  // round-trips only run when items are actually submitted.
+  let itemsChanged = false;
+  if (parsed.data.items !== undefined) {
+    const existingItemRows = await db
+      .select({
+        id: orderItems.id,
+        breadTypeId: orderItems.breadTypeId,
+        breadSizeId: orderItems.breadSizeId,
+        quantity: orderItems.quantity,
+        additionsCharged: orderItems.additionsCharged,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, id));
+    const existingItemIds = existingItemRows.map((i) => i.id);
+    const existingAdditionLinks = existingItemIds.length
+      ? await db
+          .select({
+            orderItemId: orderItemAdditions.orderItemId,
+            breadAdditionId: orderItemAdditions.breadAdditionId,
+          })
+          .from(orderItemAdditions)
+          .where(inArray(orderItemAdditions.orderItemId, existingItemIds))
+      : [];
+    const existingAddByItem: Record<number, number[]> = {};
+    for (const a of existingAdditionLinks) {
+      (existingAddByItem[a.orderItemId] ??= []).push(a.breadAdditionId);
+    }
+    // Canonical, order-independent fingerprint of a line's pricing inputs.
+    const canonLine = (
+      breadTypeId: number,
+      breadSizeId: number | null,
+      quantity: number,
+      additionIds: number[],
+      additionsCharged: boolean | null | undefined
+    ) =>
+      `${breadTypeId}:${breadSizeId}:${quantity}:${[...additionIds].sort((a, b) => a - b).join(',')}:${
+        additionsCharged == null ? 'n' : additionsCharged ? '1' : '0'
+      }`;
+    const canonSet = (lines: string[]) => lines.slice().sort().join('|');
+    const existingCanon = canonSet(
+      existingItemRows.map((i) =>
+        canonLine(i.breadTypeId, i.breadSizeId, i.quantity, existingAddByItem[i.id] ?? [], i.additionsCharged)
+      )
+    );
+    const submittedCanon = canonSet(
+      parsed.data.items.map((i) =>
+        canonLine(i.breadTypeId, i.breadSizeId, i.quantity, i.breadAdditionIds ?? [], i.additionsCharged)
+      )
+    );
+    itemsChanged = submittedCanon !== existingCanon;
+  }
+  const pricingFlagsChanged =
+    (parsed.data.dealsEnabled !== undefined && parsed.data.dealsEnabled !== order.dealsEnabled) ||
+    (parsed.data.additionsCharged !== undefined &&
+      parsed.data.additionsCharged !== order.additionsCharged);
+  const shouldReprice = parsed.data.items !== undefined && (itemsChanged || pricingFlagsChanged);
+
   // Build update data
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -265,8 +329,9 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     .set(updateData)
     .where(eq(orders.id, id));
 
-  // Update items if provided
-  if (parsed.data.items) {
+  // Rewrite items only when they (or a pricing flag) actually changed. An
+  // identical resend keeps the frozen rows + prices untouched.
+  if (parsed.data.items && shouldReprice) {
     const validTypes = await db
       .select({ id: breadTypes.id })
       .from(breadTypes)
@@ -466,7 +531,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   // snapshot (or legacy Σ) via goodsForRead and never write a snapshot.
   let calculatedTotal: number;
   let breakdown = updated.pricingBreakdown;
-  if (parsed.data.items !== undefined) {
+  if (shouldReprice) {
     const [grpS] = await db
       .select({ surcharge: groups.additionsSurcharge })
       .from(groups)

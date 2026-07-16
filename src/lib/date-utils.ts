@@ -27,6 +27,30 @@ export function resolveDeliveryDate(
   }
 }
 
+/**
+ * Delivery date for the NEXT occurrence of a recurring order. Recurrence is
+ * weekly, so we advance the order's own delivery date by 7 days — robust no
+ * matter which day "delivered" is actually clicked. (The creation-time
+ * getNextShabbatDate() returns *today* on a Friday, so reusing it would clone a
+ * Shabbat order onto the same Friday, and it drops a specific_date entirely.)
+ * Falls back to the type-based resolution when the source has no stored date.
+ */
+export function nextRecurringDate(
+  deliveryType: string,
+  currentDate: string | null
+): string | null {
+  if (currentDate) {
+    // Advance one week, keeping the source weekday, but roll forward past today
+    // so a late-marked delivery (owner taps "delivered" a week or two late) never
+    // clones a next order dated in the past.
+    let next = addDays(new Date(currentDate + 'T00:00:00'), 7);
+    const today = startOfDay(new Date());
+    while (next <= today) next = addDays(next, 7);
+    return format(next, 'yyyy-MM-dd');
+  }
+  return resolveDeliveryDate(deliveryType);
+}
+
 export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
   const date = startOfDay(new Date(dateStr + 'T00:00:00'));
   const today = startOfDay(new Date());
