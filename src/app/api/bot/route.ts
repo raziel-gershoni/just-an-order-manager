@@ -30,6 +30,7 @@ import { calculateOrderTotal, recordOrderPayment } from '@/lib/order-payments';
 import { transitionOrderStatus } from '@/lib/order-status';
 import { resolveBotOrderAccess } from '@/lib/telegram-auth';
 import { respondToInvite } from '@/lib/invites';
+import { formatStaffItemLabel } from '@/lib/order-display';
 import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
@@ -236,6 +237,7 @@ function setupHandlers(bot: import('grammy').Bot) {
           .from(orderItemAdditions)
           .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
           .where(inArray(orderItemAdditions.orderItemId, itemIds))
+          .orderBy(asc(breadAdditions.sortOrder))
       : [];
     const additionsByItem: Record<number, string[]> = {};
     for (const a of additionLinks) {
@@ -246,11 +248,10 @@ function setupHandlers(bot: import('grammy').Bot) {
     const map: Record<number, { breadTypeName: string; quantity: number }[]> = {};
     for (const item of allItems) {
       if (!map[item.orderId]) map[item.orderId] = [];
-      const base = item.sizeName ? `${item.typeName} ${item.sizeName}` : item.typeName;
-      let label = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
-      const adds = additionsByItem[item.id] ?? [];
-      if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
-      map[item.orderId].push({ breadTypeName: label, quantity: item.quantity });
+      map[item.orderId].push({
+        breadTypeName: formatStaffItemLabel(item.typeName, item.sizeName, item.weightGrams, additionsByItem[item.id] ?? []),
+        quantity: item.quantity,
+      });
     }
     return map;
   }

@@ -8,9 +8,10 @@ import {
   breadSizes,
   breadAdditions,
 } from '@/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, asc } from 'drizzle-orm';
 import { nextRecurringDate } from './date-utils';
 import { notifyNewOrder } from './notifications';
+import { formatStaffItemLabel } from './order-display';
 
 type SourceOrder = typeof orders.$inferSelect;
 
@@ -162,6 +163,7 @@ export async function createNextRecurringOrder(order: SourceOrder): Promise<numb
           .from(orderItemAdditions)
           .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
           .where(inArray(orderItemAdditions.orderItemId, notifyItemIds))
+          .orderBy(asc(breadAdditions.sortOrder))
       : [];
     const addsByItem: Record<number, string[]> = {};
     for (const a of addRows) {
@@ -169,13 +171,10 @@ export async function createNextRecurringOrder(order: SourceOrder): Promise<numb
       addsByItem[a.orderItemId].push(a.name);
     }
 
-    const staffItems = notifyRows.map((r) => {
-      let label = r.sizeName ? `${r.typeName} ${r.sizeName}` : r.typeName;
-      if (r.weightGrams != null) label = `${label} (${r.weightGrams}g)`;
-      const adds = addsByItem[r.itemId] ?? [];
-      if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
-      return { breadTypeName: label, quantity: r.quantity };
-    });
+    const staffItems = notifyRows.map((r) => ({
+      breadTypeName: formatStaffItemLabel(r.typeName, r.sizeName, r.weightGrams, addsByItem[r.itemId] ?? []),
+      quantity: r.quantity,
+    }));
 
     if (cust) {
       await notifyNewOrder(order.groupId, createdOrderId, {

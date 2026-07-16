@@ -4,6 +4,7 @@ import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdd
 import { eq, and, asc, ne, inArray } from 'drizzle-orm';
 import { format } from 'date-fns';
 import { sendMorningSummary } from '@/lib/notifications';
+import { formatStaffItemLabel } from '@/lib/order-display';
 import { scaleRecipeByQty, sumScaledByType, formatRecipeBlockHebrew, type Recipe, type ScaledRecipe } from '@/lib/recipe';
 
 export const maxDuration = 60;
@@ -87,13 +88,9 @@ async function handler(request: Request) {
       for (const order of todayOrders) {
         const items = allItems.filter((i) => i.orderId === order.id);
         for (const item of items) {
-          const base = item.sizeName ? `${item.breadTypeName} ${item.sizeName}` : item.breadTypeName;
-          let label = item.weightGrams != null ? `${base} (${item.weightGrams}g)` : base;
-          const adds = additionsByItem[item.id] ?? [];
-          if (adds.length) label = `${label} (עם ${adds.join(', ')})`;
           summaryItems.push({
             customerName: order.customerName,
-            breadTypeName: label,
+            breadTypeName: formatStaffItemLabel(item.breadTypeName, item.sizeName, item.weightGrams, additionsByItem[item.id] ?? []),
             quantity: item.quantity,
           });
         }

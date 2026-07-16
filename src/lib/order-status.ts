@@ -8,7 +8,7 @@ import {
   breadAdditions,
   orderItemAdditions,
 } from '@/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, asc } from 'drizzle-orm';
 import { ORDER_STATUS_TRANSITIONS } from './constants';
 import { formatItemLineForStaff } from './order-display';
 import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
@@ -107,6 +107,7 @@ export async function transitionOrderStatus(
             .from(orderItemAdditions)
             .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
             .where(inArray(orderItemAdditions.orderItemId, itemIds))
+            .orderBy(asc(breadAdditions.sortOrder))
         : [];
       const additionsByItem: Record<number, string[]> = {};
       for (const a of additionLinks) {
