@@ -13,16 +13,7 @@ import {
   breadSizes,
   breadAdditions,
   orderItemAdditions,
-  breadRecipes,
-  breadRecipeIngredients,
 } from '@/db/schema';
-import {
-  scaleRecipeByQty,
-  sumScaledByType,
-  formatRecipeBlockHebrew,
-  type Recipe,
-  type ScaledRecipe,
-} from '@/lib/recipe';
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
@@ -31,6 +22,7 @@ import { transitionOrderStatus } from '@/lib/order-status';
 import { resolveBotOrderAccess } from '@/lib/telegram-auth';
 import { respondToInvite } from '@/lib/invites';
 import { formatStaffItemLabel } from '@/lib/order-display';
+import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
 import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
@@ -254,79 +246,6 @@ function setupHandlers(bot: import('grammy').Bot) {
       });
     }
     return map;
-  }
-
-  // Build the recipe block (Hebrew) aggregating across all the given orders' line items.
-  // Returns empty string if no bread type has a recipe configured.
-  async function buildRecipeBlockForOrders(orderIds: number[]): Promise<string> {
-    if (orderIds.length === 0) return '';
-    const items = await db
-      .select({
-        breadTypeId: orderItems.breadTypeId,
-        breadTypeName: breadTypes.name,
-        weightGrams: breadSizes.weightGrams,
-        quantity: orderItems.quantity,
-      })
-      .from(orderItems)
-      .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
-      .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-      .where(inArray(orderItems.orderId, orderIds));
-
-    if (items.length === 0) return '';
-
-    type Agg = { name: string; loaves: number; finishedGrams: number; partials: ScaledRecipe[] };
-    const aggByType = new Map<number, Agg>();
-    for (const it of items) {
-      if (!aggByType.has(it.breadTypeId)) {
-        aggByType.set(it.breadTypeId, {
-          name: it.breadTypeName,
-          loaves: 0,
-          finishedGrams: 0,
-          partials: [],
-        });
-      }
-    }
-
-    const involvedTypeIds = Array.from(aggByType.keys());
-    const recipeRows = await db
-      .select()
-      .from(breadRecipes)
-      .where(inArray(breadRecipes.breadTypeId, involvedTypeIds));
-    const ingRows = recipeRows.length
-      ? await db
-          .select()
-          .from(breadRecipeIngredients)
-          .where(inArray(breadRecipeIngredients.breadTypeId, involvedTypeIds))
-          .orderBy(asc(breadRecipeIngredients.sortOrder))
-      : [];
-    const recipeByType = new Map<number, Recipe>();
-    for (const r of recipeRows) recipeByType.set(r.breadTypeId, { ingredients: [] });
-    for (const i of ingRows) {
-      recipeByType.get(i.breadTypeId)?.ingredients.push({
-        name: i.name,
-        kind: i.kind,
-        pctOfFinished: Number(i.pctOfFinished),
-        sortOrder: i.sortOrder,
-      });
-    }
-
-    for (const it of items) {
-      const agg = aggByType.get(it.breadTypeId)!;
-      agg.loaves += it.quantity;
-      if (it.weightGrams != null) agg.finishedGrams += it.weightGrams * it.quantity;
-      const recipe = recipeByType.get(it.breadTypeId);
-      if (recipe && recipe.ingredients.length > 0 && it.weightGrams != null) {
-        agg.partials.push(scaleRecipeByQty(recipe, it.weightGrams, it.quantity));
-      }
-    }
-
-    const entries = Array.from(aggByType.values()).map((a) => ({
-      name: a.name,
-      loaves: a.loaves,
-      finishedGrams: a.finishedGrams,
-      recipe: a.partials.length > 0 ? sumScaledByType(a.partials) : null,
-    }));
-    return formatRecipeBlockHebrew(entries);
   }
 
   bot.command('today', async (ctx) => {

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients } from '@/db/schema';
+import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
 import { eq, and, asc, ne, inArray } from 'drizzle-orm';
 import { format } from 'date-fns';
 import { sendMorningSummary } from '@/lib/notifications';
 import { formatStaffItemLabel } from '@/lib/order-display';
-import { scaleRecipeByQty, sumScaledByType, formatRecipeBlockHebrew, type Recipe, type ScaledRecipe } from '@/lib/recipe';
+import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
 
 export const maxDuration = 60;
 
@@ -99,58 +99,7 @@ async function handler(request: Request) {
       // Build per-type recipe block for the baker (Hebrew)
       let recipeBlock: string | undefined;
       try {
-        type Agg = { name: string; loaves: number; finishedGrams: number; partials: ScaledRecipe[] };
-        const aggByType = new Map<number, Agg>();
-        for (const it of allItems) {
-          if (!aggByType.has(it.breadTypeId)) {
-            aggByType.set(it.breadTypeId, {
-              name: it.breadTypeName,
-              loaves: 0,
-              finishedGrams: 0,
-              partials: [],
-            });
-          }
-        }
-        const involvedTypeIds = Array.from(aggByType.keys());
-        if (involvedTypeIds.length > 0) {
-          const recipeRows = await db
-            .select()
-            .from(breadRecipes)
-            .where(inArray(breadRecipes.breadTypeId, involvedTypeIds));
-          const ingRows = recipeRows.length
-            ? await db
-                .select()
-                .from(breadRecipeIngredients)
-                .where(inArray(breadRecipeIngredients.breadTypeId, involvedTypeIds))
-                .orderBy(asc(breadRecipeIngredients.sortOrder))
-            : [];
-          const recipeByType = new Map<number, Recipe>();
-          for (const r of recipeRows) recipeByType.set(r.breadTypeId, { ingredients: [] });
-          for (const i of ingRows) {
-            recipeByType.get(i.breadTypeId)?.ingredients.push({
-              name: i.name,
-              kind: i.kind,
-              pctOfFinished: Number(i.pctOfFinished),
-              sortOrder: i.sortOrder,
-            });
-          }
-          for (const it of allItems) {
-            const agg = aggByType.get(it.breadTypeId)!;
-            agg.loaves += it.quantity;
-            if (it.weightGrams != null) agg.finishedGrams += it.weightGrams * it.quantity;
-            const recipe = recipeByType.get(it.breadTypeId);
-            if (recipe && recipe.ingredients.length > 0 && it.weightGrams != null) {
-              agg.partials.push(scaleRecipeByQty(recipe, it.weightGrams, it.quantity));
-            }
-          }
-          const entries = Array.from(aggByType.values()).map((a) => ({
-            name: a.name,
-            loaves: a.loaves,
-            finishedGrams: a.finishedGrams,
-            recipe: a.partials.length > 0 ? sumScaledByType(a.partials) : null,
-          }));
-          recipeBlock = formatRecipeBlockHebrew(entries) || undefined;
-        }
+        recipeBlock = (await buildRecipeBlockForOrders(todayOrders.map((o) => o.id))) || undefined;
       } catch (err) {
         console.error(`[cron/morning-reminder] recipe block failed for group ${group.id}:`, err);
       }
