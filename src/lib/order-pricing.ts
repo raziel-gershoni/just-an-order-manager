@@ -115,11 +115,24 @@ export function goodsForRead(
   return items.reduce((s, i) => s + i.quantity * Number(i.pricePerUnit || 0), 0);
 }
 
-/** Full order total on READ: (totalOverride ?? goods) + delivery fee — the one consistent rule. */
+/**
+ * Full order total from an ALREADY-computed goods subtotal: (totalOverride ??
+ * goods) + delivery fee — the one consistent rule. Use this at sites that got
+ * goods from a SQL SUM or the frozen snapshot (deliveries list, charge calc) so
+ * the total rule lives in exactly one place.
+ */
+export function orderTotalFromGoods(
+  order: { totalOverride: string | null; deliveryFee: string | null },
+  goods: number
+): number {
+  const base = order.totalOverride != null ? Number(order.totalOverride) : goods;
+  return base + Number(order.deliveryFee || 0);
+}
+
+/** Full order total on READ: (totalOverride ?? goods) + delivery fee. */
 export function orderTotalForRead(
   order: { goodsSnapshot: string | null; totalOverride: string | null; deliveryFee: string | null },
   items: { quantity: number; pricePerUnit: string | null }[]
 ): number {
-  const goods = order.totalOverride != null ? Number(order.totalOverride) : goodsForRead(order, items);
-  return goods + Number(order.deliveryFee || 0);
+  return orderTotalFromGoods(order, goodsForRead(order, items));
 }

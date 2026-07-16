@@ -2,6 +2,7 @@ import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, customers, orderItems, customerPhones } from '@/db/schema';
 import { eq, and, inArray, notInArray, asc, sql } from 'drizzle-orm';
+import { orderTotalFromGoods } from '@/lib/order-pricing';
 
 // Active deliveries (is_delivery, not yet delivered/cancelled) for owner/manager
 // /driver. Returns the navigable address + private notes + the amount to collect.
@@ -65,12 +66,8 @@ export const GET = withGroup(async (_request, auth, groupId) => {
   for (const p of phones) if (!phoneByCustomer.has(p.customerId)) phoneByCustomer.set(p.customerId, p.phone);
 
   const deliveries = rows.map((r) => {
-    const goods = r.totalOverride
-      ? Number(r.totalOverride)
-      : r.goodsSnapshot != null
-        ? Number(r.goodsSnapshot)
-        : (goodsByOrder.get(r.id) ?? 0);
-    const amount = goods + Number(r.deliveryFee || 0);
+    const goods = r.goodsSnapshot != null ? Number(r.goodsSnapshot) : (goodsByOrder.get(r.id) ?? 0);
+    const amount = orderTotalFromGoods(r, goods);
     return {
       id: r.id,
       deliveryDate: r.deliveryDate,

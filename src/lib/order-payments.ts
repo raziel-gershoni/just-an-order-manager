@@ -1,11 +1,12 @@
 import { db } from '@/db';
 import { orders, orderItems, payments } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { orderTotalFromGoods } from './order-pricing';
 
 /**
- * Calculate the total price of an order. The goods total honors `totalOverride`
- * if set, otherwise sums quantity × pricePerUnit across all items. The delivery
- * fee is always added on top.
+ * Calculate the total price of an order via the one read-total rule
+ * (totalOverride ?? goods) + fee, where goods prefers the frozen bulk-priced
+ * snapshot and falls back to Σ qty×price for legacy orders.
  */
 export async function calculateOrderTotal(orderId: number): Promise<number> {
   const [order] = await db
@@ -18,22 +19,22 @@ export async function calculateOrderTotal(orderId: number): Promise<number> {
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!order) return 0;
-  const fee = Number(order.deliveryFee || 0);
-  if (order.totalOverride) return Number(order.totalOverride) + fee;
-  // Prefer the frozen bulk-priced goods snapshot; fall back to Σ qty×price for
-  // legacy orders (identical to before).
-  if (order.goodsSnapshot != null) return Number(order.goodsSnapshot) + fee;
 
-  const items = await db
-    .select({
-      quantity: orderItems.quantity,
-      pricePerUnit: orderItems.pricePerUnit,
-    })
-    .from(orderItems)
-    .where(eq(orderItems.orderId, orderId));
-
-  const goods = items.reduce((s, i) => s + i.quantity * Number(i.pricePerUnit || 0), 0);
-  return goods + fee;
+  // Goods is only consulted when there's no override; the legacy items query
+  // runs only when there's neither an override nor a snapshot.
+  let goods = 0;
+  if (order.totalOverride == null) {
+    if (order.goodsSnapshot != null) {
+      goods = Number(order.goodsSnapshot);
+    } else {
+      const items = await db
+        .select({ quantity: orderItems.quantity, pricePerUnit: orderItems.pricePerUnit })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId));
+      goods = items.reduce((s, i) => s + i.quantity * Number(i.pricePerUnit || 0), 0);
+    }
+  }
+  return orderTotalFromGoods(order, goods);
 }
 
 /**

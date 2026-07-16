@@ -1,10 +1,11 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { payments, customers, orders, orderItems, breadTypes } from '@/db/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { payments, customers } from '@/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { notifyPrepayment, notifyBalanceAlert } from '@/lib/notifications';
 import { BALANCE_DEBT_THRESHOLD } from '@/lib/constants';
+import { ensureOrderCharge, getCustomerBalance } from '@/lib/order-payments';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -55,58 +56,10 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
 
-  // Auto-create charge if recording a payment for an order without an existing charge
+  // Auto-create the charge (idempotent) when recording a payment against an
+  // order that hasn't been charged yet — one charge source of truth.
   if (type === 'payment' && orderId) {
-    const [existingCharge] = await db
-      .select({ id: payments.id })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.orderId, orderId),
-          eq(payments.type, 'charge'),
-          eq(payments.groupId, groupId)
-        )
-      )
-      .limit(1);
-
-    if (!existingCharge) {
-      // Get order for potential override
-      const [order] = await db
-        .select({ totalOverride: orders.totalOverride, goodsSnapshot: orders.goodsSnapshot, deliveryFee: orders.deliveryFee })
-        .from(orders)
-        .where(eq(orders.id, orderId))
-        .limit(1);
-
-      // Calculate order total for the charge
-      const items = await db
-        .select({
-          quantity: orderItems.quantity,
-          pricePerUnit: orderItems.pricePerUnit,
-        })
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId));
-
-      const legacyTotal = items.reduce(
-        (s, i) => s + i.quantity * Number(i.pricePerUnit || 0),
-        0
-      );
-      // Prefer the frozen bulk-priced goods snapshot; fall back to Σ qty×price
-      // for legacy orders (identical to before).
-      const goods = order?.goodsSnapshot != null ? Number(order.goodsSnapshot) : legacyTotal;
-      // Add the delivery fee, consistent with calculateOrderTotal / GET / deliveries.
-      const orderTotal =
-        (order?.totalOverride ? Number(order.totalOverride) : goods) + Number(order?.deliveryFee || 0);
-
-      if (orderTotal > 0) {
-        await db.insert(payments).values({
-          groupId,
-          customerId,
-          amount: `-${orderTotal.toFixed(2)}`,
-          type: 'charge',
-          orderId,
-        });
-      }
-    }
+    await ensureOrderCharge(orderId, groupId, customerId);
   }
 
   // For charges, amount should be negative
@@ -126,16 +79,8 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .returning();
 
   // Check balance and notify
-  const [balanceResult] = await db
-    .select({
-      balance: sql<string>`COALESCE(SUM(${payments.amount}), 0)`,
-    })
-    .from(payments)
-    .where(
-      and(eq(payments.customerId, customerId), eq(payments.groupId, groupId))
-    );
-
-  const balance = Number(balanceResult.balance);
+  const balanceStr = await getCustomerBalance(customerId, groupId);
+  const balance = Number(balanceStr);
 
   // Notify on payment
   if (type === 'payment' && Number(amount) > 0) {
@@ -150,9 +95,9 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   if (balance < BALANCE_DEBT_THRESHOLD) {
     await notifyBalanceAlert(groupId, {
       customerName: customer.name,
-      balance: balanceResult.balance,
+      balance: balanceStr,
     });
   }
 
-  return jsonResponse({ payment, balance: balanceResult.balance }, 201);
+  return jsonResponse({ payment, balance: balanceStr }, 201);
 });

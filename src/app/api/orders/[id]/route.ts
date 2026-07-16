@@ -5,7 +5,7 @@ import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { scaleRecipe, type Recipe, type ScaledRecipe } from '@/lib/recipe';
-import { goodsForRead, priceOrderForWrite, type WriteLine } from '@/lib/order-pricing';
+import { goodsForRead, orderTotalFromGoods, priceOrderForWrite, type WriteLine } from '@/lib/order-pricing';
 
 function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
@@ -132,8 +132,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
   // for legacy orders (identical to before).
   const calculatedTotal = goodsForRead(order, items);
   const deliveryFee = Number(order.deliveryFee || 0);
-  const totalPrice =
-    (order.totalOverride ? Number(order.totalOverride) : calculatedTotal) + deliveryFee;
+  const totalPrice = orderTotalFromGoods(order, calculatedTotal);
 
   // Count of customer phones — used by the order UI to decide whether to
   // show the "notify customer" checkbox on status changes.
@@ -567,7 +566,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   } else {
     calculatedTotal = goodsForRead(updated, updatedItems);
   }
-  const totalPrice = (updated.totalOverride ? Number(updated.totalOverride) : calculatedTotal) + fee;
+  const totalPrice = orderTotalFromGoods(updated, calculatedTotal);
 
   return jsonResponse({
     order: {
