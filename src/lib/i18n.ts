@@ -342,6 +342,8 @@ const translations: Record<string, string> = {
   'bot.amount': 'סכום',
   'bot.payment_recorded': 'תשלום נרשם',
   'bot.marked_to_be_paid': 'סומן לתשלום',
+  'bot.order_already_updated': 'ההזמנה כבר עודכנה, רעננו',
+  'bot.status_change_failed': 'לא ניתן לשנות את הסטטוס',
 
   // Balance labels
   'customers.balance_square': 'מסולק',

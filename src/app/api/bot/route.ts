@@ -26,15 +26,13 @@ import {
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { format, addDays } from 'date-fns';
-import { notifyMemberJoined, notifyCustomerWhatsApp, notifyPrepayment } from '@/lib/notifications';
+import { notifyMemberJoined, notifyPrepayment } from '@/lib/notifications';
 import {
-  ensureOrderCharge,
   ensureOrderPayment,
   calculateOrderTotal,
   getCustomerBalance,
 } from '@/lib/order-payments';
-import { getCustomerPhones } from '@/lib/customer-phones';
-import { createNextRecurringOrder } from '@/lib/order-recurring';
+import { transitionOrderStatus } from '@/lib/order-status';
 import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
@@ -555,25 +553,17 @@ function setupHandlers(bot: import('grammy').Bot) {
       .limit(1);
     if (!order) return;
 
-    await db
-      .update(orders)
-      .set({ status: newStatus as any, updatedAt: new Date() })
-      .where(eq(orders.id, orderId));
-
-    // Record the charge as soon as the order is delivered. Idempotent.
-    if (newStatus === 'delivered') {
-      await ensureOrderCharge(orderId, order.groupId, order.customerId);
-      // Same recurring roll-forward + baker heads-up the web app does, so a
-      // recurring order delivered via this button still repeats.
-      if (order.isRecurring) {
-        await createNextRecurringOrder(order);
-      }
-    }
-
-    // Send WhatsApp notification when order is ready
-    if (newStatus === 'ready') {
-      const phones = await getCustomerPhones(order.customerId);
-      await notifyCustomerWhatsApp(phones);
+    // Same state machine the web app runs (validation + CAS + charge + recurring
+    // clone + notifications). Only the auth (above) and the Telegram reply
+    // (below) are bot-specific.
+    const result = await transitionOrderStatus(order, newStatus, { notifyCustomer: true });
+    if (!result.ok) {
+      await ctx.answerCallbackQuery(
+        result.status === 409
+          ? t('bot.order_already_updated', lang)
+          : t('bot.status_change_failed', lang)
+      );
+      return;
     }
 
     await ctx.answerCallbackQuery(`${t(`status.${newStatus}`, lang)} ✅`);
