@@ -16,7 +16,7 @@ import {
 } from '@/db/schema';
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
-import { format, addDays } from 'date-fns';
+import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { calculateOrderTotal, recordOrderPayment } from '@/lib/order-payments';
 import { transitionOrderStatus } from '@/lib/order-status';
 import { resolveBotOrderAccess } from '@/lib/telegram-auth';
@@ -264,7 +264,7 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = todayStr();
     const groupId = userGroups[0].groupId;
 
     const todayOrders = await db
@@ -334,8 +334,8 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const weekEnd = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+    const today = todayStr();
+    const weekEnd = upcomingHorizonStr();
     const groupId = userGroups[0].groupId;
 
     const weekOrders = await db

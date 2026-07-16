@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
 import { eq, and, asc, ne, inArray } from 'drizzle-orm';
-import { format } from 'date-fns';
+import { todayStr } from '@/lib/date-utils';
 import { sendMorningSummary } from '@/lib/notifications';
 import { formatStaffItemLabel } from '@/lib/order-display';
 import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
@@ -16,7 +16,7 @@ async function handler(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = todayStr();
   console.log(`[cron/morning-reminder] starting for ${today}`);
 
   let allGroups: { id: number }[];

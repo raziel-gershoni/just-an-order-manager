@@ -1,6 +1,16 @@
 import { nextFriday, format, startOfDay, endOfDay, addDays } from 'date-fns';
 import { HDate } from '@hebcal/hdate';
 
+/** Today's delivery-date key as a yyyy-MM-dd string — the app's canonical "today". */
+export function todayStr(): string {
+  return format(new Date(), 'yyyy-MM-dd');
+}
+
+/** The delivery-date string `days` from today (default 7) — the upcoming-window horizon. */
+export function upcomingHorizonStr(days = 7): string {
+  return format(addDays(new Date(), days), 'yyyy-MM-dd');
+}
+
 export function getNextShabbatDate(): Date {
   const today = new Date();
   const day = today.getDay();
