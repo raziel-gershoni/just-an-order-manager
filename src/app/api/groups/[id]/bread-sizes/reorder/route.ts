@@ -35,5 +35,7 @@ export const PUT = withAuth(async (request, auth) => {
     )
   );
 
+  // No revalidatePublicSite: the public pricelist sorts sizes by effective price,
+  // not this sortOrder, so reordering sizes doesn't change public output.
   return jsonResponse({ success: true });
 });

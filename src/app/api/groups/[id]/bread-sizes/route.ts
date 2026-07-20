@@ -60,5 +60,7 @@ export const POST = withAuth(async (request, auth) => {
     })
     .returning();
 
+  // No revalidatePublicSite: a bare size isn't on the public pricelist until it's
+  // linked to a type (that link route purges the cache).
   return jsonResponse({ size }, 201);
 });

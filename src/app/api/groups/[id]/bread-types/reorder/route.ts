@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { breadTypes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { revalidatePublicSite } from '@/lib/public-site';
 
 function getGroupId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -37,5 +38,7 @@ export const PUT = withAuth(async (request, auth) => {
     )
   );
 
+  // Type order is the pricelist's row order — purge the cached page.
+  revalidatePublicSite(groupId);
   return jsonResponse({ success: true });
 });

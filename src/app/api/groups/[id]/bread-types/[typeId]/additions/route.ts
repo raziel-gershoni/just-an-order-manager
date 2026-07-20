@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { breadTypes, breadAdditions, breadTypeAdditions } from '@/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { revalidatePublicSite } from '@/lib/public-site';
 
 function parsePath(url: string): { groupId: number; typeId: number } {
   const parts = new URL(url).pathname.split('/');
@@ -66,5 +67,7 @@ export const PUT = withAuth(async (request, auth) => {
     );
   }
 
+  // The public modal lists each type's additions — purge its cache.
+  revalidatePublicSite(groupId);
   return jsonResponse({ success: true, count: parsed.data.enabled.length });
 });

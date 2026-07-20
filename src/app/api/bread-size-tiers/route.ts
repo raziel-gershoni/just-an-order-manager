@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { breadSizeTiers, breadSizes, breadTypes } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { revalidatePublicSite } from '@/lib/public-site';
 
 export const GET = withGroup(async (_request, _auth, groupId) => {
   const tiers = await db
@@ -66,5 +67,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
     .values({ groupId, breadSizeId, breadTypeId, minQty, price })
     .returning();
 
+  // Tiers drive the public "deals" — purge the cached pricelist.
+  revalidatePublicSite(groupId);
   return jsonResponse({ tier: row }, 201);
 });

@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { breadTypes, breadSizes, breadTypeSizes, breadAdditions, breadTypeAdditions } from '@/db/schema';
 import { eq, asc, sql, inArray, and } from 'drizzle-orm';
 import { z } from 'zod/v4';
+import { revalidatePublicSite } from '@/lib/public-site';
 
 function getGroupId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -166,6 +167,9 @@ export const POST = withAuth(async (request, auth) => {
     );
   }
 
+  // A fresh active type (with its auto-enabled default sizes) shows on the
+  // public pricelist immediately — purge its cache.
+  revalidatePublicSite(groupId);
   return jsonResponse(
     {
       breadType: {

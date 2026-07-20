@@ -75,6 +75,9 @@ export const DELETE = withAuth(async (request, auth) => {
   if (hard) {
     // Clear junction rows first so the bread_type_sizes FK doesn't block
     await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, breadTypeId));
+    // No transactions here: purge now, before the row delete that may still 409
+    // on an order FK (the type is gone from the pricelist either way).
+    revalidatePublicSite(breadType.groupId);
     try {
       await db.delete(breadTypes).where(eq(breadTypes.id, breadTypeId));
       return jsonResponse({ deleted: true });
@@ -90,5 +93,6 @@ export const DELETE = withAuth(async (request, auth) => {
     .where(eq(breadTypes.id, breadTypeId))
     .returning();
 
+  revalidatePublicSite(breadType.groupId);
   return jsonResponse({ breadType: updated });
 });

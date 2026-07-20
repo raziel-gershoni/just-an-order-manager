@@ -140,5 +140,6 @@ export const POST = withAuth(async (request, auth) => {
     sortOrder: maxSort + 1,
   });
 
+  revalidatePublicSite(groupId);
   return jsonResponse({ success: true });
 });
