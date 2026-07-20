@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { PublicBread } from '@/lib/public-site';
+import type { PublicBread, PublicDeal } from '@/lib/public-site';
 import { PublicSectionHead } from './PublicSectionHead';
 import { PublicBadge } from './PublicBadge';
 
@@ -53,6 +53,7 @@ export function PricelistSection({
         {catalog.map((bread, i) => {
           const accent = accentOf(bread);
           const range = rangeOf(bread);
+          const hasDeals = bread.sizes.some((s) => s.deals.length > 0);
           return (
             <button
               key={bread.id}
@@ -74,6 +75,18 @@ export function PricelistSection({
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-display text-[16px] font-semibold">
                     <span className="truncate">{bread.name}</span>
                     {bread.badge && <PublicBadge badge={bread.badge} small />}
+                    {hasDeals && (
+                      <span
+                        className="whitespace-nowrap rounded-[3px] border px-1.5 py-0.5 text-[10px] font-bold"
+                        style={{
+                          color: accent,
+                          borderColor: `color-mix(in srgb, ${accent} 45%, var(--border))`,
+                          background: `color-mix(in srgb, ${accent} 10%, transparent)`,
+                        }}
+                      >
+                        {t('site.deals_tag')}
+                      </span>
+                    )}
                   </span>
                   {range && (
                     <span className="whitespace-nowrap font-mono text-[13px] font-bold" style={{ color: accent }}>
@@ -165,12 +178,17 @@ function PricelistModal({
                 className="w-4 shrink-0 self-stretch border-e-[1.5px] border-dashed border-card/60"
                 style={{ background: accent }}
               />
-              <div className="flex flex-1 items-center justify-between gap-2 px-3 py-2.5 text-[14px]">
-                <span className="flex items-center gap-1.5 font-semibold">
-                  {s.name}
-                  {s.badge && <PublicBadge badge={s.badge} small />}
-                </span>
-                <span className="font-mono font-bold tabular-nums">₪{s.price}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[14px]">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    {s.name}
+                    {s.badge && <PublicBadge badge={s.badge} small />}
+                  </span>
+                  <span className="font-mono font-bold tabular-nums">₪{s.price}</span>
+                </div>
+                {s.deals.map((d) => (
+                  <DealRow key={d.minQty} deal={d} accent={accent} />
+                ))}
               </div>
             </div>
           ))}
@@ -195,6 +213,39 @@ function PricelistModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function DealRow({ deal, accent }: { deal: PublicDeal; accent: string }) {
+  // A torn-coupon strip under the size: accent-tinted, dashed top edge, with the
+  // "N ל-₪P" offer and a bold percent-off chip. Reads as a discount at a glance.
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-dashed px-3 py-2"
+      style={{
+        borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))`,
+        background: `color-mix(in srgb, ${accent} 9%, transparent)`,
+      }}
+    >
+      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: accent }}>
+        {t('site.deal_label')}
+      </span>
+      <span className="font-semibold text-[13px]">
+        <span className="font-mono">{deal.minQty}</span> {t('site.deal_for')}
+        <span className="font-mono font-bold" dir="ltr"> ₪{deal.packPrice}</span>
+      </span>
+      <span
+        className="ms-auto whitespace-nowrap rounded-[3px] px-1.5 py-0.5 text-[11px] font-bold text-white"
+        style={{ background: accent }}
+        dir="ltr"
+      >
+        −{deal.savePct}%
+      </span>
+      <span className="w-full font-mono text-[11px] text-muted-foreground">
+        <span dir="ltr">₪{deal.eachPrice}</span> {t('site.deal_each')} · {t('site.deal_save')}{' '}
+        <span dir="ltr">₪{deal.saveAmount}</span>
+      </span>
     </div>
   );
 }

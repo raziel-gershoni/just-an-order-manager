@@ -14,6 +14,7 @@ import {
   type SectionConfig,
 } from '@/db/schema';
 import { resolveBadge, type ResolvedBadge } from './badges';
+import { loadGroupTiers } from './order-pricing';
 
 // ---- View-model ----
 
@@ -24,12 +25,24 @@ export type PublicImage = {
   height: number | null;
 };
 
+/** A public-facing bulk deal for a size: "buy `minQty` for `packPrice`", with
+ *  the savings pre-computed against the single price (all money formatted). Only
+ *  tiers that actually beat `minQty × single` are surfaced. */
+export type PublicDeal = {
+  minQty: number;
+  packPrice: string; // total for the pack, formatted
+  eachPrice: string; // effective per-unit price at this tier, formatted
+  saveAmount: string; // shekels saved vs buying singles, formatted
+  savePct: number; // rounded percent off
+};
+
 export type PublicSize = {
   id: number;
   name: string;
   weightGrams: number | null;
   price: string; // formatted, no currency symbol
   badge: ResolvedBadge | null;
+  deals: PublicDeal[]; // bulk tiers cheaper than singles, ascending by minQty
 };
 
 export type PublicBread = {
@@ -138,10 +151,34 @@ export function buildTelegramLink(
 
 // ---- Helpers ----
 
-function formatPrice(value: string): string {
+function formatPrice(value: string | number): string {
   const n = Number(value);
-  if (!Number.isFinite(n)) return value;
+  if (!Number.isFinite(n)) return String(value);
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+/** Turn a (type, size)'s raw tier map into public deals, keeping only tiers that
+ *  actually undercut buying `minQty` singles and pre-computing the savings. */
+function buildDeals(
+  single: number,
+  tierPrices: Record<number, number>
+): PublicDeal[] {
+  if (!(single > 0)) return [];
+  return Object.entries(tierPrices)
+    .map(([q, p]) => ({ minQty: Number(q), pack: Number(p) }))
+    .filter(({ minQty, pack }) => minQty >= 2 && pack > 0 && pack < single * minQty)
+    .sort((a, b) => a.minQty - b.minQty)
+    .map(({ minQty, pack }) => {
+      const full = single * minQty;
+      const save = full - pack;
+      return {
+        minQty,
+        packPrice: formatPrice(pack),
+        eachPrice: formatPrice(pack / minQty),
+        saveAmount: formatPrice(save),
+        savePct: Math.round((save / full) * 100),
+      };
+    });
 }
 
 function toImage(
@@ -270,6 +307,10 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     sizesByType.set(link.breadTypeId, arr);
   }
 
+  // Bulk tiers, indexed the same way the order engine reads them, so public
+  // deals derive from the one tier source of truth.
+  const groupTiers = await loadGroupTiers(groupId);
+
   const catalog: PublicBread[] = types.map((t) => ({
     id: t.id,
     name: t.name,
@@ -278,13 +319,17 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     image: toImage(imageById.get(t.imageId ?? -1)),
     // Sizes sorted by effective price, low → high.
     sizes: (sizesByType.get(t.id) ?? [])
-      .map((l) => ({
-        id: l.breadSizeId,
-        name: l.name,
-        weightGrams: l.weightGrams,
-        price: formatPrice(l.priceOverride ?? l.price),
-        badge: resolveBadge(l.badgeType, l.badgeLabel, l.badgeIcon),
-      }))
+      .map((l) => {
+        const single = Number(l.priceOverride ?? l.price);
+        return {
+          id: l.breadSizeId,
+          name: l.name,
+          weightGrams: l.weightGrams,
+          price: formatPrice(l.priceOverride ?? l.price),
+          badge: resolveBadge(l.badgeType, l.badgeLabel, l.badgeIcon),
+          deals: buildDeals(single, groupTiers.tierPricesFor(t.id, l.breadSizeId)),
+        };
+      })
       .sort((a, b) => Number(a.price) - Number(b.price)),
     additions: additionsByType.get(t.id) ?? [],
   }));

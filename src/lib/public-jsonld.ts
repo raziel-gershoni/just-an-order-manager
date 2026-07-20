@@ -82,15 +82,35 @@ export function buildBakeryJsonLd(
           };
           if (b.description?.trim()) item.description = b.description.trim();
           if (b.image?.url) item.image = b.image.url;
-          const offers = b.sizes
-            .filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0)
-            .map((s) => ({
-              '@type': 'Offer',
-              ...(s.name?.trim() ? { name: s.name.trim() } : {}),
-              price: Number(s.price),
-              priceCurrency: 'ILS',
-              availability: 'https://schema.org/InStock',
-            }));
+          const offers = b.sizes.flatMap((s) => {
+            const single = Number(s.price);
+            if (!Number.isFinite(single) || single <= 0) return [];
+            const sizeName = s.name?.trim();
+            const rows: Record<string, unknown>[] = [
+              {
+                '@type': 'Offer',
+                ...(sizeName ? { name: sizeName } : {}),
+                price: single,
+                priceCurrency: 'ILS',
+                availability: 'https://schema.org/InStock',
+              },
+            ];
+            // Bulk tiers as per-unit offers gated on a minimum quantity — the
+            // standard schema.org encoding for a "buy N, save" deal.
+            for (const d of s.deals) {
+              const each = Number(d.eachPrice);
+              if (!Number.isFinite(each) || each <= 0) continue;
+              rows.push({
+                '@type': 'Offer',
+                name: `${sizeName ? `${sizeName} ` : ''}×${d.minQty}`,
+                price: each,
+                priceCurrency: 'ILS',
+                eligibleQuantity: { '@type': 'QuantitativeValue', minValue: d.minQty },
+                availability: 'https://schema.org/InStock',
+              });
+            }
+            return rows;
+          });
           if (offers.length) item.offers = offers;
           return item;
         }),
