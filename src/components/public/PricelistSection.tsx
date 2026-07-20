@@ -218,8 +218,8 @@ function PricelistModal({
 }
 
 function DealRow({ deal, accent }: { deal: PublicDeal; accent: string }) {
-  // A torn-coupon strip under the size: accent-tinted, dashed top edge, with the
-  // "N ל-₪P" offer and a bold percent-off chip. Reads as a discount at a glance.
+  // A torn-coupon strip under the size: accent-tinted, dashed top edge — the
+  // "N ב-₪P" offer and a bold "saved ₪X" chip. One line, discount at a glance.
   return (
     <div
       className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-dashed px-3 py-2"
@@ -238,13 +238,8 @@ function DealRow({ deal, accent }: { deal: PublicDeal; accent: string }) {
       <span
         className="ms-auto whitespace-nowrap rounded-[3px] px-1.5 py-0.5 text-[11px] font-bold text-white"
         style={{ background: accent }}
-        dir="ltr"
       >
-        −{deal.savePct}%
-      </span>
-      <span className="w-full font-mono text-[11px] text-muted-foreground">
-        <span dir="ltr">₪{deal.eachPrice}</span> {t('site.deal_each')} · {t('site.deal_save')}{' '}
-        <span dir="ltr">₪{deal.saveAmount}</span>
+        {t('site.deal_save')} <span dir="ltr">₪{deal.saveAmount}</span>
       </span>
     </div>
   );

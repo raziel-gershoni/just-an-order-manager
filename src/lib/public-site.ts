@@ -27,13 +27,13 @@ export type PublicImage = {
 
 /** A public-facing bulk deal for a size: "buy `minQty` for `packPrice`", with
  *  the savings pre-computed against the single price (all money formatted). Only
- *  tiers that actually beat `minQty × single` are surfaced. */
+ *  tiers that actually beat `minQty × single` are surfaced. `eachPrice` is kept
+ *  for the JSON-LD per-unit offer, not the on-page display. */
 export type PublicDeal = {
   minQty: number;
   packPrice: string; // total for the pack, formatted
   eachPrice: string; // effective per-unit price at this tier, formatted
   saveAmount: string; // shekels saved vs buying singles, formatted
-  savePct: number; // rounded percent off
 };
 
 export type PublicSize = {
@@ -176,7 +176,6 @@ function buildDeals(
         packPrice: formatPrice(pack),
         eachPrice: formatPrice(pack / minQty),
         saveAmount: formatPrice(save),
-        savePct: Math.round((save / full) * 100),
       };
     });
 }
