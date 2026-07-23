@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { customers, customerPhones } from '@/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { customers, customerPhones, reminderSends } from '@/db/schema';
+import { eq, and, asc, desc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
 function getCustomerId(url: string): number {
@@ -25,7 +25,16 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     .where(eq(customerPhones.customerId, id))
     .orderBy(asc(customerPhones.sortOrder));
 
-  return jsonResponse({ customer: { ...customer, phones } });
+  // The customer's most recent reminder (any occasion), for the "last reminded"
+  // line on the detail screen. Null if they've never been reminded.
+  const [lastReminder] = await db
+    .select({ occasion: reminderSends.occasion, status: reminderSends.status, sentAt: reminderSends.sentAt })
+    .from(reminderSends)
+    .where(eq(reminderSends.customerId, id))
+    .orderBy(desc(reminderSends.sentAt))
+    .limit(1);
+
+  return jsonResponse({ customer: { ...customer, phones, lastReminder: lastReminder ?? null } });
 });
 
 const updateCustomerSchema = z.object({

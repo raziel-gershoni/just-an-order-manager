@@ -38,6 +38,7 @@ interface Customer {
   deliveryNotes: string | null;
   reminderOptOut: boolean;
   phones: CustomerPhone[];
+  lastReminder: { occasion: string; status: string; sentAt: string } | null;
 }
 interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; isRecurring?: boolean; totalQuantity: number; itemsSummary: string }
 interface Payment { id: number; amount: string; type: string; description: string | null; createdAt: string }
@@ -178,7 +179,7 @@ export default function CustomerDetailPage() {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      const { customer: updated } = await apiFetch<{ customer: Omit<Customer, 'phones'> }>(
+      const { customer: updated } = await apiFetch<{ customer: Omit<Customer, 'phones' | 'lastReminder'> }>(
         `/customers/${id}`,
         {
           method: 'PATCH',
@@ -472,17 +473,34 @@ export default function CustomerDetailPage() {
             </Button>
           )}
           {isAdmin && (
-            <label className="flex items-center gap-2 pt-2.5 mt-1 border-t border-border text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={customer.reminderOptOut}
-                onChange={(e) => toggleOptOut(e.target.checked)}
-                className="h-4 w-4 accent-primary cursor-pointer"
-              />
-              <span className={customer.reminderOptOut ? 'font-medium text-destructive' : 'text-muted-foreground'}>
-                {t('reminders.opt_out')}
-              </span>
-            </label>
+            <div className="pt-2.5 mt-1 border-t border-border space-y-1.5">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={customer.reminderOptOut}
+                  onChange={(e) => toggleOptOut(e.target.checked)}
+                  className="h-4 w-4 accent-primary cursor-pointer"
+                />
+                <span className={customer.reminderOptOut ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+                  {t('reminders.opt_out')}
+                </span>
+              </label>
+              {customer.lastReminder && (
+                <div className="text-xs text-muted-foreground">
+                  {t('reminders.last_sent')}:{' '}
+                  <span className="tabular-nums" dir="ltr">
+                    {new Date(customer.lastReminder.sentAt).toLocaleDateString('he-IL')}
+                  </span>
+                  {' · '}
+                  {t(`reminders.occasion.${customer.lastReminder.occasion}`)}
+                  {customer.lastReminder.status === 'failed' && (
+                    <span className="ms-1.5 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                      {t('reminders.status_failed')}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </Card>
 

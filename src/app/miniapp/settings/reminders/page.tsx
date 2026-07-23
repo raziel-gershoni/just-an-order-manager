@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
+import { ReminderLog } from '@/components/ui/ReminderLog';
 import { Plus, Pencil, Trash2, Pause, Play, Repeat } from 'lucide-react';
 
 type Occasion = 'week_start' | 'shabbat' | 'recurring';
@@ -35,6 +36,7 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<Template> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<'templates' | 'log'>('templates');
   const [recurringEnabled, setRecurringEnabled] = useState(false);
   // Gate the toggle until its own value has loaded, so a tap made before the
   // GET resolves can't be clobbered by the (stale) response landing after it.
@@ -134,6 +136,26 @@ export default function RemindersPage() {
     <>
       <ControlCenterTabs />
       <div className="p-5 space-y-4">
+        <div className="flex gap-1 rounded-lg bg-muted p-1">
+          {(['templates', 'log'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={
+                'flex-1 rounded-md py-2 text-sm font-medium transition-all ' +
+                (view === v ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')
+              }
+            >
+              {t(v === 'templates' ? 'reminders.tab_templates' : 'reminders.tab_log')}
+            </button>
+          ))}
+        </div>
+
+        {view === 'log' ? (
+          <ReminderLog />
+        ) : (
+          <>
         <Card className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 font-medium text-sm">
@@ -219,6 +241,8 @@ export default function RemindersPage() {
               </Card>
             );
           })
+        )}
+          </>
         )}
       </div>
 
