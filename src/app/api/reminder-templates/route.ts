@@ -16,7 +16,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
 const createSchema = z.object({
   label: z.string().min(1).max(255),
   metaTemplateName: z.string().min(1).max(255),
-  occasion: z.enum(['week_start', 'shabbat']),
+  occasion: z.enum(['week_start', 'shabbat', 'recurring']),
   bodyPreview: z.string().max(2000).nullable().optional(),
   isActive: z.boolean().optional(),
 });

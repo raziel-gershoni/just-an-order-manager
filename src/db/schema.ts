@@ -69,6 +69,8 @@ export const ingredientKindEnum = pgEnum('ingredient_kind', [
 export const reminderOccasionEnum = pgEnum('reminder_occasion', [
   'week_start',
   'shabbat',
+  // Auto-sent twice a week to customers with an active recurring order.
+  'recurring',
 ]);
 
 export const reminderSendStatusEnum = pgEnum('reminder_send_status', [
@@ -106,6 +108,9 @@ export const groups = pgTable('groups', {
     .default('0'),
   deliveryFreeOver: decimal('delivery_free_over', { precision: 10, scale: 2 }),
   deliveryCities: jsonb('delivery_cities').$type<string[]>(),
+  // Master switch for the automatic twice-weekly recurring-order reminders.
+  // Off by default — the feature ships dark until the owner turns it on.
+  recurringRemindersEnabled: boolean('recurring_reminders_enabled').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -294,6 +299,9 @@ export const customerPhones = pgTable('customer_phones', {
   phone: varchar('phone', { length: 50 }).notNull(),
   name: varchar('name', { length: 255 }),
   sortOrder: integer('sort_order').notNull().default(0),
+  // Whether this number receives automatic messages (order updates + reminders).
+  // Default on, so a new number behaves like today until the owner unchecks it.
+  notify: boolean('notify').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

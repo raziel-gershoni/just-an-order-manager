@@ -17,7 +17,7 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation, Bell, BellOff } from 'lucide-react';
 import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
 
@@ -26,6 +26,7 @@ interface CustomerPhone {
   phone: string;
   name: string | null;
   sortOrder: number;
+  notify: boolean;
 }
 
 interface Customer {
@@ -139,6 +140,26 @@ export default function CustomerDetailPage() {
       });
       setCustomer((prev) => (prev ? { ...prev, reminderOptOut: next } : prev));
     } catch {
+      toast.error(t('customers.save_failed'));
+    }
+  }
+
+  // Per-phone "receives automatic messages" toggle. Optimistic — flip locally,
+  // roll back on failure. Governs every automatic message (order updates +
+  // reminders) for this number.
+  async function toggleNotify(phoneId: number, next: boolean) {
+    const flip = (val: boolean) =>
+      setCustomer((prev) =>
+        prev ? { ...prev, phones: prev.phones.map((p) => (p.id === phoneId ? { ...p, notify: val } : p)) } : prev
+      );
+    flip(next);
+    try {
+      await apiFetch(`/customer-phones/${phoneId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ notify: next }),
+      });
+    } catch {
+      flip(!next);
       toast.error(t('customers.save_failed'));
     }
   }
@@ -368,7 +389,7 @@ export default function CustomerDetailPage() {
                   <button
                     type="button"
                     onClick={() => copyPhone(p.phone)}
-                    className="tabular-nums text-primary inline-flex min-h-[44px] items-center gap-1.5 hover:underline"
+                    className={'tabular-nums inline-flex min-h-[44px] items-center gap-1.5 hover:underline ' + (p.notify ? 'text-primary' : 'text-muted-foreground')}
                     dir="ltr"
                     aria-label={`העתק מספר ${p.phone}`}
                     title="העתק מספר"
@@ -378,6 +399,17 @@ export default function CustomerDetailPage() {
                   </button>
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      aria-label={p.notify ? t('customers.notify_on') : t('customers.notify_off')}
+                      title={p.notify ? t('customers.notify_on') : t('customers.notify_off')}
+                      onClick={() => toggleNotify(p.id, !p.notify)}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-all duration-150 hover:bg-muted active:scale-[0.98]"
+                    >
+                      {p.notify ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       type="button"

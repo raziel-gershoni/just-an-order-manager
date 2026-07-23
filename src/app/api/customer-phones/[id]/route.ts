@@ -32,6 +32,8 @@ const updateSchema = z.object({
   phone: z.string().min(1).max(50).optional(),
   name: z.string().max(255).nullable().optional(),
   sortOrder: z.number().int().optional(),
+  // Whether this number receives automatic messages.
+  notify: z.boolean().optional(),
 });
 
 export const PATCH = withAuth(async (request, auth) => {
@@ -47,6 +49,7 @@ export const PATCH = withAuth(async (request, auth) => {
   if (parsed.data.phone !== undefined) updateData.phone = sanitizePhoneInput(parsed.data.phone);
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name?.trim() || null;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
+  if (parsed.data.notify !== undefined) updateData.notify = parsed.data.notify;
 
   const [updated] = await db
     .update(customerPhones)

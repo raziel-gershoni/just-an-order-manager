@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
-import { Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
+import { Plus, Pencil, Trash2, Pause, Play, Repeat } from 'lucide-react';
 
-type Occasion = 'week_start' | 'shabbat';
+type Occasion = 'week_start' | 'shabbat' | 'recurring';
 interface Template {
   id: number;
   label: string;
@@ -22,11 +22,11 @@ interface Template {
   sortOrder: number;
 }
 
-const OCCASIONS: Occasion[] = ['week_start', 'shabbat'];
+const OCCASIONS: Occasion[] = ['week_start', 'shabbat', 'recurring'];
 
 export default function RemindersPage() {
   const { apiFetch } = useApi();
-  const { activeGroupRole } = useGroup();
+  const { activeGroupId, activeGroupRole } = useGroup();
   const t = useT();
   const toast = useToast();
   const isBaker = activeGroupRole === 'baker';
@@ -35,6 +35,10 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<Template> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [recurringEnabled, setRecurringEnabled] = useState(false);
+  // Gate the toggle until its own value has loaded, so a tap made before the
+  // GET resolves can't be clobbered by the (stale) response landing after it.
+  const [groupLoaded, setGroupLoaded] = useState(false);
 
   useEffect(() => {
     apiFetch<{ templates: Template[] }>('/reminder-templates')
@@ -42,6 +46,29 @@ export default function RemindersPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!activeGroupId) return;
+    setGroupLoaded(false);
+    apiFetch<{ group: { recurringRemindersEnabled: boolean } }>(`/groups/${activeGroupId}`)
+      .then((r) => setRecurringEnabled(r.group.recurringRemindersEnabled ?? false))
+      .catch(() => {})
+      .finally(() => setGroupLoaded(true));
+  }, [activeGroupId]);
+
+  async function toggleRecurring(next: boolean) {
+    if (!activeGroupId) return;
+    setRecurringEnabled(next); // optimistic
+    try {
+      await apiFetch(`/groups/${activeGroupId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ recurringRemindersEnabled: next }),
+      });
+    } catch {
+      setRecurringEnabled(!next);
+      toast.error(t('reminders.template_save_failed'));
+    }
+  }
 
   async function save() {
     if (!editing?.label?.trim() || !editing?.metaTemplateName?.trim() || !editing?.occasion) return;
@@ -107,6 +134,25 @@ export default function RemindersPage() {
     <>
       <ControlCenterTabs />
       <div className="p-5 space-y-4">
+        <Card className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 font-medium text-sm">
+              <Repeat className="h-4 w-4 text-primary" />
+              {t('reminders.recurring_title')}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={recurringEnabled}
+              disabled={!groupLoaded}
+              onClick={() => toggleRecurring(!recurringEnabled)}
+              className={'relative h-7 w-12 flex-none rounded-full transition-colors disabled:opacity-50 ' + (recurringEnabled ? 'bg-success' : 'bg-muted')}
+            >
+              <span className={'absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-all ' + (recurringEnabled ? 'start-6' : 'start-1')} />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">{t('reminders.recurring_desc')}</p>
+        </Card>
         {loading ? (
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
         ) : (
@@ -115,7 +161,14 @@ export default function RemindersPage() {
             return (
               <Card key={occ} className="p-0 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-dashed border-border">
-                  <span className="font-semibold text-sm">{t(`reminders.occasion.${occ}`)}</span>
+                  <span className="font-semibold text-sm">
+                    {t(`reminders.occasion.${occ}`)}
+                    {occ === 'recurring' && (
+                      <span className="ms-2 font-normal text-[11px] text-muted-foreground">
+                        {t('reminders.recurring_auto_note')}
+                      </span>
+                    )}
+                  </span>
                   <Button variant="ghost" size="sm" onClick={() => setEditing({ occasion: occ, isActive: true })}>
                     <Plus className="h-4 w-4" />
                     {t('reminders.add_template')}

@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { customerPhones } from '@/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 
 /**
  * Clean a phone number as it comes in from a form/paste, before storing it.
@@ -27,5 +27,29 @@ export async function getCustomerPhones(customerId: number): Promise<string[]> {
     .from(customerPhones)
     .where(eq(customerPhones.customerId, customerId))
     .orderBy(asc(customerPhones.sortOrder));
+  return rows.map((r) => r.phone);
+}
+
+/**
+ * The phone rows (id + number) that should receive AUTOMATIC messages for a
+ * customer — i.e. `notify = true` — ordered by sortOrder. The single source of
+ * truth for "which of a customer's numbers do we auto-message"; every automatic
+ * sender (order confirmations, ready, cancelled, reminders, recurring) routes
+ * through this. The id is kept for callers that log per-phone (reminderSends).
+ * An empty result means the owner silenced all of this customer's numbers.
+ */
+export async function getNotifiablePhoneRows(
+  customerId: number
+): Promise<{ id: number; phone: string }[]> {
+  return db
+    .select({ id: customerPhones.id, phone: customerPhones.phone })
+    .from(customerPhones)
+    .where(and(eq(customerPhones.customerId, customerId), eq(customerPhones.notify, true)))
+    .orderBy(asc(customerPhones.sortOrder));
+}
+
+/** Notifiable phone numbers for a customer — the string-only convenience form. */
+export async function getNotifiablePhones(customerId: number): Promise<string[]> {
+  const rows = await getNotifiablePhoneRows(customerId);
   return rows.map((r) => r.phone);
 }

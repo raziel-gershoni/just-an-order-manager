@@ -95,6 +95,8 @@ export const POST = withGroup(async (request, auth, groupId) => {
     skippedOptOut = custRows.length - allowed.length;
     const allowedIds = allowed.map((c) => c.id);
     if (allowedIds.length > 0) {
+      // Bulk-by-customer honours the per-phone notify flag (the explicit
+      // phoneId path above is the owner's on-the-spot override and ignores it).
       const phones = await db
         .select({
           phoneId: customerPhones.id,
@@ -102,7 +104,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
           customerId: customerPhones.customerId,
         })
         .from(customerPhones)
-        .where(inArray(customerPhones.customerId, allowedIds))
+        .where(and(inArray(customerPhones.customerId, allowedIds), eq(customerPhones.notify, true)))
         .orderBy(asc(customerPhones.sortOrder));
       targets = phones.map((p) => ({
         customerId: p.customerId,

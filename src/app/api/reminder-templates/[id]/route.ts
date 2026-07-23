@@ -12,7 +12,7 @@ function getId(url: string): number {
 const updateSchema = z.object({
   label: z.string().min(1).max(255).optional(),
   metaTemplateName: z.string().min(1).max(255).optional(),
-  occasion: z.enum(['week_start', 'shabbat']).optional(),
+  occasion: z.enum(['week_start', 'shabbat', 'recurring']).optional(),
   bodyPreview: z.string().max(2000).nullable().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),

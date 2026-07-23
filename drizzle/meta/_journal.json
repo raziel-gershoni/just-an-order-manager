@@ -141,6 +141,13 @@
       "when": 1782200500000,
       "tag": "0019_item_additions_charged",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784841909750,
+      "tag": "0020_recurring_reminders",
+      "breakpoints": true
     }
   ]
 }

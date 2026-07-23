@@ -6,7 +6,7 @@ import { formatItemLine, formatItemLabel, formatStaffItemLabel } from '@/lib/ord
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
-import { getCustomerPhones } from '@/lib/customer-phones';
+import { getNotifiablePhones } from '@/lib/customer-phones';
 import { priceOrderForWrite } from '@/lib/order-pricing';
 import { resolveAndPriceOrderLines } from '@/lib/order-lines';
 
@@ -232,9 +232,9 @@ export const POST = withGroup(async (request, auth, groupId) => {
     notes: notes ?? null,
   });
 
-  // WhatsApp notification to customer — name only, no weight, sent to all phones
+  // WhatsApp notification to customer — name only, no weight, to notifiable phones
   if (notifyCustomer !== false) {
-    const phones = await getCustomerPhones(customer.id);
+    const phones = await getNotifiablePhones(customer.id);
     const itemsSummary = priced.lines
       .map((l) => `${l.quantity} ${formatItemLabel(l.breadTypeName, l.breadSizeName, l.additionNames)}`)
       .join(', ');

@@ -12,7 +12,7 @@ import { eq, and, inArray, asc } from 'drizzle-orm';
 import { ORDER_STATUS_TRANSITIONS } from './constants';
 import { formatItemLineForStaff } from './order-display';
 import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
-import { getCustomerPhones } from './customer-phones';
+import { getNotifiablePhones } from './customer-phones';
 import { ensureOrderCharge } from './order-payments';
 import { createNextRecurringOrder } from './order-recurring';
 
@@ -124,7 +124,7 @@ export async function transitionOrderStatus(
           itemsSummary: summary,
         });
         if (shouldNotify) {
-          const phones = await getCustomerPhones(order.customerId);
+          const phones = await getNotifiablePhones(order.customerId);
           await notifyCustomerWhatsApp(phones);
         }
       }
@@ -135,7 +135,7 @@ export async function transitionOrderStatus(
 
   if (newStatus === 'cancelled' && shouldNotify) {
     try {
-      const phones = await getCustomerPhones(order.customerId);
+      const phones = await getNotifiablePhones(order.customerId);
       await notifyCustomerWhatsApp(phones, 'order_cancelled');
     } catch (err) {
       console.error(`Failed to notify customer of cancellation for order ${order.id}:`, err);

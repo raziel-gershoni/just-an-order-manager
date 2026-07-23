@@ -20,7 +20,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
   if (!customer) return errorResponse('Customer not found', 404);
 
   const phones = await db
-    .select({ id: customerPhones.id, phone: customerPhones.phone, name: customerPhones.name, sortOrder: customerPhones.sortOrder })
+    .select({ id: customerPhones.id, phone: customerPhones.phone, name: customerPhones.name, sortOrder: customerPhones.sortOrder, notify: customerPhones.notify })
     .from(customerPhones)
     .where(eq(customerPhones.customerId, id))
     .orderBy(asc(customerPhones.sortOrder));

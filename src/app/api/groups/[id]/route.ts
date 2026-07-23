@@ -31,6 +31,7 @@ const updateGroupSchema = z.object({
   deliveryFee: decimalStr.optional(),
   deliveryFreeOver: decimalStr.nullable().optional(),
   deliveryCities: z.array(z.string().min(1).max(255)).max(100).optional(),
+  recurringRemindersEnabled: z.boolean().optional(),
 });
 
 const DELIVERY_KEYS = [
@@ -62,11 +63,17 @@ export const PATCH = withAuth(async (request, auth) => {
   if (touchesDelivery && !canManage) {
     return errorResponse('Only owner or manager can edit delivery', 403);
   }
+  if (parsed.data.recurringRemindersEnabled !== undefined && !canManage) {
+    return errorResponse('Only owner or manager can edit reminders', 403);
+  }
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.additionsSurcharge !== undefined) {
     updates.additionsSurcharge = parsed.data.additionsSurcharge;
+  }
+  if (parsed.data.recurringRemindersEnabled !== undefined) {
+    updates.recurringRemindersEnabled = parsed.data.recurringRemindersEnabled;
   }
   for (const k of DELIVERY_KEYS) {
     if (parsed.data[k] !== undefined) updates[k] = parsed.data[k];
