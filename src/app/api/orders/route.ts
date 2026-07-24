@@ -238,7 +238,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
     const itemsSummary = priced.lines
       .map((l) => `${l.quantity} ${formatItemLabel(l.breadTypeName, l.breadSizeName, l.additionNames)}`)
       .join(', ');
-    await notifyCustomerWhatsApp(phones, 'order_received', [`: ${itemsSummary}`]);
+    await notifyCustomerWhatsApp(phones, 'order_received', [itemsSummary]);
   }
 
   return jsonResponse({ order, items: insertedItems }, 201);
