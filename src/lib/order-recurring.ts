@@ -17,7 +17,7 @@ type SourceOrder = typeof orders.$inferSelect;
 
 /**
  * Auto-create the next occurrence of a delivered recurring order, and give the
- * baker the same "new order" heads-up a manual order sends. Shared by every
+ * baker a heads-up that reads as a renewal, not as a fresh order. Shared by every
  * delivery surface (web PATCH + Telegram inline button) so recurrence behaves
  * identically no matter who marks the order delivered.
  *
@@ -134,8 +134,9 @@ export async function createNextRecurringOrder(order: SourceOrder): Promise<numb
   }
 
   // Baker heads-up — same rich staff labels (type, size, weight, additions) as a
-  // manual order. Separate best-effort block so a notify failure can't delete a
-  // good clone.
+  // manual order, but flagged `isRenewal` so it gets its own header instead of
+  // hiding among the new-order pings. Separate best-effort block so a notify
+  // failure can't delete a good clone.
   try {
     const [cust] = await db
       .select({ name: customers.name })
@@ -182,6 +183,7 @@ export async function createNextRecurringOrder(order: SourceOrder): Promise<numb
         items: staffItems,
         deliveryDate: nextDeliveryDate,
         notes: order.notes,
+        isRenewal: true,
       });
     }
   } catch (err) {

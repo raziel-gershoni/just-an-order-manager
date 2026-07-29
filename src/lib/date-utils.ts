@@ -1,4 +1,5 @@
 import { nextFriday, format, startOfDay, endOfDay, addDays } from 'date-fns';
+import { he } from 'date-fns/locale/he';
 import { HDate } from '@hebcal/hdate';
 
 /** Today's delivery-date key as a yyyy-MM-dd string — the app's canonical "today". */
@@ -101,6 +102,17 @@ export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
   }
 
   return format(date, 'dd/MM');
+}
+
+/**
+ * "יום ג׳ 05/08" — weekday first, then the short date. Bot messages used to carry
+ * the bare ISO date, which reads slowly and buries the one thing a baker needs
+ * off a glance: which day. Falls back to the raw string if it can't be parsed.
+ */
+export function formatWeekdayShort(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return format(date, 'EEE dd/MM', { locale: he });
 }
 
 /**

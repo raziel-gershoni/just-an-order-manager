@@ -321,6 +321,7 @@ const translations: Record<string, string> = {
 
   // Notifications (bot)
   'notify.new_order': 'הזמנה חדשה!',
+  'notify.recurring_renewed': 'הזמנה קבועה — חידוש אוטומטי',
   'notify.order_ready': 'הזמנה מוכנה!',
   'notify.customer': 'לקוח',
   'notify.quantity': 'כמות',

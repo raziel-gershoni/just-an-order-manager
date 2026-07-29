@@ -5,6 +5,7 @@ import { groupMembers, users } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { t } from './i18n';
 import { sendWhatsAppTemplate } from './whatsapp';
+import { formatWeekdayShort } from './date-utils';
 
 type Role = 'owner' | 'manager' | 'baker' | 'driver';
 
@@ -72,6 +73,13 @@ export async function notifyNewOrder(
     items: { breadTypeName: string; quantity: number }[];
     deliveryDate: string | null;
     notes: string | null;
+    /**
+     * True when this order is the auto-created clone of a delivered recurring
+     * order rather than one somebody just placed. Same body, different head:
+     * its own emoji, title and perforation rule so a renewal reads as a renewal
+     * at a glance instead of blending into the run of new-order pings.
+     */
+    isRenewal?: boolean;
   }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
@@ -79,17 +87,16 @@ export async function notifyNewOrder(
     .text('אשר ✅', `order_status:${orderId}:confirmed`);
 
   await sendToRecipients(recipients, (lang) => {
-    const lines = [
-      `<b>🍞 ${t('notify.new_order', lang)}</b>`,
-      ``,
-      `<b>${t('notify.customer', lang)}:</b> ${order.customerName}`,
-    ];
+    const lines = order.isRenewal
+      ? [`<b>🔁 ${t('notify.recurring_renewed', lang)}</b>`, `┄┄┄┄┄┄┄┄┄┄┄┄`]
+      : [`<b>🍞 ${t('notify.new_order', lang)}</b>`, ``];
+    lines.push(`<b>${t('notify.customer', lang)}:</b> ${order.customerName}`);
     for (const item of order.items) {
       lines.push(`  • ${item.quantity} ${item.breadTypeName}`);
     }
     if (order.deliveryDate) {
       lines.push(
-        `<b>${t('notify.delivery_date', lang)}:</b> ${order.deliveryDate}`
+        `<b>${t('notify.delivery_date', lang)}:</b> ${formatWeekdayShort(order.deliveryDate)}`
       );
     }
     if (order.notes) {
