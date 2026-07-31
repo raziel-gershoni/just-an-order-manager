@@ -10,6 +10,7 @@ import {
 } from '@/db/schema';
 import { eq, and, inArray, asc } from 'drizzle-orm';
 import { ORDER_STATUS_TRANSITIONS } from './constants';
+import { todayStr } from './date-utils';
 import { formatItemLineForStaff } from './order-display';
 import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
 import { getNotifiablePhones } from './customer-phones';
@@ -55,7 +56,17 @@ export async function transitionOrderStatus(
   // (double tap / retry) finds status already changed and loses the race.
   const [updated] = await db
     .update(orders)
-    .set({ status: newStatus as OrderRow['status'], updatedAt: new Date() })
+    .set({
+      status: newStatus as OrderRow['status'],
+      updatedAt: new Date(),
+      // An ASAP order is created with no delivery date — correct while it's
+      // open, since nobody has promised a day. The moment it's delivered there
+      // *is* a day, and leaving it null strands the order at the bottom of
+      // every list forever (Postgres sorts NULLs last) with nothing to sort by.
+      ...(newStatus === 'delivered' && order.deliveryDate === null
+        ? { deliveryDate: todayStr() }
+        : {}),
+    })
     .where(and(eq(orders.id, order.id), eq(orders.status, order.status)))
     .returning();
 
