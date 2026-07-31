@@ -17,7 +17,7 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation, Bell, BellOff, Phone } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation, Bell, BellOff } from 'lucide-react';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
@@ -424,17 +424,10 @@ export default function CustomerDetailPage() {
                       <Send className="h-4 w-4" />
                     </button>
                   )}
-                  {/* Dial. toIntlPhone strips every non-digit, which also drops
-                      the bidi marks a pasted Hebrew-keyboard number can carry
-                      and would otherwise hand a broken number to the dialer. */}
-                  <a
-                    href={`tel:+${toIntlPhone(p.phone)}`}
-                    aria-label={`התקשר ל-${p.phone}`}
-                    title="התקשר"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-primary transition-all duration-150 hover:bg-primary/10 active:scale-[0.98]"
-                  >
-                    <Phone className="h-4 w-4" />
-                  </a>
+                  {/* No dial button: Telegram's in-app WebView drops the tel:
+                      scheme on both iOS and Android and exposes no call API, so
+                      a call button can't work where this app is actually used.
+                      Tapping the number copies it, which is the same outcome. */}
                   <a
                     href={`https://wa.me/${toIntlPhone(p.phone)}`}
                     target="_blank"
