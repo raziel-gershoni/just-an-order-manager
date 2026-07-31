@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
+import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
@@ -113,7 +114,9 @@ export default function CustomersPage() {
       <div className="flex justify-between items-center gap-2">
         <h1 className="text-xl font-bold tracking-tight">{t('customers.title')}</h1>
         <div className="flex items-center gap-2">
-          {isAdmin && !showAdd && (
+          {/* Entering select mode is the only way into the bulk-send flow, so
+              gating this one button parks the whole path. */}
+          {MANUAL_REMINDERS_ENABLED && isAdmin && !showAdd && (
             selectMode ? (
               <Button size="sm" variant="ghost" onClick={exitSelect}>
                 {t('reminders.cancel')}

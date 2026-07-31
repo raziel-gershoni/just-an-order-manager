@@ -17,7 +17,8 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation, Bell, BellOff } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation, Bell, BellOff, Phone } from 'lucide-react';
+import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
 
@@ -335,7 +336,7 @@ export default function CustomerDetailPage() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted-foreground">{t('customers.phones')}</span>
             <div className="flex items-center gap-1">
-              {isAdmin && customer.phones.length > 0 && (
+              {MANUAL_REMINDERS_ENABLED && isAdmin && customer.phones.length > 0 && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -411,7 +412,7 @@ export default function CustomerDetailPage() {
                       {p.notify ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
                     </button>
                   )}
-                  {isAdmin && (
+                  {MANUAL_REMINDERS_ENABLED && isAdmin && (
                     <button
                       type="button"
                       aria-label={t('reminders.send')}
@@ -423,6 +424,17 @@ export default function CustomerDetailPage() {
                       <Send className="h-4 w-4" />
                     </button>
                   )}
+                  {/* Dial. toIntlPhone strips every non-digit, which also drops
+                      the bidi marks a pasted Hebrew-keyboard number can carry
+                      and would otherwise hand a broken number to the dialer. */}
+                  <a
+                    href={`tel:+${toIntlPhone(p.phone)}`}
+                    aria-label={`התקשר ל-${p.phone}`}
+                    title="התקשר"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-primary transition-all duration-150 hover:bg-primary/10 active:scale-[0.98]"
+                  >
+                    <Phone className="h-4 w-4" />
+                  </a>
                   <a
                     href={`https://wa.me/${toIntlPhone(p.phone)}`}
                     target="_blank"
@@ -472,6 +484,8 @@ export default function CustomerDetailPage() {
               {t('customers.add_phone')}
             </Button>
           )}
+          {/* Stays live: this opt-out is what excludes a customer from the
+              automatic recurring reminders, which are in use. */}
           {isAdmin && (
             <div className="pt-2.5 mt-1 border-t border-border space-y-1.5">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
