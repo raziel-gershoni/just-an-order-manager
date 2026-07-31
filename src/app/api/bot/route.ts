@@ -1,4 +1,4 @@
-import { webhookCallback, InlineKeyboard } from 'grammy';
+import { webhookCallback, InlineKeyboard, type Context } from 'grammy';
 import { ensureBotSetup } from '@/lib/bot';
 import { db } from '@/db';
 import {
@@ -26,6 +26,24 @@ import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
 import { siteBaseUrl } from '@/lib/site-url';
 
 // ---- Helpers ----
+
+/**
+ * The message's inline keyboard minus the button that was just pressed.
+ *
+ * Single-order pings carry one button, so this comes back empty and the caller
+ * clears the keyboard exactly as before. The daily nudges pack one button per
+ * order into a single message — there, blanket-clearing would disarm every
+ * other order the moment one was actioned, so only the pressed row goes.
+ */
+function keyboardWithoutPressed(ctx: Context) {
+  const message = ctx.callbackQuery?.message;
+  const rows =
+    (message && 'reply_markup' in message ? message.reply_markup?.inline_keyboard : undefined) ?? [];
+  const pressed = ctx.callbackQuery?.data;
+  return rows
+    .map((row) => row.filter((b) => !('callback_data' in b) || b.callback_data !== pressed))
+    .filter((row) => row.length > 0);
+}
 
 async function getOrCreateUser(telegramId: string, name: string) {
   let [user] = await db
@@ -464,7 +482,10 @@ function setupHandlers(bot: import('grammy').Bot) {
     }
 
     await ctx.answerCallbackQuery(`${t(`status.${newStatus}`, lang)} ✅`);
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+    const remaining = keyboardWithoutPressed(ctx);
+    await ctx.editMessageReplyMarkup(
+      remaining.length ? { reply_markup: { inline_keyboard: remaining } } : undefined
+    );
 
     // Follow up with payment dialog after delivery
     if (newStatus === 'delivered') {
@@ -522,14 +543,27 @@ function setupHandlers(bot: import('grammy').Bot) {
       );
 
       await ctx.answerCallbackQuery(`✅ ${t('bot.payment_recorded', lang)}`);
-      await ctx.editMessageText(
-        `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
-      );
+      // Rewriting the text is right for the one-order payment dialog, but it
+      // would erase a whole unpaid-nudge list; when other orders are still
+      // listed, retire just this button and leave the message standing.
+      const remaining = keyboardWithoutPressed(ctx);
+      if (remaining.length) {
+        await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });
+      } else {
+        await ctx.editMessageText(
+          `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
+        );
+      }
     } else {
       // 'unpaid' — charge is already recorded by the deliver handler,
       // paid flag stays false. Just acknowledge and clear the keyboard.
       await ctx.answerCallbackQuery(`📝 ${t('bot.marked_to_be_paid', lang)}`);
-      await ctx.editMessageText(`📝 ${t('bot.marked_to_be_paid', lang)}`);
+      const remaining = keyboardWithoutPressed(ctx);
+      if (remaining.length) {
+        await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });
+      } else {
+        await ctx.editMessageText(`📝 ${t('bot.marked_to_be_paid', lang)}`);
+      }
     }
   });
 }

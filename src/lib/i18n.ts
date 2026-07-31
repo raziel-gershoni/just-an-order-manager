@@ -322,6 +322,13 @@ const translations: Record<string, string> = {
   // Notifications (bot)
   'notify.new_order': 'הזמנה חדשה!',
   'notify.recurring_renewed': 'הזמנה קבועה — חידוש אוטומטי',
+  'notify.pending_one': 'הזמנה אחת ממתינה לאישור',
+  'notify.pending_many': 'הזמנות ממתינות לאישור',
+  'notify.unpaid_one': 'הזמנה אחת לא שולמה',
+  'notify.unpaid_many': 'הזמנות שלא שולמו',
+  'notify.approve': 'אשר',
+  'notify.mark_paid': 'שולם',
+  'notify.and_more': 'ועוד',
   'notify.order_ready': 'הזמנה מוכנה!',
   'notify.customer': 'לקוח',
   'notify.quantity': 'כמות',

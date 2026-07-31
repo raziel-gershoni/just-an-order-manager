@@ -5,9 +5,33 @@ import { groupMembers, users } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { t } from './i18n';
 import { sendWhatsAppTemplate } from './whatsapp';
-import { formatWeekdayShort } from './date-utils';
+import { daysAgoLabel, formatWeekdayShort } from './date-utils';
 
 type Role = 'owner' | 'manager' | 'baker' | 'driver';
+
+/**
+ * Perforation rule under a header — the chat echo of the dashed docket dividers
+ * in the app. Messages that carry it are the ones meant to break the run of
+ * routine pings: an auto-renewal, a daily nudge.
+ */
+const RULE = '┄┄┄┄┄┄┄┄┄┄┄┄';
+
+/** Button labels wrap badly past ~30 chars, so long customer names get clipped. */
+function shortName(name: string, max = 18): string {
+  return name.length > max ? `${name.slice(0, max - 1)}…` : name;
+}
+
+/**
+ * Escape text that goes into an HTML-parsed message body. Every send here uses
+ * parse_mode: 'HTML', so a customer or bread type carrying an `&` or a `<` makes
+ * Telegram reject the whole message. That was one lost ping before; the daily
+ * nudges batch a dozen names into a single message, where one bad character
+ * would take the entire backlog down with it. Button labels are plain text and
+ * must NOT be escaped — they'd render the entities literally.
+ */
+function esc(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 interface Recipient {
   chatId: string;
@@ -88,11 +112,11 @@ export async function notifyNewOrder(
 
   await sendToRecipients(recipients, (lang) => {
     const lines = order.isRenewal
-      ? [`<b>🔁 ${t('notify.recurring_renewed', lang)}</b>`, `┄┄┄┄┄┄┄┄┄┄┄┄`]
+      ? [`<b>🔁 ${t('notify.recurring_renewed', lang)}</b>`, RULE]
       : [`<b>🍞 ${t('notify.new_order', lang)}</b>`, ``];
-    lines.push(`<b>${t('notify.customer', lang)}:</b> ${order.customerName}`);
+    lines.push(`<b>${t('notify.customer', lang)}:</b> ${esc(order.customerName)}`);
     for (const item of order.items) {
-      lines.push(`  • ${item.quantity} ${item.breadTypeName}`);
+      lines.push(`  • ${item.quantity} ${esc(item.breadTypeName)}`);
     }
     if (order.deliveryDate) {
       lines.push(
@@ -100,8 +124,85 @@ export async function notifyNewOrder(
       );
     }
     if (order.notes) {
-      lines.push(`<b>${t('notify.notes', lang)}:</b> ${order.notes}`);
+      lines.push(`<b>${t('notify.notes', lang)}:</b> ${esc(order.notes)}`);
     }
+    return lines.join('\n');
+  }, keyboard);
+}
+
+/**
+ * Daily nudge: orders still waiting for someone to tap אשר. One message for the
+ * whole backlog with one approve button per order, so the feed stays quiet
+ * however many have piled up. `more` is the count that didn't fit.
+ */
+export async function notifyPendingApproval(
+  groupId: number,
+  pending: {
+    id: number;
+    customerName: string;
+    deliveryDate: string | null;
+    items: { breadTypeName: string; quantity: number }[];
+  }[],
+  more: number
+): Promise<{ sent: number; failed: number }> {
+  const recipients = await getRecipientsByRole(groupId, ['baker']);
+  // .row() *between* buttons, never after the last — a trailing call leaves an
+  // empty row in the markup Telegram has no use for.
+  const keyboard = new InlineKeyboard();
+  pending.forEach((o, i) => {
+    if (i > 0) keyboard.row();
+    keyboard.text(`${t('notify.approve')} · #${o.id} ${shortName(o.customerName)}`, `order_status:${o.id}:confirmed`);
+  });
+
+  return sendToRecipients(recipients, (lang) => {
+    const title =
+      pending.length === 1
+        ? t('notify.pending_one', lang)
+        : `${pending.length} ${t('notify.pending_many', lang)}`;
+    const lines = [`<b>⏳ ${title}</b>`, RULE];
+    for (const o of pending) {
+      const when = o.deliveryDate ? formatWeekdayShort(o.deliveryDate) : t('delivery.asap', lang);
+      lines.push(`<b>#${o.id} ${esc(o.customerName)}</b> — ${when}`);
+      for (const item of o.items) {
+        lines.push(`  • ${item.quantity} ${esc(item.breadTypeName)}`);
+      }
+    }
+    if (more > 0) lines.push(``, `<i>${t('notify.and_more', lang)} ${more}</i>`);
+    return lines.join('\n');
+  }, keyboard);
+}
+
+/**
+ * Daily nudge: orders delivered a while back that were never marked paid, each
+ * with a one-tap שולם button. Managers, not bakers — this is a money list.
+ */
+export async function notifyUnpaidOrders(
+  groupId: number,
+  unpaid: { id: number; customerName: string; date: string; total: number }[],
+  more: number
+): Promise<{ sent: number; failed: number }> {
+  const recipients = await getRecipientsByRole(groupId, ['manager']);
+  const keyboard = new InlineKeyboard();
+  unpaid.forEach((o, i) => {
+    if (i > 0) keyboard.row();
+    keyboard.text(
+      `${t('notify.mark_paid')} · #${o.id} ${shortName(o.customerName)} ₪${o.total.toFixed(0)}`,
+      `order_pay:${o.id}:paid`
+    );
+  });
+
+  return sendToRecipients(recipients, (lang) => {
+    const title =
+      unpaid.length === 1
+        ? t('notify.unpaid_one', lang)
+        : `${unpaid.length} ${t('notify.unpaid_many', lang)}`;
+    const lines = [`<b>💰 ${title}</b>`, RULE];
+    for (const o of unpaid) {
+      lines.push(
+        `<b>#${o.id} ${esc(o.customerName)}</b> — ₪${o.total.toFixed(0)} · ${daysAgoLabel(o.date)}`
+      );
+    }
+    if (more > 0) lines.push(``, `<i>${t('notify.and_more', lang)} ${more}</i>`);
     return lines.join('\n');
   }, keyboard);
 }
@@ -122,7 +223,7 @@ export async function notifyOrderReady(
     [
       `<b>✅ ${t('notify.order_ready', lang)}</b>`,
       ``,
-      `${order.customerName} — ${order.itemsSummary}`,
+      `${esc(order.customerName)} — ${esc(order.itemsSummary)}`,
     ].join('\n'),
     keyboard
   );
@@ -152,7 +253,7 @@ export async function notifyPrepayment(
   const recipients = await getRecipientsByRole(groupId, ['baker']);
   await sendToRecipients(recipients, (lang) => {
     const lines = [
-      `<b>💰 ${data.customerName} ${t('notify.prepayment', lang)} ₪${data.amount}</b>`,
+      `<b>💰 ${esc(data.customerName)} ${t('notify.prepayment', lang)} ₪${data.amount}</b>`,
     ];
     if (data.balance === 0) {
       lines.push(`✅ ${t('notify.settled', lang)}`);
@@ -171,7 +272,7 @@ export async function notifyBalanceAlert(
 ) {
   const recipients = await getRecipientsByRole(groupId, ['manager']);
   await sendToRecipients(recipients, (lang) =>
-    `⚠️ ${data.customerName} ${t('notify.balance_alert', lang)} ₪${Math.abs(Number(data.balance))}`
+    `⚠️ ${esc(data.customerName)} ${t('notify.balance_alert', lang)} ₪${Math.abs(Number(data.balance))}`
   );
 }
 
@@ -181,7 +282,7 @@ export async function notifyMemberJoined(
 ) {
   const recipients = await getRecipientsByRole(groupId, ['owner']);
   await sendToRecipients(recipients, (lang) =>
-    `👋 ${data.memberName} ${t('notify.member_joined', lang)} ${t(`role.${data.role}`, lang)}`
+    `👋 ${esc(data.memberName)} ${t('notify.member_joined', lang)} ${t(`role.${data.role}`, lang)}`
   );
 }
 
@@ -203,14 +304,14 @@ export async function sendMorningSummary(
         byType[o.breadTypeName] = { customers: [], total: 0 };
       }
       byType[o.breadTypeName].customers.push(
-        `${o.customerName} (${o.quantity})`
+        `${esc(o.customerName)} (${o.quantity})`
       );
       byType[o.breadTypeName].total += o.quantity;
     }
 
     for (const [type, data] of Object.entries(byType)) {
       lines.push(
-        `<b>${type}</b> — ${data.total} ${t('notify.loaves', lang)}`
+        `<b>${esc(type)}</b> — ${data.total} ${t('notify.loaves', lang)}`
       );
       for (const c of data.customers) {
         lines.push(`  • ${c}`);

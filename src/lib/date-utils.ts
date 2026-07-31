@@ -1,4 +1,4 @@
-import { nextFriday, format, startOfDay, endOfDay, addDays } from 'date-fns';
+import { nextFriday, format, startOfDay, endOfDay, addDays, differenceInCalendarDays } from 'date-fns';
 import { he } from 'date-fns/locale/he';
 import { HDate } from '@hebcal/hdate';
 
@@ -102,6 +102,23 @@ export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
   }
 
   return format(date, 'dd/MM');
+}
+
+/**
+ * "לפני 12 ימים" — plain age in days. Chase lists care how long something has
+ * been sitting, not which date it was; formatDateRelative deliberately gives up
+ * past a fortnight and falls back to a bare date, which is the wrong end of the
+ * scale here — the oldest debt is the one that most needs a number on it.
+ */
+export function daysAgoLabel(dateStr: string): string {
+  const days = differenceInCalendarDays(
+    startOfDay(new Date()),
+    startOfDay(new Date(dateStr + 'T00:00:00'))
+  );
+  if (days <= 0) return 'היום';
+  if (days === 1) return 'אתמול';
+  if (days === 2) return 'לפני יומיים';
+  return `לפני ${days} ימים`;
 }
 
 /**
