@@ -49,7 +49,7 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
       trustItems: bakeryProfile.trustItems,
       whatsappPhone: bakeryProfile.whatsappPhone,
       contactPhone: bakeryProfile.contactPhone,
-      bakeDays: bakeryProfile.bakeDays,
+      orderDays: bakeryProfile.orderDays,
     })
     .from(bakeryProfile)
     .where(eq(bakeryProfile.groupId, groupId))
@@ -108,7 +108,7 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
   if (profile?.story) out['סיפור'] = profile.story;
   const trust = (profile?.trustItems ?? []).filter(Boolean);
   if (trust.length) out['נקודות_מפתח'] = trust;
-  if (profile?.bakeDays) out['ימי_אפייה'] = profile.bakeDays;
+  if (profile?.orderDays) out['ימי_הזמנות'] = profile.orderDays;
   const phone = profile?.whatsappPhone || profile?.contactPhone;
   if (phone) out['טלפון_הזמנות'] = phone;
   if (group.deliveryHomeCity) out['עיר'] = group.deliveryHomeCity;

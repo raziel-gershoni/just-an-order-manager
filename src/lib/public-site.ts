@@ -67,7 +67,7 @@ export type PublicProfile = {
   instagram: string | null;
   address: string | null;
   mapUrl: string | null;
-  bakeDays: string | null;
+  orderDays: string | null;
   pickupArea: string | null;
   heroImage: PublicImage | null;
   logoUrl: string | null;
@@ -346,7 +346,7 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
     instagram: profile.instagram,
     address: profile.address,
     mapUrl: profile.mapUrl,
-    bakeDays: profile.bakeDays,
+    orderDays: profile.orderDays,
     // Pickup/origin city has a single home: the delivery home city.
     pickupArea: group.deliveryHomeCity,
     heroImage: toImage(imageById.get(profile.heroImageId ?? -1)),

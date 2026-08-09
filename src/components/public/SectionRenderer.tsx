@@ -20,7 +20,7 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
 
   const hasDetails =
     !!(
-      profile.bakeDays ||
+      profile.orderDays ||
       profile.pickupArea ||
       profile.whatsappPhone ||
       profile.contactPhone ||

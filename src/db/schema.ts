@@ -464,7 +464,11 @@ export const bakeryProfile = pgTable('bakery_profile', {
   instagram: varchar('instagram', { length: 64 }),
   address: varchar('address', { length: 255 }),
   mapUrl: varchar('map_url', { length: 1000 }),
-  bakeDays: varchar('bake_days', { length: 64 }),
+  // Surfaced to customers as "ימי הזמנות". The column keeps its original
+  // bake_days name on purpose: migrations run at the start of the Vercel build,
+  // so renaming it would break the live site for the minutes until the new
+  // deploy takes over — a cosmetic rename isn't worth that window.
+  orderDays: varchar('bake_days', { length: 64 }),
   pickupArea: varchar('pickup_area', { length: 120 }),
   // Ordered list of { key, visible } controlling section order + visibility.
   sections: jsonb('sections').$type<SectionConfig[]>(),

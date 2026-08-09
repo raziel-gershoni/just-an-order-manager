@@ -26,8 +26,8 @@ export function DetailsSection({
         .join(' · ')
     : null;
 
-  if (profile.bakeDays)
-    rows.push({ key: 'days', label: t('site.bake_days'), value: profile.bakeDays, icon: <ClockIcon className="h-[18px] w-[18px] text-primary" /> });
+  if (profile.orderDays)
+    rows.push({ key: 'days', label: t('site.order_days'), value: profile.orderDays, icon: <ClockIcon className="h-[18px] w-[18px] text-primary" /> });
   if (profile.pickupArea)
     rows.push({ key: 'pickup', label: t('site.pickup'), value: profile.pickupArea, href: profile.mapUrl ?? undefined, icon: <PinIcon className="h-[18px] w-[18px] text-primary" /> });
   if (profile.whatsappPhone)

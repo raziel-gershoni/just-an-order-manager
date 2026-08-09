@@ -27,7 +27,7 @@ interface SiteProfile {
   instagram: string | null;
   address: string | null;
   mapUrl: string | null;
-  bakeDays: string | null;
+  orderDays: string | null;
   pickupArea: string | null;
   heroImageId: number | null;
   sections: SectionConfig[];
@@ -44,7 +44,7 @@ type FormState = {
   instagram: string;
   address: string;
   mapUrl: string;
-  bakeDays: string;
+  orderDays: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -58,7 +58,7 @@ const EMPTY_FORM: FormState = {
   instagram: '',
   address: '',
   mapUrl: '',
-  bakeDays: '',
+  orderDays: '',
 };
 
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
@@ -91,7 +91,7 @@ export default function SiteEditorPage() {
   if (!form.story.trim()) emptyKeys.add('story');
   if (!form.whatsappPhone.trim()) emptyKeys.add('cta');
   if (
-    !form.bakeDays.trim() &&
+    !form.orderDays.trim() &&
     !form.whatsappPhone.trim() &&
     !form.contactPhone.trim() &&
     !form.instagram.trim() &&
@@ -114,7 +114,7 @@ export default function SiteEditorPage() {
       instagram: p.instagram ?? '',
       address: p.address ?? '',
       mapUrl: p.mapUrl ?? '',
-      bakeDays: p.bakeDays ?? '',
+      orderDays: p.orderDays ?? '',
     });
     setPublished(p.isPublished);
     setHeroImageId(p.heroImageId ?? null);
@@ -171,7 +171,7 @@ export default function SiteEditorPage() {
         instagram: orNull(form.instagram),
         address: orNull(form.address),
         mapUrl: orNull(form.mapUrl),
-        bakeDays: orNull(form.bakeDays),
+        orderDays: orNull(form.orderDays),
       };
       const { profile } = await apiFetch<{ profile: SiteProfile }>('/site-profile', {
         method: 'PATCH',
@@ -289,7 +289,7 @@ export default function SiteEditorPage() {
 
           {/* Contact + logistics */}
           <Card className="space-y-3 p-4">
-            <Input label={t('site.f_bake_days')} value={form.bakeDays} onChange={(e) => set('bakeDays', e.target.value)} />
+            <Input label={t('site.f_order_days')} value={form.orderDays} onChange={(e) => set('orderDays', e.target.value)} />
             <Input label={t('site.f_whatsapp')} inputMode="tel" value={form.whatsappPhone} onChange={(e) => set('whatsappPhone', e.target.value)} />
             <Input label={t('site.f_phone')} inputMode="tel" value={form.contactPhone} onChange={(e) => set('contactPhone', e.target.value)} />
             <Input label={t('site.f_instagram')} value={form.instagram} onChange={(e) => set('instagram', e.target.value)} />
