@@ -8,6 +8,8 @@ import {
   breadAdditions,
   bakeryProfile,
 } from '@/db/schema';
+import { loadGroupTiers } from './order-pricing';
+import { deriveDeals, type BulkDeal } from './pricing';
 
 function num(v: string | null | undefined): number {
   const n = Number(v);
@@ -16,8 +18,9 @@ function num(v: string | null | undefined): number {
 
 /**
  * A compact, Hebrew-keyed snapshot of the bakery's pricelist — bread types
- * with sizes/prices, plus additions surcharge, delivery terms and basic
- * bakery info. Built for feeding an LLM (e.g. to render a pricelist image),
+ * with sizes/prices and their bulk deals, plus additions surcharge, delivery
+ * terms and basic bakery info. Built for feeding an LLM (e.g. to render a
+ * pricelist image),
  * so keys are in Hebrew and prices are plain numbers. Owner/manager only;
  * reflects the live catalog regardless of whether the public site is published.
  *
@@ -66,6 +69,7 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
     ? await db
         .select({
           breadTypeId: breadTypeSizes.breadTypeId,
+          breadSizeId: breadTypeSizes.breadSizeId,
           name: breadSizes.name,
           price: breadSizes.price,
           priceOverride: breadTypeSizes.priceOverride,
@@ -83,18 +87,44 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
     .where(and(eq(breadAdditions.groupId, groupId), eq(breadAdditions.isActive, true)))
     .orderBy(asc(breadAdditions.sortOrder));
 
-  const sizesByType = new Map<number, { name: string; price: number }[]>();
+  // Bulk tiers resolve per (type, size) — a size-wide default row, overridden by
+  // a per-type row where one exists — so deals are stated on the bread they
+  // actually apply to rather than as one global footnote.
+  const tiers = await loadGroupTiers(groupId);
+
+  const sizesByType = new Map<
+    number,
+    { name: string; price: number; deals: BulkDeal[] }[]
+  >();
   for (const l of sizeLinks) {
+    const price = num(l.priceOverride ?? l.price);
     const arr = sizesByType.get(l.breadTypeId) ?? [];
-    arr.push({ name: l.name, price: num(l.priceOverride ?? l.price) });
+    arr.push({
+      name: l.name,
+      price,
+      deals: deriveDeals(price, tiers.tierPricesFor(l.breadTypeId, l.breadSizeId)),
+    });
     sizesByType.set(l.breadTypeId, arr);
   }
 
+  let anyDeals = false;
   const breads = types.map((t) => {
     const sizes = (sizesByType.get(t.id) ?? [])
       .slice()
       .sort((a, b) => a.price - b.price)
-      .map((s) => ({ 'שם': s.name, 'מחיר': s.price }));
+      .map((s) => {
+        const size: Record<string, unknown> = { 'שם': s.name, 'מחיר': s.price };
+        if (s.deals.length) {
+          anyDeals = true;
+          size['מבצעים'] = s.deals.map((d) => ({
+            'כמות': d.minQty,
+            'מחיר_לחבילה': d.packPrice,
+            'מחיר_ליחידה': d.eachPrice,
+            'חיסכון': d.saveAmount,
+          }));
+        }
+        return size;
+      });
     const bread: Record<string, unknown> = { 'שם': t.name };
     if (t.description) bread['תיאור'] = t.description;
     bread['גדלים'] = sizes;
@@ -129,6 +159,13 @@ export async function buildCatalogExport(groupId: number): Promise<Record<string
         ...(group.deliveryFreeOver != null ? { 'חינם_מעל': num(group.deliveryFreeOver) } : {}),
       }
     : { 'פעיל': false };
+
+  // How the engine actually charges a pack, spelled out — otherwise a deal reads
+  // as "6 of the same bread" when mixing is allowed and often cheaper.
+  if (anyDeals) {
+    out['כלל_מבצעים'] =
+      'אפשר לערבב סוגי לחם באותה חבילה כל עוד הם באותו גודל — חבילה מעורבת מחויבת לפי הלחם היקר שבה.';
+  }
 
   out['סוגי_לחם'] = breads;
 

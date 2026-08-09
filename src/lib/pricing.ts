@@ -156,6 +156,42 @@ function buildRows(packList: { q: number; amount: number }[], singlesCents: numb
   return rows;
 }
 
+// ---- Tiers as customers see them ----
+
+/** A bulk tier stated as an offer: buy `minQty` for `packPrice`, saving
+ *  `saveAmount` against the same count of singles. */
+export type BulkDeal = {
+  minQty: number;
+  packPrice: number;
+  eachPrice: number;
+  saveAmount: number;
+};
+
+/**
+ * The advertisable deals for one (type, size): tiers that actually undercut
+ * `minQty × single`, ascending by quantity. A tier that saves nothing is noise,
+ * so it never reaches a customer.
+ *
+ * Plain numbers on purpose — the public site and the catalog export format money
+ * differently, and this is the one place that decides which deals exist at all.
+ */
+export function deriveDeals(
+  single: number,
+  tierPrices: Record<number, number>
+): BulkDeal[] {
+  if (!(single > 0)) return [];
+  return Object.entries(tierPrices)
+    .map(([q, p]) => ({ minQty: Number(q), pack: Number(p) }))
+    .filter(({ minQty, pack }) => minQty >= 2 && pack > 0 && pack < single * minQty)
+    .sort((a, b) => a.minQty - b.minQty)
+    .map(({ minQty, pack }) => ({
+      minQty,
+      packPrice: round2(pack),
+      eachPrice: round2(pack / minQty),
+      saveAmount: round2(single * minQty - pack),
+    }));
+}
+
 // ---- Order-level pricing ----
 
 export type OrderLine = {

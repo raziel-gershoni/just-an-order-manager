@@ -15,6 +15,7 @@ import {
 } from '@/db/schema';
 import { resolveBadge, type ResolvedBadge } from './badges';
 import { loadGroupTiers } from './order-pricing';
+import { deriveDeals } from './pricing';
 
 // ---- View-model ----
 
@@ -157,27 +158,18 @@ function formatPrice(value: string | number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-/** Turn a (type, size)'s raw tier map into public deals, keeping only tiers that
- *  actually undercut buying `minQty` singles and pre-computing the savings. */
+/** Format a (type, size)'s deals for the page. Which tiers qualify is decided by
+ *  the engine, so the site and the catalog export always advertise the same set. */
 function buildDeals(
   single: number,
   tierPrices: Record<number, number>
 ): PublicDeal[] {
-  if (!(single > 0)) return [];
-  return Object.entries(tierPrices)
-    .map(([q, p]) => ({ minQty: Number(q), pack: Number(p) }))
-    .filter(({ minQty, pack }) => minQty >= 2 && pack > 0 && pack < single * minQty)
-    .sort((a, b) => a.minQty - b.minQty)
-    .map(({ minQty, pack }) => {
-      const full = single * minQty;
-      const save = full - pack;
-      return {
-        minQty,
-        packPrice: formatPrice(pack),
-        eachPrice: formatPrice(pack / minQty),
-        saveAmount: formatPrice(save),
-      };
-    });
+  return deriveDeals(single, tierPrices).map((d) => ({
+    minQty: d.minQty,
+    packPrice: formatPrice(d.packPrice),
+    eachPrice: formatPrice(d.eachPrice),
+    saveAmount: formatPrice(d.saveAmount),
+  }));
 }
 
 function toImage(
