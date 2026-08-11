@@ -162,6 +162,13 @@
       "when": 1785187509750,
       "tag": "0022_settle_order_8",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786829709750,
+      "tag": "0023_drop_stray_users",
+      "breakpoints": true
     }
   ]
 }

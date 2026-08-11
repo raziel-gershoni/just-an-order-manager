@@ -410,7 +410,6 @@ const translations: Record<string, string> = {
   // Public site — page copy
   'site.order_whatsapp': 'הזמנה בוואטסאפ',
   'site.order_short': 'הזמנה',
-  'site.order_telegram': 'בטלגרם',
   'site.open_whatsapp': 'פתיחת וואטסאפ',
   'site.pricelist': 'המחירון',
   'site.prices_note': 'מחירים בש״ח',

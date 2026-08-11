@@ -1,5 +1,4 @@
 import type { PublicSite } from './public-site';
-import { buildTelegramLink } from './public-site';
 
 /**
  * Schema.org `Bakery` (a LocalBusiness / FoodEstablishment) node for the public
@@ -22,11 +21,11 @@ export function buildBakeryJsonLd(
   const min = prices.length ? Math.min(...prices) : null;
   const max = prices.length ? Math.max(...prices) : null;
 
+  // Instagram only. The Telegram bot is the staff back office, not a profile
+  // customers should be pointed at from search results.
   const sameAs: string[] = [];
   const ig = profile.instagram?.replace(/^@/, '').trim();
   if (ig) sameAs.push(`https://instagram.com/${ig}`);
-  const tg = buildTelegramLink(process.env.NEXT_PUBLIC_BOT_USERNAME);
-  if (tg) sameAs.push(tg);
 
   const images = [profile.heroImage?.url, profile.logoUrl].filter(
     (v): v is string => !!v

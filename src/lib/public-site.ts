@@ -142,14 +142,6 @@ export function buildWhatsAppLink(
   return `https://wa.me/${intl}${q}`;
 }
 
-export function buildTelegramLink(
-  botUsername: string | null | undefined
-): string | null {
-  if (!botUsername) return null;
-  const u = botUsername.replace(/^@/, '').trim();
-  return u ? `https://t.me/${u}` : null;
-}
-
 // ---- Helpers ----
 
 function formatPrice(value: string | number): string {

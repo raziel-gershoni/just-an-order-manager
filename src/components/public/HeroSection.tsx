@@ -6,11 +6,9 @@ import { WhatsAppButton } from './WhatsAppButton';
 export function HeroSection({
   profile,
   waHref,
-  tgHref,
 }: {
   profile: PublicProfile;
   waHref: string | null;
-  tgHref: string | null;
 }) {
   const headline = profile.heroHeadline?.trim() || '';
   const eyebrow = profile.eyebrow?.trim() || '';
@@ -74,18 +72,10 @@ export function HeroSection({
         </div>
       )}
 
-      <div className="mt-5 flex gap-2.5">
+      {/* WhatsApp is the only way in. The bot behind the old Telegram button is
+          staff-side — it answered customers with the back-office onboarding. */}
+      <div className="mt-5 flex">
         <WhatsAppButton href={waHref} label={t('site.order_whatsapp')} className="flex-1" />
-        {tgHref && (
-          <a
-            href={tgHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex flex-1 items-center justify-center rounded-lg border-[1.5px] border-border px-4 py-3.5 text-[15px] font-bold text-foreground"
-          >
-            {t('site.order_telegram')}
-          </a>
-        )}
       </div>
 
       {profile.trustItems.length > 0 && (

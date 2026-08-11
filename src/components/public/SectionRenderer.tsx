@@ -1,10 +1,6 @@
 import Image from 'next/image';
 import { t } from '@/lib/i18n';
-import {
-  type PublicSite,
-  buildWhatsAppLink,
-  buildTelegramLink,
-} from '@/lib/public-site';
+import { type PublicSite, buildWhatsAppLink } from '@/lib/public-site';
 import { WhatsAppIcon } from './icons';
 import { HeroSection } from './HeroSection';
 import { GallerySection } from './GallerySection';
@@ -16,7 +12,6 @@ import { CtaSection } from './CtaSection';
 export function SectionRenderer({ site }: { site: PublicSite }) {
   const { profile, sections, catalog, gallery } = site;
   const waHref = buildWhatsAppLink(profile.whatsappPhone, t('site.wa_prefill'));
-  const tgHref = buildTelegramLink(process.env.NEXT_PUBLIC_BOT_USERNAME);
 
   const hasDetails =
     !!(
@@ -32,7 +27,7 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
   const render = (key: string) => {
     switch (key) {
       case 'hero':
-        return <HeroSection key="hero" profile={profile} waHref={waHref} tgHref={tgHref} />;
+        return <HeroSection key="hero" profile={profile} waHref={waHref} />;
       case 'gallery':
         return gallery.length ? (
           <GallerySection key="gallery" images={gallery} name={profile.displayName} />
