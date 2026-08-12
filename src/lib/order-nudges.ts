@@ -85,8 +85,9 @@ export async function sendPendingApprovalNudge(groupId: number): Promise<NudgeRe
 }
 
 /**
- * Orders delivered at least a week ago that were never marked paid. Paying from
- * credit sets `paid`, so what's left here is real outstanding money.
+ * Orders delivered at least a week ago that were never marked paid. Money
+ * reaching the tab settles the deliveries it covers (`settleCoveredOrders`), so
+ * what's left here is real outstanding money.
  * Returns null when there's nothing to chase (no message).
  */
 export async function sendUnpaidNudge(groupId: number): Promise<NudgeResult | null> {

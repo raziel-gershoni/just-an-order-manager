@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { orders, orderItems, payments } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from './order-pricing';
 import { notifyPrepayment } from './notifications';
 
@@ -165,4 +165,81 @@ export async function getCustomerBalance(
       and(eq(payments.customerId, customerId), eq(payments.groupId, groupId))
     );
   return result.balance;
+}
+
+/**
+ * Bring a customer's `paid` flags back in line with their ledger.
+ *
+ * The bakery runs a tab, so money usually arrives against the customer rather
+ * than one order. Such a payment lands in the ledger and nothing else, which
+ * used to leave every delivery flagged unpaid however much credit it left
+ * behind — the order screen and the daily unpaid nudge would keep chasing a
+ * customer who was already square.
+ *
+ * Allocating payments oldest-first is the same thing as letting the newest
+ * deliveries absorb whatever is still owed, so walk them newest-first, let the
+ * debt soak in, and settle everything the money has already covered. An order
+ * the debt only partly reaches stays unpaid — it isn't paid off yet.
+ *
+ * Only ever settles. A fresh charge must not un-tick a delivery someone marked
+ * paid by hand, and an order carrying no charge row is invisible to the balance,
+ * so no payment in it can have covered that order. Returns the ids settled.
+ */
+export async function settleCoveredOrders(
+  customerId: number,
+  groupId: number
+): Promise<number[]> {
+  const balance = Number(await getCustomerBalance(customerId, groupId));
+  let owed = balance < 0 ? -balance : 0;
+
+  const open = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.groupId, groupId),
+        eq(orders.customerId, customerId),
+        eq(orders.status, 'delivered'),
+        eq(orders.paid, false)
+      )
+    )
+    // Same date fallback the unpaid nudge uses, so an ASAP order with no
+    // delivery date sorts by when it was written instead of last.
+    .orderBy(
+      sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) desc`,
+      desc(orders.id)
+    );
+  if (open.length === 0) return [];
+
+  const chargeRows = await db
+    .select({ orderId: payments.orderId })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.groupId, groupId),
+        eq(payments.customerId, customerId),
+        eq(payments.type, 'charge')
+      )
+    );
+  const charged = new Set(
+    chargeRows.map((r) => r.orderId).filter((id): id is number => id != null)
+  );
+
+  const settled: number[] = [];
+  for (const o of open) {
+    if (!charged.has(o.id)) continue;
+    if (owed <= 0) {
+      settled.push(o.id);
+      continue;
+    }
+    owed -= await calculateOrderTotal(o.id);
+  }
+
+  if (settled.length > 0) {
+    await db
+      .update(orders)
+      .set({ paid: true, updatedAt: new Date() })
+      .where(inArray(orders.id, settled));
+  }
+  return settled;
 }

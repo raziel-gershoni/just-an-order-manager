@@ -169,6 +169,13 @@
       "when": 1786829709750,
       "tag": "0023_drop_stray_users",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786916109750,
+      "tag": "0024_settle_covered_orders",
+      "breakpoints": true
     }
   ]
 }

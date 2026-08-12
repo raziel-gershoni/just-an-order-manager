@@ -5,7 +5,11 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { notifyPrepayment, notifyBalanceAlert } from '@/lib/notifications';
 import { BALANCE_DEBT_THRESHOLD } from '@/lib/constants';
-import { ensureOrderCharge, getCustomerBalance } from '@/lib/order-payments';
+import {
+  ensureOrderCharge,
+  getCustomerBalance,
+  settleCoveredOrders,
+} from '@/lib/order-payments';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -77,6 +81,13 @@ export const POST = withGroup(async (request, _auth, groupId) => {
       description,
     })
     .returning();
+
+  // Money on the tab settles the deliveries it covers, whether or not it was
+  // filed against one. Without this a customer-level payment leaves its orders
+  // flagged unpaid and the daily nudge keeps chasing someone already square.
+  if (Number(finalAmount) > 0) {
+    await settleCoveredOrders(customerId, groupId);
+  }
 
   // Check balance and notify
   const balanceStr = await getCustomerBalance(customerId, groupId);
