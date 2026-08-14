@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 
-import { siteBaseUrl } from '../src/lib/site-url';
+import { CANONICAL_BASE_URL } from '../src/lib/site-url';
 
 /**
  * Declare the app's QStash schedules in code and reconcile them on every deploy,
@@ -126,14 +126,14 @@ async function main() {
     return;
   }
 
-  const appBase = siteBaseUrl();
-  // A schedule points at a public URL forever after. Refuse to write one from a
-  // machine whose app URL is local, or the next run from a dev box would
-  // repoint production crons at a host QStash can't reach.
-  if (!/^https:\/\//i.test(appBase) || /localhost|127\.0\.0\.1/i.test(appBase)) {
-    console.log(`[schedules] app URL "${appBase}" is not a public https origin — skipping.`);
-    return;
-  }
+  // Pinned to the canonical host rather than resolved from NEXT_PUBLIC_APP_URL.
+  // A schedule's destination is infrastructure, not content: deriving it from an
+  // env var that differs between a dev machine and Vercel would have the same
+  // schedule id flip-flopping between hosts depending on who ran last, and a run
+  // from a laptop pointing localhost could take production's crons down. One
+  // constant means every run writes the same URL. Move the domain and this moves
+  // with it on the next deploy.
+  const appBase = CANONICAL_BASE_URL;
 
   const account = await findAccount(token);
   if (!account) {
