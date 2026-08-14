@@ -329,6 +329,8 @@ const translations: Record<string, string> = {
   'notify.approve': 'אשר',
   'notify.mark_paid': 'שולם',
   'notify.and_more': 'ועוד',
+  'notify.reminders_stalled': 'תזכורות אוטומטיות לא נשלחות',
+  'notify.reminders_stalled_hint': 'הזמנה קבועה עברה את מועד המסירה בלי שנשלחה תזכורת. כנראה שהתזמון (QStash) לא רץ.',
   'notify.order_ready': 'הזמנה מוכנה!',
   'notify.customer': 'לקוח',
   'notify.quantity': 'כמות',

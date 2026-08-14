@@ -3,7 +3,8 @@ import { db } from '@/db';
 import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
 import { eq, and, asc, ne, inArray } from 'drizzle-orm';
 import { todayStr } from '@/lib/date-utils';
-import { sendMorningSummary } from '@/lib/notifications';
+import { sendMorningSummary, notifyRemindersStalled } from '@/lib/notifications';
+import { findMissedRecurringReminders } from '@/lib/reminder-health';
 import { formatStaffItemLabel } from '@/lib/order-display';
 import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
 import { sendPendingApprovalNudge, sendUnpaidNudge } from '@/lib/order-nudges';
@@ -20,6 +21,8 @@ interface Stats {
   notifyFailed: number;
   approvalNudges: number;
   unpaidNudges: number;
+  /** Groups warned that the recurring reminder has stopped running. */
+  stalledWarnings: number;
   nudgeFailed: number;
 }
 
@@ -51,6 +54,7 @@ async function handler(request: Request) {
     notifyFailed: 0,
     approvalNudges: 0,
     unpaidNudges: 0,
+    stalledWarnings: 0,
     nudgeFailed: 0,
   };
 
@@ -83,6 +87,22 @@ async function handler(request: Request) {
     } catch (err) {
       stats.nudgeFailed++;
       console.error(`[cron/morning-reminder] unpaid nudge failed for group ${group.id}:`, err);
+    }
+
+    // The one cron that reports on another cron. The recurring reminder can
+    // only stay silent when it works, so nothing but this would ever say it
+    // had stopped — it went three weeks unscheduled before anyone noticed.
+    try {
+      const missed = await findMissedRecurringReminders(group.id);
+      if (missed.length > 0) {
+        const result = await notifyRemindersStalled(group.id, missed);
+        stats.stalledWarnings++;
+        stats.notified += result.sent;
+        stats.notifyFailed += result.failed;
+      }
+    } catch (err) {
+      stats.nudgeFailed++;
+      console.error(`[cron/morning-reminder] reminder health check failed for group ${group.id}:`, err);
     }
   }
 

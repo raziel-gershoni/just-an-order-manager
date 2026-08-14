@@ -207,6 +207,29 @@ export async function notifyUnpaidOrders(
   }, keyboard);
 }
 
+/**
+ * The recurring reminder hasn't run. Owner/manager only — it's an ops problem,
+ * not something the baker can act on — and deliberately without a button: there
+ * is nothing to tap, the fix is a schedule outside the app.
+ */
+export async function notifyRemindersStalled(
+  groupId: number,
+  missed: { orderId: number; customerName: string; deliveryDate: string }[]
+): Promise<{ sent: number; failed: number }> {
+  const recipients = await getRecipientsByRole(groupId, ['manager']);
+
+  return sendToRecipients(recipients, (lang) => {
+    const lines = [`<b>⚠️ ${t('notify.reminders_stalled', lang)}</b>`, RULE];
+    for (const m of missed) {
+      lines.push(
+        `<b>#${m.orderId} ${esc(m.customerName)}</b> — ${formatWeekdayShort(m.deliveryDate)}`
+      );
+    }
+    lines.push(``, `<i>${t('notify.reminders_stalled_hint', lang)}</i>`);
+    return lines.join('\n');
+  });
+}
+
 export async function notifyOrderReady(
   groupId: number,
   orderId: number,
