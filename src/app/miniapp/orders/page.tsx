@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
-import { Plus, ClipboardList, AlertCircle, RotateCw } from 'lucide-react';
+import { Plus, ClipboardList, AlertCircle, RotateCw, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
@@ -34,10 +34,12 @@ type Tab = 'active' | 'completed' | 'all';
 
 export default function OrdersPage() {
   const { apiFetch } = useApi();
-  const { activeGroupId } = useGroup();
+  const { activeGroupId, activeGroupRole } = useGroup();
+  const canPrint = activeGroupRole === 'owner' || activeGroupRole === 'manager';
   const t = useT();
   const lang = useLang();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [printUrl, setPrintUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -61,6 +63,18 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
   }, [activeGroupId, tab, reloadKey]);
 
+  // Minted up front so the button is a plain link rather than a click that has
+  // to await a fetch before opening a tab — popup blockers and Telegram's
+  // WebView both dislike that. Expiry is handled by the sheet, which explains
+  // itself and sends you back here.
+  useEffect(() => {
+    if (!activeGroupId || !canPrint) return;
+    apiFetch<{ url: string }>('/print/token?d=today')
+      .then((r) => setPrintUrl(r.url))
+      .catch(() => setPrintUrl(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId, canPrint]);
+
   const tabLabels: Record<Tab, string> = {
     active: t('orders.tab_active'),
     completed: t('orders.tab_completed'),
@@ -71,14 +85,27 @@ export default function OrdersPage() {
 
   return (
     <div className="p-5 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold tracking-tight">{t('orders.title')}</h1>
-        <Link href="/miniapp/orders/new">
-          <Button size="sm">
-            <Plus className="h-4 w-4" />
-            {t('orders.new')}
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* A real link, not WebApp.openLink — the sheet has to work in any
+              browser, and printing needs one: window.print() is a no-op inside
+              a WebView. In Telegram this lands in its in-app browser, where
+              ⋯ → "פתח בדפדפן" finishes the trip. */}
+          {canPrint && printUrl && (
+            <a href={printUrl} target="_blank" rel="noopener noreferrer" aria-label="גיליון אריזה">
+              <Button size="sm" variant="outline">
+                <Printer className="h-4 w-4" />
+              </Button>
+            </a>
+          )}
+          <Link href="/miniapp/orders/new">
+            <Button size="sm">
+              <Plus className="h-4 w-4" />
+              {t('orders.new')}
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}

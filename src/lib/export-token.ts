@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-// Short-lived signed token authorizing a pricelist-file download for one group.
-// Minted by an authenticated (manager) request, then carried in the download
-// URL — so the file endpoint needs no initData (which Telegram's native
-// downloadFile can't send and would mangle/expire in the URL anyway).
+// Short-lived signed token authorizing a manager-scope read of one group,
+// carried in a URL. Minted by an authenticated (manager) request, so the target
+// needs no initData — which the two callers can't supply: Telegram's native
+// downloadFile can't send headers (pricelist file), and the printable packing
+// sheet is opened in an external browser that was never given initData.
 
 function secret(): string {
   const s = process.env.TELEGRAM_BOT_TOKEN;
