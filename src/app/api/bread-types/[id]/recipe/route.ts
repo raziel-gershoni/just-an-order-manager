@@ -1,9 +1,15 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { breadTypes, breadRecipes, breadRecipeIngredients } from '@/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
-import { recipeFromGrams, withBakersPercents, type Recipe } from '@/lib/recipe';
+import {
+  recipeFromEntries,
+  entryGrams,
+  withBakersPercents,
+  type Recipe,
+  type RecipeEntry,
+} from '@/lib/recipe';
 
 function getBreadTypeId(url: string): number {
   // /api/bread-types/[id]/recipe → take the second-to-last path segment
@@ -74,12 +80,20 @@ const putSchema = z.object({
   referenceFinishedGrams: z.number().int().positive(),
   ingredients: z
     .array(
-      z.object({
-        name: z.string().min(1).max(100),
-        kind: ingredientKindSchema,
-        grams: z.number().positive(),
-        sortOrder: z.number().int().nonnegative().default(0),
-      })
+      z
+        .object({
+          name: z.string().min(1).max(100),
+          kind: ingredientKindSchema,
+          sortOrder: z.number().int().nonnegative().default(0),
+          grams: z.number().positive().optional(),
+          pctOfFinished: z.number().positive().optional(),
+        })
+        // Exactly one: a row is either something the baker typed in grams, or a
+        // percentage carried over untouched. Accepting both would leave the
+        // server picking which one is the truth.
+        .refine((r) => (r.grams === undefined) !== (r.pctOfFinished === undefined), {
+          message: 'Each ingredient needs exactly one of grams or pctOfFinished',
+        })
     )
     .min(1),
 });
@@ -93,28 +107,38 @@ export const PUT = withAuth(async (request, auth) => {
   const parsed = putSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { referenceFinishedGrams, ingredients } = parsed.data;
+  const { referenceFinishedGrams } = parsed.data;
+  const entries = parsed.data.ingredients as RecipeEntry[];
 
   // At least one flour
-  const hasFlour = ingredients.some((i) => i.kind === 'flour');
+  const hasFlour = entries.some((i) => i.kind === 'flour');
   if (!hasFlour) {
     return errorResponse('Recipe must include at least one flour ingredient', 400);
   }
 
-  // Sanity: dough total must be ≥ finished weight
-  const totalGrams = ingredients.reduce((sum, i) => sum + i.grams, 0);
+  // Two rows with the same name silently merge in sumScaledByType, which keys
+  // on name|kind — so the daily aggregate would quietly under-report.
+  const names = entries.map((i) => i.name.trim());
+  const duplicate = names.find((n, i) => names.indexOf(n) !== i);
+  if (duplicate) {
+    return errorResponse(`Ingredient "${duplicate}" appears twice`, 400);
+  }
+
+  // Percentage rows have to be resolved to grams before this comparison, or a
+  // mixed payload would weigh a partial sum against the whole loaf.
+  const totalGrams = entries.reduce((sum, i) => sum + entryGrams(referenceFinishedGrams, i), 0);
   if (totalGrams < referenceFinishedGrams) {
     return errorResponse(
-      `Total ingredient weight (${totalGrams}g) is less than finished loaf weight (${referenceFinishedGrams}g) — bread can't bake heavier than its dough`,
+      `Total ingredient weight (${Math.round(totalGrams)}g) is less than finished loaf weight (${referenceFinishedGrams}g) — bread can't bake heavier than its dough`,
       400
     );
   }
 
-  const recipe = recipeFromGrams(referenceFinishedGrams, ingredients);
+  const recipe = recipeFromEntries(referenceFinishedGrams, entries);
 
-  // Upsert: clear ingredients, upsert recipe row, insert ingredients
-  await db.delete(breadRecipeIngredients).where(eq(breadRecipeIngredients.breadTypeId, breadTypeId));
-
+  // The parent row first: it carries no ingredient data and is idempotent, and
+  // "recipe row with no ingredients" is a state we already tolerate before the
+  // first save.
   const [existing] = await db
     .select()
     .from(breadRecipes)
@@ -130,17 +154,21 @@ export const PUT = withAuth(async (request, auth) => {
     await db.insert(breadRecipes).values({ breadTypeId });
   }
 
-  if (recipe.ingredients.length > 0) {
-    await db.insert(breadRecipeIngredients).values(
-      recipe.ingredients.map((i) => ({
-        breadTypeId,
-        name: i.name,
-        kind: i.kind,
-        pctOfFinished: i.pctOfFinished.toFixed(4),
-        sortOrder: i.sortOrder,
-      }))
-    );
-  }
+  // Delete + insert as ONE statement. neon-http has no interactive
+  // transactions, so a two-statement swap can strand a bread that looks
+  // configured with zero ingredients — which every read surface renders as
+  // "no recipe", silently.
+  const values = recipe.ingredients.map(
+    (i) =>
+      sql`(${breadTypeId}, ${i.name.trim()}, ${i.kind}::ingredient_kind, ${i.pctOfFinished.toFixed(4)}, ${i.sortOrder})`
+  );
+  await db.execute(sql`
+    WITH cleared AS (
+      DELETE FROM bread_recipe_ingredients WHERE bread_type_id = ${breadTypeId}
+    )
+    INSERT INTO bread_recipe_ingredients (bread_type_id, name, kind, pct_of_finished, sort_order)
+    VALUES ${sql.join(values, sql`, `)}
+  `);
 
   return jsonResponse({ ok: true });
 });
