@@ -7,8 +7,11 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Plus, Trash2, Pencil, Calculator } from 'lucide-react';
+import { Plus, Trash2, Pencil, Calculator, Copy } from 'lucide-react';
 import { groupByKind, type IngredientKind } from '@/lib/recipe';
+import { IngredientNameInput } from '@/components/recipe/IngredientNameInput';
+import { CopyRecipeFlow } from '@/components/recipe/CopyRecipeFlow';
+import { EMPTY_NAMES, type GroupRecipe, type NamesByKind, type SeedRow } from '@/components/recipe/types';
 
 interface StoredIngredient {
   name: string;
@@ -25,15 +28,24 @@ interface FetchedRecipe {
   updatedAt: string;
 }
 interface EditorRow {
+  /** Stable across reorder and delete. Keying rows by array index makes React
+   *  reuse the DOM node, so the inputs below a deleted row show the previous
+   *  row's values. */
+  id: number;
   name: string;
   kind: IngredientKind;
   grams: string;
   sortOrder: number;
-  /** % of the finished loaf weight at seed time. Used to auto-rescale grams when ref weight changes (only if !dirty). Undefined for rows added by hand. */
+  /** % of the finished loaf weight at seed time. Used to auto-rescale grams when ref weight changes (only if !dirty), and sent verbatim on save so an untouched row keeps the exact percentage already in storage. */
   originalPctOfFinished?: number;
-  /** True once the user has manually typed in this row's grams field — auto-rescale skips dirty rows. */
+  /** True once the user has manually typed in this row's grams field — auto-rescale skips dirty rows, and so does the lossless save path. */
   dirty: boolean;
 }
+
+// Client-only and never persisted, so a counter beats crypto.randomUUID(): it
+// is deterministic and readable in React DevTools.
+let nextRowId = 1;
+const newRowId = () => nextRowId++;
 
 const KIND_OPTIONS: IngredientKind[] = ['flour', 'water', 'salt', 'starter', 'other'];
 
@@ -48,10 +60,10 @@ function defaultTemplate(referenceWeight: number): EditorRow[] {
     dirty: false,
   });
   return [
-    { name: 'קמח', kind: 'flour', sortOrder: 0, ...seed(flour) },
-    { name: 'מים', kind: 'water', sortOrder: 1, ...seed(Math.round(flour * 0.7)) },
-    { name: 'מלח', kind: 'salt', sortOrder: 2, ...seed(Math.round(flour * 0.02)) },
-    { name: 'מחמצת', kind: 'starter', sortOrder: 3, ...seed(Math.round(flour * 0.2)) },
+    { id: newRowId(), name: 'קמח', kind: 'flour', sortOrder: 0, ...seed(flour) },
+    { id: newRowId(), name: 'מים', kind: 'water', sortOrder: 1, ...seed(Math.round(flour * 0.7)) },
+    { id: newRowId(), name: 'מלח', kind: 'salt', sortOrder: 2, ...seed(Math.round(flour * 0.02)) },
+    { id: newRowId(), name: 'מחמצת', kind: 'starter', sortOrder: 3, ...seed(Math.round(flour * 0.2)) },
   ];
 }
 
@@ -91,6 +103,11 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
   const [rows, setRows] = useState<EditorRow[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // The group's other recipes (copy sources) and every ingredient name in use.
+  const [sources, setSources] = useState<GroupRecipe[]>([]);
+  const [namesByKind, setNamesByKind] = useState<NamesByKind>(EMPTY_NAMES);
+  const [copying, setCopying] = useState(false);
+
   // Show-in-grams expander state
   const [displayWeight, setDisplayWeight] = useState<string>(
     defaultReferenceWeight != null ? String(defaultReferenceWeight) : '1000'
@@ -114,6 +131,21 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     };
   }, [breadTypeId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ recipes: GroupRecipe[]; namesByKind: NamesByKind }>('/recipes')
+      .then((res) => {
+        if (cancelled) return;
+        setNamesByKind(res.namesByKind);
+        // A bread is never its own copy source.
+        setSources(res.recipes.filter((r) => r.breadTypeId !== breadTypeId));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [breadTypeId]);
+
   function startCreate() {
     const weight = defaultReferenceWeight ?? 1000;
     setRefWeight(String(weight));
@@ -123,13 +155,17 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
 
   function startEdit() {
     if (!recipe) return;
-    const weight = Number(displayWeight) || defaultReferenceWeight || 1000;
+    // The bread's own size, not the "הצג בגרמים" calculator's weight. That box
+    // is for looking at a different loaf; letting it set the editor's basis
+    // means a tool for reading quietly changes what gets written.
+    const weight = defaultReferenceWeight || Number(displayWeight) || 1000;
     setRefWeight(String(weight));
     setRows(
       recipe.ingredients
         .slice()
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((i) => ({
+          id: newRowId(),
           name: i.name,
           kind: i.kind,
           grams: String(Math.round((i.pctOfFinished * weight) / 100)),
@@ -141,10 +177,32 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     setEditing(true);
   }
 
+  /** Land copied rows in the editor at THIS bread's weight, not the source's. */
+  function seedFromCopy(seed: SeedRow[]) {
+    const weight = defaultReferenceWeight ?? 1000;
+    setRefWeight(String(weight));
+    setRows(
+      seed.map((s) => ({
+        id: newRowId(),
+        name: s.name,
+        kind: s.kind,
+        grams: String(Math.round((s.pctOfFinished * weight) / 100)),
+        sortOrder: s.sortOrder,
+        // dirty:false is what makes the copy lossless — the grams above are for
+        // the eye, and save() sends these percentages instead. Renaming a flour
+        // does not change its quantity, so a renamed row stays clean too.
+        originalPctOfFinished: s.pctOfFinished,
+        dirty: false,
+      }))
+    );
+    setCopying(false);
+    setEditing(true);
+  }
+
   function addRow() {
     setRows((prev) => [
       ...prev,
-      { name: '', kind: 'other', grams: '', sortOrder: prev.length, dirty: true },
+      { id: newRowId(), name: '', kind: 'other', grams: '', sortOrder: prev.length, dirty: true },
     ]);
   }
 
@@ -179,6 +237,19 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
 
   const previewPcts = useMemo(() => pctOfFlourFromRows(rows), [rows]);
 
+  /** Ids of rows whose trimmed name collides with an earlier row's. */
+  const duplicateRowIds = useMemo(() => {
+    const seen = new Map<string, number>();
+    const dupes = new Set<number>();
+    for (const r of rows) {
+      const key = r.name.trim();
+      if (!key) continue;
+      if (seen.has(key)) dupes.add(r.id);
+      else seen.set(key, r.id);
+    }
+    return dupes;
+  }, [rows]);
+
   async function save() {
     const refW = Number(refWeight);
     if (!refW || refW <= 0) {
@@ -192,6 +263,10 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     }
     if (!validRows.some((r) => r.kind === 'flour')) {
       toast.error(t('settings.recipe_no_flour'));
+      return;
+    }
+    if (duplicateRowIds.size > 0) {
+      toast.error(t('settings.ingredient_duplicate'));
       return;
     }
     const totalGrams = validRows.reduce((sum, r) => sum + Number(r.grams), 0);
@@ -209,8 +284,13 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
           ingredients: validRows.map((r, i) => ({
             name: r.name.trim(),
             kind: r.kind,
-            grams: Number(r.grams),
             sortOrder: i,
+            // Untouched rows keep the percentage already in storage. Deriving
+            // it again from the grams on screen would bake this loaf's rounding
+            // into the recipe — the whole reason a copy degrades today.
+            ...(!r.dirty && r.originalPctOfFinished != null
+              ? { pctOfFinished: r.originalPctOfFinished }
+              : { grams: Number(r.grams) }),
           })),
         }),
       });
@@ -264,12 +344,14 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
 
         <div className="space-y-2">
           {rows.map((r, idx) => (
-            <div key={idx} className="grid grid-cols-[1fr_5rem_5rem_2rem] gap-1.5 items-center">
-              <Input
+            <div key={r.id} className="grid grid-cols-[1fr_5rem_5rem_2rem] gap-1.5 items-center">
+              <IngredientNameInput
                 value={r.name}
-                onChange={(e) => updateRow(idx, { name: e.target.value })}
+                onChange={(v) => updateRow(idx, { name: v })}
+                kind={r.kind}
+                namesByKind={namesByKind}
                 placeholder={t('settings.ingredient')}
-                className="text-sm"
+                duplicate={duplicateRowIds.has(r.id)}
               />
               <select
                 value={r.kind}
@@ -341,13 +423,33 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     return (
       <div className="border-t border-border pt-3 space-y-2">
         <div className="text-sm font-medium text-muted-foreground">{t('settings.recipe')}</div>
-        <Card className="bg-muted/30 text-center py-3 space-y-2">
-          <p className="text-xs text-muted-foreground">{t('settings.no_recipe')}</p>
-          <Button size="sm" variant="outline" onClick={startCreate}>
-            <Plus className="h-3.5 w-3.5" />
-            {t('settings.set_recipe')}
-          </Button>
-        </Card>
+        {copying ? (
+          <CopyRecipeFlow
+            sources={sources}
+            namesByKind={namesByKind}
+            onCancel={() => setCopying(false)}
+            onDone={seedFromCopy}
+          />
+        ) : (
+          <Card className="bg-muted/30 text-center py-3 space-y-2">
+            <p className="text-xs text-muted-foreground">{t('settings.no_recipe')}</p>
+            <div className="flex gap-2 justify-center">
+              <Button size="sm" variant="outline" onClick={startCreate}>
+                <Plus className="h-3.5 w-3.5" />
+                {t('settings.set_recipe')}
+              </Button>
+              {/* Only where there is no recipe to destroy. Replacing one is what
+                  edit and delete are for; a silent overwrite behind a copy
+                  button is a trap. */}
+              {sources.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setCopying(true)}>
+                  <Copy className="h-3.5 w-3.5" />
+                  {t('settings.copy_recipe')}
+                </Button>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
     );
   }
