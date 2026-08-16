@@ -168,11 +168,35 @@ export function withBakersPercents(recipe: Recipe) {
 }
 
 /**
- * Build a Recipe (pctOfFinished form) from baker's gram entry — used at save time in the editor.
+ * A row on its way into storage. It carries EITHER the grams a baker typed —
+ * which must be divided by the loaf weight they typed them against — OR an
+ * exact percentage that is already storage-shaped and must not be re-derived.
+ *
+ * The second case is what keeps a copied recipe lossless. Every display rounds
+ * to whole grams, and rounding a number for the eye must never become the
+ * number of record: send a recipe through a 700g bread and back and the salt
+ * moves a full gram otherwise.
  */
-export function recipeFromGrams(
+export type RecipeEntry = {
+  name: string;
+  kind: IngredientKind;
+  sortOrder: number;
+} & (
+  | { grams: number; pctOfFinished?: undefined }
+  | { pctOfFinished: number; grams?: undefined }
+);
+
+/** What this row weighs on a loaf of `referenceFinishedGrams`. */
+export function entryGrams(referenceFinishedGrams: number, row: RecipeEntry): number {
+  return row.grams !== undefined
+    ? row.grams
+    : (row.pctOfFinished * referenceFinishedGrams) / 100;
+}
+
+/** Build a Recipe from rows that may mix typed grams and carried-over percentages. */
+export function recipeFromEntries(
   referenceFinishedGrams: number,
-  rows: { name: string; kind: IngredientKind; grams: number; sortOrder: number }[]
+  rows: RecipeEntry[]
 ): Recipe {
   if (referenceFinishedGrams <= 0) {
     throw new Error('referenceFinishedGrams must be > 0');
@@ -181,10 +205,24 @@ export function recipeFromGrams(
     ingredients: rows.map((r) => ({
       name: r.name,
       kind: r.kind,
-      pctOfFinished: (r.grams / referenceFinishedGrams) * 100,
+      pctOfFinished:
+        r.pctOfFinished !== undefined
+          ? r.pctOfFinished
+          : (r.grams / referenceFinishedGrams) * 100,
       sortOrder: r.sortOrder,
     })),
   };
+}
+
+/**
+ * Build a Recipe (pctOfFinished form) from baker's gram entry — the all-grams
+ * case, for callers with no percentages to preserve.
+ */
+export function recipeFromGrams(
+  referenceFinishedGrams: number,
+  rows: { name: string; kind: IngredientKind; grams: number; sortOrder: number }[]
+): Recipe {
+  return recipeFromEntries(referenceFinishedGrams, rows);
 }
 
 /**
