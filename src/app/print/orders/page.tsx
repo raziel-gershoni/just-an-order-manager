@@ -4,6 +4,8 @@ import {
   resolveRange,
   type PrintOrder,
   type PrintPreset,
+  type PrintRecipeBlock,
+  type PrintSheet,
 } from '@/lib/print-sheet';
 import { formatWeekdayShort } from '@/lib/date-utils';
 import { PrintButton } from '@/components/print/PrintButton';
@@ -92,6 +94,8 @@ export default async function PrintOrdersPage({
           <p className="empty">אין הזמנות לתאריך הזה.</p>
         ) : (
           <>
+            <MixSection sheet={sheet} />
+
             <section className="bake" aria-labelledby="bake-h">
               <div className="section-head">
                 <h2 id="bake-h">לאפייה</h2>
@@ -117,6 +121,82 @@ export default async function PrintOrdersPage({
         )}
       </main>
     </>
+  );
+}
+
+/** Grams stay in the sheet's RTL flow: bare digits sit correctly there, and the
+ *  ״ג״ belongs to the left of the number the way Hebrew reads it. */
+function grams(g: number): string {
+  return `${Math.round(g).toLocaleString('en-US')}ג`;
+}
+
+/** What goes into the mixer, before anything is shaped. */
+function MixSection({ sheet }: { sheet: PrintSheet }) {
+  const { recipes, noRecipe, partialRecipe } = sheet;
+  // Weights are a per-bake instruction, so they only belong on a dated sheet.
+  // The active view spans whatever dates happen to be open, and summing those
+  // into one dough describes a mix nobody should ever make. The loaf tally
+  // below still covers the whole view.
+  if (!sheet.date) return null;
+  // No recipes at all means no weigh-out to print — and nothing for the caveat
+  // to qualify. The caveat exists to stop *partial* weights reading as the
+  // whole job, so it only appears alongside weights.
+  if (recipes.length === 0) return null;
+
+  const totalFlour = recipes.reduce((s, r) => s + r.flourGrams, 0);
+
+  return (
+    <section className="mix" aria-labelledby="mix-h">
+      <div className="section-head">
+        <h2 id="mix-h">לישה</h2>
+        <span className="stamp">קמח {grams(totalFlour)}</span>
+      </div>
+
+      <div className="recipes">
+        {recipes.map((r) => (
+          <RecipeCard key={r.name} recipe={r} />
+        ))}
+      </div>
+
+      {noRecipe.length > 0 && (
+        <p className="caveat">ללא מתכון — נשקל ידנית: {noRecipe.join(' · ')}</p>
+      )}
+      {partialRecipe.length > 0 && (
+        <p className="caveat">חסר משקל לגודל, הכמות חלקית: {partialRecipe.join(' · ')}</p>
+      )}
+    </section>
+  );
+}
+
+function RecipeCard({ recipe }: { recipe: PrintRecipeBlock }) {
+  return (
+    <article className="recipe">
+      <header className="recipe-head">
+        <h3>{recipe.name}</h3>
+        <span className="recipe-yield">
+          {recipe.loaves} כיכרות · {grams(recipe.finishedGrams)}
+        </span>
+      </header>
+
+      <ul className="weights">
+        {recipe.lines.map((l) => (
+          <li key={l.name} className="weigh">
+            <span className="tick" aria-hidden="true" />
+            <span className="ing">{l.name}</span>
+            {/* The leader is what makes a line weighable at arm's length from
+                a scale — the eye tracks the dots, not the row. */}
+            <span className="leader" aria-hidden="true" />
+            <span className="pct">{l.pctOfFlour.toFixed(0)}%</span>
+            <span className="gram">{grams(l.grams)}</span>
+          </li>
+        ))}
+      </ul>
+
+      <footer className="recipe-foot">
+        <span>סך קמח {grams(recipe.flourGrams)}</span>
+        <span>סך בצק {grams(recipe.doughGrams)}</span>
+      </footer>
+    </article>
   );
 }
 

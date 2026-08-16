@@ -118,6 +118,49 @@ body { background: #EFEBE2; }
 .bake .qty { font-size: 17px; }
 .bake .what { font-weight: 700; }
 
+/* ---- לישה: the weigh-out, in scale-readout form ---- */
+/* auto-fit rather than a fixed pair: one recipe then runs the full width, and
+   a long leader is a better use of the space than an empty column. */
+.recipes {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(76mm, 1fr)); gap: 6px 14px;
+}
+
+.recipe { border-top: 1.5px solid var(--ink); padding-top: 5px; }
+.recipe-head { display: flex; align-items: baseline; gap: 8px; }
+.recipe-head h3 { font-size: 14px; font-weight: 800; margin: 0; }
+.recipe-yield {
+  margin-inline-start: auto; font-size: 10.5px; color: var(--ink-soft); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.weights { list-style: none; margin: 4px 0 0; padding: 0; }
+.weigh { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12.5px; }
+.weigh .tick { width: 10px; height: 10px; }
+.ing { font-weight: 600; white-space: nowrap; }
+.leader { flex: 1; border-bottom: 1px dotted var(--rule); transform: translateY(-3px); }
+.pct {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  min-width: 26px; text-align: end;
+}
+.gram {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+  min-width: 52px; text-align: end;
+}
+
+.recipe-foot {
+  display: flex; gap: 12px; margin-top: 4px; padding-top: 3px;
+  border-top: 1px solid var(--rule);
+  font-size: 10.5px; font-weight: 700; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.caveat {
+  margin: 7px 0 0; font-size: 11px; font-weight: 600; color: var(--ink-soft);
+  padding-inline-start: 7px; border-inline-start: 2px dotted var(--rule);
+}
+
 /* ---- one order: stub + body ---- */
 .orders { margin-top: 16px; }
 .order {
@@ -185,8 +228,10 @@ body { background: #EFEBE2; }
   .sheet {
     max-width: none; margin: 0; padding: 0; box-shadow: none;
   }
-  /* An order split across a page break is an order someone forgets to pack. */
+  /* An order split across a page break is an order someone forgets to pack;
+     a recipe split across one is an ingredient someone forgets to weigh. */
   .order { break-inside: avoid; page-break-inside: avoid; }
   .bake { break-inside: avoid; page-break-inside: avoid; }
+  .recipe { break-inside: avoid; page-break-inside: avoid; }
 }
 `;

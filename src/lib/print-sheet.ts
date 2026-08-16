@@ -15,16 +15,18 @@ import { he } from 'date-fns/locale/he';
 import { todayStr } from './date-utils';
 import { formatStaffItemLabel } from './order-display';
 import { calculateOrderTotal } from './order-payments';
+import { aggregateRecipesForOrders } from './order-recipe';
 
 /**
  * Everything one printed packing sheet needs, in one read.
  *
- * The sheet answers two questions that are asked at different moments — "how
- * many loaves do I shape" before the bake, and "what goes in this bag" after —
- * so it carries both: a production tally across every order, then the orders
- * themselves. Item labels come from `formatStaffItemLabel`, the same staff
- * wording the baker sees in Telegram, and totals from `calculateOrderTotal`,
- * so a printed sheet can never quote a figure the order screen disagrees with.
+ * The sheet follows the day's work in order: what to weigh into the mixer, how
+ * many loaves to shape, and then what goes in each bag. Item labels come from
+ * `formatStaffItemLabel`, the same staff wording the baker sees in Telegram;
+ * totals from `calculateOrderTotal`; and the weights from
+ * `aggregateRecipesForOrders`, the same scaling the baker screen and the
+ * morning digest use — so a printed sheet can never quote a figure another
+ * surface disagrees with.
  */
 
 export const PRINT_PRESETS = ['yesterday', 'today', 'tomorrow', 'active'] as const;
@@ -49,11 +51,32 @@ export interface PrintOrder {
   items: PrintLine[];
 }
 
+export interface PrintRecipeLine {
+  name: string;
+  grams: number;
+  /** Baker's percent — the ratio a baker checks a dough by. */
+  pctOfFlour: number;
+}
+
+export interface PrintRecipeBlock {
+  name: string;
+  loaves: number;
+  finishedGrams: number;
+  flourGrams: number;
+  doughGrams: number;
+  lines: PrintRecipeLine[];
+}
+
 export interface PrintSheet {
   /** What this sheet covers, e.g. "יום ו׳ 15/08" or "כל ההזמנות הפעילות". */
   heading: string;
   /** The date the presets resolved to, or null for the active-orders view. */
   date: string | null;
+  recipes: PrintRecipeBlock[];
+  /** Types on the sheet with no recipe at all — named so the weights above can't read as the whole job. */
+  noRecipe: string[];
+  /** Types whose weights are short a size that carries no gram weight. */
+  partialRecipe: string[];
   production: PrintLine[];
   totalLoaves: number;
   orders: PrintOrder[];
@@ -138,7 +161,16 @@ export async function buildPrintSheet(
     );
 
   if (rows.length === 0) {
-    return { heading: headingFor(date), date, production: [], totalLoaves: 0, orders: [] };
+    return {
+      heading: headingFor(date),
+      date,
+      recipes: [],
+      noRecipe: [],
+      partialRecipe: [],
+      production: [],
+      totalLoaves: 0,
+      orders: [],
+    };
   }
 
   const orderIds = rows.map((r) => r.id);
@@ -181,7 +213,10 @@ export async function buildPrintSheet(
     if (!phoneByCustomer.has(p.customerId)) phoneByCustomer.set(p.customerId, p.phone);
   }
 
-  const totals = await Promise.all(rows.map((r) => calculateOrderTotal(r.id)));
+  const [totals, recipeAgg] = await Promise.all([
+    Promise.all(rows.map((r) => calculateOrderTotal(r.id))),
+    aggregateRecipesForOrders(orderIds),
+  ]);
 
   const itemsByOrder = new Map<number, PrintLine[]>();
   const production = new Map<string, number>();
@@ -218,9 +253,33 @@ export async function buildPrintSheet(
     .map(([label, qty]) => ({ label, qty }))
     .sort((a, b) => b.qty - a.qty || a.label.localeCompare(b.label, 'he'));
 
+  // A type whose sizes all lack a gram weight scales to an empty recipe; there
+  // is nothing to weigh out, so it belongs in the caveat line, not the block.
+  const recipes: PrintRecipeBlock[] = recipeAgg.byType
+    .filter((t) => t.hasRecipe && t.recipe && t.recipe.ingredients.length > 0)
+    .map((t) => ({
+      name: t.name,
+      loaves: t.totalLoaves,
+      finishedGrams: t.recipe!.finishedGrams,
+      flourGrams: t.recipe!.totalFlourGrams,
+      doughGrams: t.recipe!.totalDoughGrams,
+      lines: t.recipe!.ingredients.map((i) => ({
+        name: i.name,
+        grams: i.grams,
+        pctOfFlour: i.pctOfFlour,
+      })),
+    }))
+    .sort((a, b) => b.doughGrams - a.doughGrams);
+
+  const named = (reason: 'no_recipe' | 'size_missing_weight') =>
+    recipeAgg.unconfigured.filter((u) => u.reason === reason).map((u) => u.name);
+
   return {
     heading: headingFor(date),
     date,
+    recipes,
+    noRecipe: named('no_recipe'),
+    partialRecipe: named('size_missing_weight'),
     production: productionLines,
     totalLoaves: productionLines.reduce((s, l) => s + l.qty, 0),
     orders: printOrders,
