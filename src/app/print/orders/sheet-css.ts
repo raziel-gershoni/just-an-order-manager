@@ -133,7 +133,25 @@ body { background: #EFEBE2; }
   font-variant-numeric: tabular-nums;
 }
 
+/* A kind heading earns its line only when it groups something — see
+   kindLabelIsUseful — so an ungrouped row sits flush with a grouped one and
+   the column of tick boxes stays one straight edge down the page. */
+.kind-head {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 4px 0 0; padding-inline-start: 16px;
+}
+.kind-name {
+  font-size: 9px; font-weight: 800; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.kind-sum {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 10px; font-weight: 700; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
 .weights { list-style: none; margin: 4px 0 0; padding: 0; }
+.kind-head + .weights { margin-top: 1px; }
 .weigh { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12.5px; }
 .weigh .tick { width: 10px; height: 10px; }
 .ing { font-weight: 600; white-space: nowrap; }

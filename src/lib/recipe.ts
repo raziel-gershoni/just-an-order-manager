@@ -1,4 +1,19 @@
+import { t } from './i18n';
+
 export type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'other';
+
+/** The Hebrew name of a kind — קמח, מים, … — from the one translation table. */
+export function kindLabel(kind: IngredientKind): string {
+  return t(`settings.kind_${kind}`);
+}
+
+/**
+ * Whether a group needs its kind spelled out. A lone ״מים״ under a heading
+ * reading ״מים״ is noise; two flours under ״קמח״ is the whole point.
+ */
+export function kindLabelIsUseful(kind: IngredientKind, items: { name: string }[]): boolean {
+  return items.length > 1 || items[0]?.name !== kindLabel(kind);
+}
 
 /** Canonical display order for ingredient kinds (dry → main hydration → leavening → seasoning → extras). */
 export const KIND_DISPLAY_ORDER: IngredientKind[] = ['flour', 'water', 'starter', 'salt', 'other'];
@@ -22,6 +37,18 @@ export function groupByKind<T extends { kind: IngredientKind; sortOrder: number 
     kind: k,
     items: buckets.get(k)!,
   }));
+}
+
+/**
+ * The same canonical order, flattened — for surfaces that render one list
+ * rather than labelled groups. Two flours entered at either end of a recipe's
+ * sortOrder still come out adjacent, which is the whole point: nobody weighs
+ * flour, then water, then flour again.
+ */
+export function sortByKind<T extends { kind: IngredientKind; sortOrder: number }>(
+  items: T[]
+): T[] {
+  return groupByKind(items).flatMap((g) => g.items);
 }
 
 export type RecipeIngredient = {
@@ -66,15 +93,19 @@ function withPctOfFlour(recipe: Recipe): { name: string; kind: IngredientKind; p
 
 export function scaleRecipe(recipe: Recipe, targetFinishedGrams: number): ScaledRecipe {
   const withFlour = withPctOfFlour(recipe);
-  const ingredients: ScaledIngredient[] = withFlour
-    .map((i) => ({
+  // Kind order, not entry order: a scaled recipe is a weigh-out list, and every
+  // surface that renders one wants the flours together. Setting it here means
+  // no caller can forget — the editor keeps entry order, everyone else inherits
+  // this.
+  const ingredients: ScaledIngredient[] = sortByKind(
+    withFlour.map((i) => ({
       name: i.name,
       kind: i.kind,
       grams: (i.pctOfFinished * targetFinishedGrams) / 100,
       pctOfFlour: i.pctOfFlour,
       sortOrder: i.sortOrder,
     }))
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  );
 
   const totalFlourGrams = ingredients
     .filter((i) => i.kind === 'flour')
@@ -119,7 +150,7 @@ export function sumScaledByType(scaled: ScaledRecipe[]): ScaledRecipe {
       }
     }
   }
-  const ingredients = Array.from(byKey.values()).sort((a, b) => a.sortOrder - b.sortOrder);
+  const ingredients = sortByKind(Array.from(byKey.values()));
   const totalFlourGrams = ingredients
     .filter((i) => i.kind === 'flour')
     .reduce((sum, i) => sum + i.grams, 0);
@@ -167,25 +198,38 @@ export function gramsRounded(grams: number): number {
  * Build the Hebrew recipe block used in the Telegram morning summary and bot /today output.
  * Entries with no recipe are silently skipped. Returns empty string if nothing to show.
  *
+ * One line per ingredient kind, in the canonical weighing order, so the flours
+ * arrive together and carry their combined weight — the number you set the
+ * scale to before you start.
+ *
  * Format:
  *   📝 מתכון להיום:
  *   סורדו (8 כיכרות · 8000ג סופי):
- *     קמח חיטה לבן 5760ג · מים 4032ג · מלח 115ג · מחמצת 1152ג
+ *     קמח 5760ג: חיטה לבן 4608ג · מלא 1152ג
+ *     מים 4032ג
+ *     מחמצת 1152ג
+ *     מלח 115ג
  */
 export function formatRecipeBlockHebrew(
   entries: { name: string; loaves: number; finishedGrams: number; recipe: ScaledRecipe | null }[]
 ): string {
   const withRecipe = entries.filter((e) => e.recipe && e.recipe.ingredients.length > 0);
   if (withRecipe.length === 0) return '';
+  const g = (grams: number) => `${Math.round(grams)}ג`;
   const lines = ['📝 מתכון להיום:'];
   for (const e of withRecipe) {
-    lines.push(
-      `<b>${e.name}</b> (${e.loaves} כיכרות · ${Math.round(e.finishedGrams)}ג סופי):`
-    );
-    const ingredients = e.recipe!.ingredients
-      .map((i) => `${i.name} ${Math.round(i.grams)}ג`)
-      .join(' · ');
-    lines.push(`  ${ingredients}`);
+    lines.push(`<b>${e.name}</b> (${e.loaves} כיכרות · ${g(e.finishedGrams)} סופי):`);
+    for (const group of groupByKind(e.recipe!.ingredients)) {
+      const items = group.items.map((i) => `${i.name} ${g(i.grams)}`).join(' · ');
+      if (!kindLabelIsUseful(group.kind, group.items)) {
+        lines.push(`  ${items}`);
+        continue;
+      }
+      const total = group.items.reduce((sum, i) => sum + i.grams, 0);
+      // The kind total only says something the line doesn't when it's a sum.
+      const head = group.items.length > 1 ? `${kindLabel(group.kind)} ${g(total)}` : kindLabel(group.kind);
+      lines.push(`  ${head}: ${items}`);
+    }
   }
   return lines.join('\n');
 }

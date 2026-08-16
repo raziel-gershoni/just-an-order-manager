@@ -178,22 +178,35 @@ function RecipeCard({ recipe }: { recipe: PrintRecipeBlock }) {
         </span>
       </header>
 
-      <ul className="weights">
-        {recipe.lines.map((l) => (
-          <li key={l.name} className="weigh">
-            <span className="tick" aria-hidden="true" />
-            <span className="ing">{l.name}</span>
-            {/* The leader is what makes a line weighable at arm's length from
-                a scale — the eye tracks the dots, not the row. */}
-            <span className="leader" aria-hidden="true" />
-            <span className="pct">{l.pctOfFlour.toFixed(0)}%</span>
-            <span className="gram">{grams(l.grams)}</span>
-          </li>
-        ))}
-      </ul>
+      {recipe.groups.map((g) => (
+        <div key={g.kind} className="kind">
+          {g.label && (
+            <div className="kind-head">
+              <span className="kind-name">{g.label}</span>
+              {/* The sum is the number you set the scale to before you start,
+                  so it leads the group rather than trailing it. */}
+              {g.totalGrams != null && <span className="kind-sum">{grams(g.totalGrams)}</span>}
+            </div>
+          )}
+          <ul className="weights">
+            {g.lines.map((l) => (
+              <li key={l.name} className="weigh">
+                <span className="tick" aria-hidden="true" />
+                <span className="ing">{l.name}</span>
+                {/* The leader is what makes a line weighable at arm's length
+                    from a scale — the eye tracks the dots, not the row. */}
+                <span className="leader" aria-hidden="true" />
+                <span className="pct">{l.pctOfFlour.toFixed(0)}%</span>
+                <span className="gram">{grams(l.grams)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
 
+      {/* Flour total lives on the קמח group head, next to the flours it sums —
+          repeating it here would print the same number twice in four lines. */}
       <footer className="recipe-foot">
-        <span>סך קמח {grams(recipe.flourGrams)}</span>
         <span>סך בצק {grams(recipe.doughGrams)}</span>
       </footer>
     </article>

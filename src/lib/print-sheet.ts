@@ -16,6 +16,7 @@ import { todayStr } from './date-utils';
 import { formatStaffItemLabel } from './order-display';
 import { calculateOrderTotal } from './order-payments';
 import { aggregateRecipesForOrders } from './order-recipe';
+import { groupByKind, kindLabel, kindLabelIsUseful, type IngredientKind } from './recipe';
 
 /**
  * Everything one printed packing sheet needs, in one read.
@@ -58,13 +59,22 @@ export interface PrintRecipeLine {
   pctOfFlour: number;
 }
 
+export interface PrintRecipeGroup {
+  kind: IngredientKind;
+  /** The heading to print, or null where the kind says nothing the line doesn't. */
+  label: string | null;
+  /** Only set for a group of two or more — a "total" of one line is just the line. */
+  totalGrams: number | null;
+  lines: PrintRecipeLine[];
+}
+
 export interface PrintRecipeBlock {
   name: string;
   loaves: number;
   finishedGrams: number;
   flourGrams: number;
   doughGrams: number;
-  lines: PrintRecipeLine[];
+  groups: PrintRecipeGroup[];
 }
 
 export interface PrintSheet {
@@ -263,10 +273,16 @@ export async function buildPrintSheet(
       finishedGrams: t.recipe!.finishedGrams,
       flourGrams: t.recipe!.totalFlourGrams,
       doughGrams: t.recipe!.totalDoughGrams,
-      lines: t.recipe!.ingredients.map((i) => ({
-        name: i.name,
-        grams: i.grams,
-        pctOfFlour: i.pctOfFlour,
+      groups: groupByKind(t.recipe!.ingredients).map((g) => ({
+        kind: g.kind,
+        label: kindLabelIsUseful(g.kind, g.items) ? kindLabel(g.kind) : null,
+        totalGrams:
+          g.items.length > 1 ? g.items.reduce((sum, i) => sum + i.grams, 0) : null,
+        lines: g.items.map((i) => ({
+          name: i.name,
+          grams: i.grams,
+          pctOfFlour: i.pctOfFlour,
+        })),
       })),
     }))
     .sort((a, b) => b.doughGrams - a.doughGrams);
