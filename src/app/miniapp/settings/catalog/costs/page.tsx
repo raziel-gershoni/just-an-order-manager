@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Wheat, Trash2, Sparkles } from 'lucide-react';
+import { Wheat, Trash2, Sparkles, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   KIND_DISPLAY_ORDER,
@@ -78,6 +78,9 @@ export default function CostsPage() {
   const [waste, setWaste] = useState('1.5');
   const [removed, setRemoved] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  // The link to this screen is hidden for bakers, but the URL is still typeable
+  // and the endpoint 403s. "No recipes yet" would be a lie about why.
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     apiFetch<Payload>('/ingredient-prices')
@@ -90,7 +93,10 @@ export default function CostsPage() {
         setHydration(String(r.book.starter.hydrationPct));
         setWaste(String(r.book.starter.wasteFactor));
       })
-      .catch((e: Error) => toast.error(e.message))
+      .catch((e: Error) => {
+        if (/403|owners and managers/i.test(e.message)) setDenied(true);
+        else toast.error(e.message);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -171,6 +177,15 @@ export default function CostsPage() {
           <div className="h-40 rounded-xl bg-muted animate-pulse" />
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
         </div>
+      </>
+    );
+  }
+
+  if (denied) {
+    return (
+      <>
+        <PageHeader title={t('costs.title')} />
+        <EmptyState icon={Lock} title={t('costs.denied')} />
       </>
     );
   }

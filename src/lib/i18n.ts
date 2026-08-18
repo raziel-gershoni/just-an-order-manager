@@ -329,6 +329,7 @@ const translations: Record<string, string> = {
   'costs.empty_title': 'אין עדיין מתכונים',
   'costs.empty_desc': 'העלות מחושבת מתוך מתכון. הגדירו מתכון לסוג לחם אחד לפחות',
   'costs.empty_action': 'לקטלוג',
+  'costs.denied': 'מחירי חומרי הגלם פתוחים לבעלים ולמנהלים בלבד',
   'costs.save': 'שמור',
   'costs.saved': '!נשמר',
   'costs.save_failed': 'השמירה נכשלה',
