@@ -7,7 +7,8 @@ import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { BadgePicker } from '@/components/site-editor/BadgePicker';
 import { SectionCard } from '../SectionCard';
-import { effectiveSizePrice, type TypeDetailSize } from '../types';
+import { effectivePrice } from '@/lib/pricing';
+import type { TypeDetailSize } from '../types';
 
 /**
  * Which sizes this bread comes in, what each costs, and the public-site badge
@@ -107,7 +108,7 @@ export function SizesSection({
     }
   }
 
-  const prices = enabled.map((s) => Number(effectiveSizePrice(s)));
+  const prices = enabled.map((s) => Number(effectivePrice(s)));
   const summary =
     enabled.length === 0
       ? t('settings.no_enabled_sizes')

@@ -9,6 +9,15 @@
 // the CHEAPEST combination of tiers + singles for any quantity, concentrating the
 // priciest breads into the fewest packs and leaving the cheapest as singles.
 
+/**
+ * A (type, size) link's price: the per-type override when there is one, else
+ * the size's own price. Written out here because the rule is duplicated across
+ * a dozen call sites with no helper; new callers should use this one.
+ */
+export function effectivePrice(size: { price: string; priceOverride?: string | null }): string {
+  return size.priceOverride ?? size.price;
+}
+
 export type PricedUnit = {
   breadTypeId: number;
   unitPrice: number; // single (per-unit) shekel price for this (type, size)

@@ -28,13 +28,3 @@ export interface Tier {
   minQty: number;
   price: string;
 }
-
-/** The one place the `priceOverride ?? price` rule is written down for the sheet. */
-export function effectiveSizePrice(size: { price: string; priceOverride: string | null }): string {
-  return size.priceOverride ?? size.price;
-}
-
-/** "כיכר · 900 גרם" with the number kept LTR so it doesn't reorder in Hebrew. */
-export function sizeLabel(size: { name: string; weightGrams: number | null }) {
-  return size.weightGrams == null ? size.name : `${size.name} · ${size.weightGrams}g`;
-}

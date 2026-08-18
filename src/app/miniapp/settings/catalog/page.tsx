@@ -18,6 +18,7 @@ import {
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { BreadSheet } from '@/components/catalog/BreadSheet';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
+import { effectivePrice } from '@/lib/pricing';
 import type { Tier } from '@/components/catalog/types';
 
 interface BreadSize {
@@ -966,7 +967,7 @@ export default function CatalogPage() {
           <Card className="p-0 overflow-hidden">
             {breadTypes.map((bt, idx) => {
               const priced = bt.enabledSizes
-                .map((s) => Number(s.priceOverride ?? s.price))
+                .map((s) => Number(effectivePrice(s)))
                 .filter((n) => !Number.isNaN(n));
               const low = priced.length ? Math.min(...priced) : null;
               const high = priced.length ? Math.max(...priced) : null;
