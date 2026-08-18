@@ -88,6 +88,10 @@ export default function CostsPage() {
   // The link to this screen is hidden for bakers, but the URL is still typeable
   // and the endpoint 403s. "No recipes yet" would be a lie about why.
   const [denied, setDenied] = useState(false);
+  // A failed fetch left `data` null, which fell through to the "no recipes yet"
+  // empty state — telling the owner their bakery has no recipes when the
+  // network simply dropped.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(
     () =>
@@ -104,7 +108,10 @@ export default function CostsPage() {
         })
         .catch((e: Error) => {
           if (/403|owners and managers/i.test(e.message)) setDenied(true);
-          else toast.error(e.message);
+          else {
+            console.warn('[costs] load failed', e);
+            setLoadFailed(true);
+          }
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -213,6 +220,31 @@ export default function CostsPage() {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <>
+        <PageHeader title={t('costs.title')} />
+        <EmptyState
+          icon={Wheat}
+          title={t('costs.load_failed')}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setLoadFailed(false);
+                setLoading(true);
+                load().finally(() => setLoading(false));
+              }}
+            >
+              {t('costs.retry')}
+            </Button>
+          }
+        />
+      </>
+    );
+  }
+
   if (!hasAnyRecipe) {
     return (
       <>
@@ -263,7 +295,8 @@ export default function CostsPage() {
                       <div className="text-sm font-medium truncate">{item.name}</div>
                       <div className="text-[11px] text-muted-foreground truncate">
                         {t('costs.used_by')} {item.usedBy.slice(0, 3).join(', ')}
-                        {item.usedBy.length > 3 && ` +${item.usedBy.length - 3}`}
+                        {item.usedBy.length > 3 &&
+                          ` ${t('catalog.and_more')} ${item.usedBy.length - 3}`}
                       </div>
                     </div>
 
@@ -487,7 +520,7 @@ export default function CostsPage() {
                     ) : (
                       <span className="min-w-0 truncate text-xs text-destructive">
                         {t('costs.missing_price')}: {missing.slice(0, 2).join(', ')}
-                        {missing.length > 2 && ` +${missing.length - 2}`}
+                        {missing.length > 2 && ` ${t('catalog.and_more')} ${missing.length - 2}`}
                       </span>
                     )}
                   </div>

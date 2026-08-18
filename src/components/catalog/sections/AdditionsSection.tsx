@@ -73,7 +73,8 @@ export function AdditionsSection({
           : enabled
               .slice(0, 4)
               .map((a) => a.name)
-              .join(', ') + (enabled.length > 4 ? ` +${enabled.length - 4}` : '')
+              .join(', ') +
+            (enabled.length > 4 ? ` ${t('catalog.and_more')} ${enabled.length - 4}` : '')
       }
       open={open}
       onToggle={onToggle}
