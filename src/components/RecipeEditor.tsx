@@ -89,9 +89,16 @@ export interface RecipeEditorProps {
   breadTypeId: number;
   /** Default reference weight to use when opening the editor for the first time (e.g. first enabled size's weightGrams). */
   defaultReferenceWeight: number | null;
+  /** Lets the surrounding section show a summary and an unsaved-changes dot
+   *  without owning the editor's state. */
+  onStateChange?: (state: { editing: boolean; ingredients: number }) => void;
 }
 
-export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEditorProps) {
+export function RecipeEditor({
+  breadTypeId,
+  defaultReferenceWeight,
+  onStateChange,
+}: RecipeEditorProps) {
   const { apiFetch } = useApi();
   const { activeGroupRole } = useGroup();
   const t = useT();
@@ -124,6 +131,11 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
   );
   const [displayWeightTouched, setDisplayWeightTouched] = useState(false);
   const [showGrams, setShowGrams] = useState(false);
+
+  useEffect(() => {
+    onStateChange?.({ editing, ingredients: recipe?.ingredients.length ?? 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, recipe]);
 
   // The bread's sizes load after this component first renders, so the initial
   // state above sees null and falls back to 1000g. Adopt the real size when it

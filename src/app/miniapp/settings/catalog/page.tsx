@@ -13,14 +13,12 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
-  Star, Check, Download, Copy, X, Coins,
+  Star, Download, Copy, X, Coins,
 } from 'lucide-react';
-import { RecipeEditor } from '@/components/RecipeEditor';
-import { TierOverrideEditor } from '@/components/catalog/TierOverrideEditor';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
-import { BadgePicker } from '@/components/site-editor/BadgePicker';
-import { ImagePicker } from '@/components/site-editor/ImagePicker';
+import { BreadSheet } from '@/components/catalog/BreadSheet';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
+import type { Tier } from '@/components/catalog/types';
 
 interface BreadSize {
   id: number;
@@ -53,41 +51,12 @@ interface BreadType {
   enabledAdditions: EnabledAddition[];
 }
 
-interface TypeDetailSize {
-  id: number;
-  name: string;
-  weightGrams: number | null;
-  price: string;
-  isDefault: boolean;
-  enabled: boolean;
-  priceOverride: string | null;
-  badgeType: string | null;
-  badgeLabel: string | null;
-  badgeIcon: string | null;
-}
-
-interface TypeDetailAddition {
-  id: number;
-  name: string;
-  isDefault: boolean;
-  enabled: boolean;
-}
-
 interface BreadAddition {
   id: number;
   name: string;
   isDefault: boolean;
   isActive: boolean;
   sortOrder: number;
-}
-
-// Bulk-pricing quantity tier. breadTypeId null = size-wide default.
-interface Tier {
-  id: number;
-  breadSizeId: number;
-  breadTypeId: number | null;
-  minQty: number;
-  price: string;
 }
 
 export default function CatalogPage() {
@@ -227,21 +196,14 @@ export default function CatalogPage() {
   const [savingSurcharge, setSavingSurcharge] = useState(false);
 
   // ---- Bread types state ----
+  // Only which bread is open. Everything inside the sheet — sizes, additions,
+  // branding, and their drafts — belongs to BreadSheet.
   const [expandedTypeId, setExpandedTypeId] = useState<number | null>(null);
-  const [typeDetailSizes, setTypeDetailSizes] = useState<TypeDetailSize[]>([]);
-  const [typeDetailAdditions, setTypeDetailAdditions] = useState<TypeDetailAddition[]>([]);
-  const [typeNameDraft, setTypeNameDraft] = useState('');
-  const [savingType, setSavingType] = useState(false);
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [addingType, setAddingType] = useState(false);
   const [savingTypeOrder, setSavingTypeOrder] = useState(false);
 
-  // ---- Public-site badge + image for the expanded type ----
-  const [typeBadgeType, setTypeBadgeType] = useState<string | null>(null);
-  const [typeBadgeLabel, setTypeBadgeLabel] = useState<string | null>(null);
-  const [typeBadgeIcon, setTypeBadgeIcon] = useState<string | null>(null);
-  const [typeImageId, setTypeImageId] = useState<number | null>(null);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
 
   // Media library (for image pickers) — owner/manager only.
@@ -291,7 +253,7 @@ export default function CatalogPage() {
     if (!activeGroupId) return;
     const v = value.trim();
     if (!/^\d+(\.\d{1,2})?$/.test(v)) {
-      toast.error(t('settings.delete_failed'));
+      toast.error(t('catalog.invalid_amount'));
       return;
     }
     setSavingSurcharge(true);
@@ -303,7 +265,7 @@ export default function CatalogPage() {
       setAdditionsSurcharge(String(Number(v)));
       toast.success(t('settings.additions_surcharge_saved'));
     } catch {
-      toast.error(t('settings.delete_failed'));
+      toast.error(t('catalog.save_failed'));
     } finally {
       setSavingSurcharge(false);
     }
@@ -471,31 +433,8 @@ export default function CatalogPage() {
 
   // ============ BREAD TYPES ============
 
-  async function expandType(typeId: number) {
-    if (expandedTypeId === typeId) {
-      setExpandedTypeId(null);
-      return;
-    }
-    setExpandedTypeId(typeId);
-    const type = breadTypes.find((t) => t.id === typeId);
-    if (type) setTypeNameDraft(type.name);
-
-    const { breadType } = await apiFetch<{
-      breadType: {
-        sizes: TypeDetailSize[];
-        additions: TypeDetailAddition[];
-        badgeType: string | null;
-        badgeLabel: string | null;
-        badgeIcon: string | null;
-        imageId: number | null;
-      };
-    }>(`/groups/${activeGroupId}/bread-types/${typeId}`);
-    setTypeDetailSizes(breadType.sizes);
-    setTypeDetailAdditions(breadType.additions);
-    setTypeBadgeType(breadType.badgeType);
-    setTypeBadgeLabel(breadType.badgeLabel);
-    setTypeBadgeIcon(breadType.badgeIcon);
-    setTypeImageId(breadType.imageId);
+  function expandType(typeId: number) {
+    setExpandedTypeId((prev) => (prev === typeId ? null : typeId));
   }
 
   async function moveType(id: number, dir: 'up' | 'down') {
@@ -518,126 +457,6 @@ export default function CatalogPage() {
     }
   }
 
-  function updateSizeBadge(
-    sizeId: number,
-    type: string | null,
-    label: string | null,
-    icon: string | null
-  ) {
-    setTypeDetailSizes((prev) =>
-      prev.map((s) =>
-        s.id === sizeId ? { ...s, badgeType: type, badgeLabel: label, badgeIcon: icon } : s
-      )
-    );
-  }
-
-  function toggleAdditionEnabledForType(additionId: number) {
-    setTypeDetailAdditions((prev) =>
-      prev.map((a) => (a.id === additionId ? { ...a, enabled: !a.enabled } : a))
-    );
-  }
-
-  function toggleEnabled(sizeId: number) {
-    setTypeDetailSizes((prev) =>
-      prev.map((s) =>
-        s.id === sizeId
-          ? { ...s, enabled: !s.enabled, priceOverride: s.enabled ? null : s.priceOverride }
-          : s
-      )
-    );
-  }
-
-  function updateOverride(sizeId: number, value: string) {
-    setTypeDetailSizes((prev) =>
-      prev.map((s) => (s.id === sizeId ? { ...s, priceOverride: value || null } : s))
-    );
-  }
-
-  async function saveType(typeId: number) {
-    setSavingType(true);
-    try {
-      // Save name (if changed) + the public-site badge & image in one PATCH.
-      const original = breadTypes.find((t) => t.id === typeId);
-      const patch: Record<string, unknown> = {
-        badgeType: typeBadgeType,
-        badgeLabel: typeBadgeType === 'custom' ? (typeBadgeLabel?.trim() || null) : null,
-        badgeIcon: typeBadgeIcon,
-        imageId: typeImageId,
-      };
-      if (original && typeNameDraft.trim() && typeNameDraft.trim() !== original.name) {
-        patch.name = typeNameDraft.trim();
-      }
-      const { breadType } = await apiFetch<{ breadType: BreadType }>(
-        `/bread-types/${typeId}`,
-        { method: 'PATCH', body: JSON.stringify(patch) }
-      );
-      setBreadTypes((prev) =>
-        prev.map((t) => (t.id === typeId ? { ...t, name: breadType.name } : t))
-      );
-
-      // Save enabled sizes (+ per-size badge)
-      const enabledSizes = typeDetailSizes
-        .filter((s) => s.enabled)
-        .map((s) => ({
-          breadSizeId: s.id,
-          priceOverride: s.priceOverride && s.priceOverride !== s.price ? s.priceOverride : null,
-          badgeType: s.badgeType,
-          badgeLabel: s.badgeType === 'custom' ? (s.badgeLabel?.trim() || null) : null,
-          badgeIcon: s.badgeIcon,
-        }));
-      await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/sizes`, {
-        method: 'PUT',
-        body: JSON.stringify({ enabled: enabledSizes }),
-      });
-
-      // Save enabled additions
-      const enabledAdditions = typeDetailAdditions.filter((a) => a.enabled).map((a) => a.id);
-      await apiFetch(`/groups/${activeGroupId}/bread-types/${typeId}/additions`, {
-        method: 'PUT',
-        body: JSON.stringify({ enabled: enabledAdditions }),
-      });
-
-      // Update local breadTypes for count display
-      setBreadTypes((prev) =>
-        prev.map((t) =>
-          t.id === typeId
-            ? {
-                ...t,
-                enabledSizes: typeDetailSizes
-                  .filter((s) => s.enabled)
-                  .map((s) => ({
-                    id: s.id,
-                    name: s.name,
-                    weightGrams: s.weightGrams,
-                    price: s.price,
-                    priceOverride: s.priceOverride,
-                    isActive: true,
-                  })),
-                enabledAdditions: typeDetailAdditions
-                  .filter((a) => a.enabled)
-                  .map((a) => ({ id: a.id, name: a.name, isActive: true })),
-              }
-            : t
-        )
-      );
-      toast.success('הלחם נשמר');
-    } catch {
-      toast.error(t('customers.save_failed'));
-    } finally {
-      setSavingType(false);
-    }
-  }
-
-  async function deleteType(typeId: number) {
-    try {
-      await apiFetch(`/bread-types/${typeId}?hard=true`, { method: 'DELETE' });
-      setBreadTypes((prev) => prev.filter((t) => t.id !== typeId));
-      setExpandedTypeId(null);
-    } catch {
-      toast.error(t('settings.delete_failed'));
-    }
-  }
-
   async function addType() {
     if (!newTypeName.trim() || !activeGroupId) return;
     setAddingType(true);
@@ -647,18 +466,12 @@ export default function CatalogPage() {
         { method: 'POST', body: JSON.stringify({ name: newTypeName.trim() }) }
       );
       setBreadTypes((prev) => [...prev, breadType]);
+      // The sheet loads the detail itself, including the auto-enabled defaults.
       setExpandedTypeId(breadType.id);
-      // Pre-load detail (it has the auto-enabled defaults)
-      const { breadType: detail } = await apiFetch<{ breadType: { sizes: TypeDetailSize[]; additions: TypeDetailAddition[] } }>(
-        `/groups/${activeGroupId}/bread-types/${breadType.id}`
-      );
-      setTypeDetailSizes(detail.sizes);
-      setTypeDetailAdditions(detail.additions);
-      setTypeNameDraft(breadType.name);
       setNewTypeName('');
       setShowAddType(false);
     } catch {
-      toast.error(t('customers.save_failed'));
+      toast.error(t('catalog.save_failed'));
     } finally {
       setAddingType(false);
     }
@@ -672,7 +485,7 @@ export default function CatalogPage() {
       });
       setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? { ...bt, isActive: !isActive } : bt)));
     } catch {
-      toast.error(t('settings.delete_failed'));
+      toast.error(t('catalog.save_failed'));
     }
   }
 
@@ -1254,255 +1067,63 @@ export default function CatalogPage() {
         </section>
       </div>
 
-      {/* FULL-SCREEN bread editor */}
-      {editingType && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto pb-24 animate-fade-in">
-          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-card/50 backdrop-blur-sm px-2 py-2">
-            <button
-              type="button"
-              aria-label="חזרה"
-              className="flex h-11 w-11 items-center justify-center shrink-0"
-              onClick={() => setExpandedTypeId(null)}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-            <h1 className="text-lg font-bold truncate">{editingType.name}</h1>
-          </div>
-
-          <div className="p-5 space-y-3">
-            {/* Name (managers edit, bakers see read-only) */}
-            {isBaker ? (
-              <div className="text-base font-semibold">{editingType.name}</div>
-            ) : (
-              <Input
-                label={t('settings.name')}
-                value={typeNameDraft}
-                onChange={(e) => setTypeNameDraft(e.target.value)}
-              />
-            )}
-
-            {/* Public-site branding: badge + image (managers only) */}
-            {!isBaker && (
-              <div className="border-t border-border pt-3 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">{t('site.type_branding')}</span>
-                  <ImagePicker value={typeImageId} assets={assets} onChange={setTypeImageId} />
-                </div>
-                <BadgePicker
-                  badgeType={typeBadgeType}
-                  badgeLabel={typeBadgeLabel}
-                  badgeIcon={typeBadgeIcon}
-                  onChange={(type, label, icon) => {
-                    setTypeBadgeType(type);
-                    setTypeBadgeLabel(label);
-                    setTypeBadgeIcon(icon);
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Recipe — surfaced near the top (primary use case) */}
-            <RecipeEditor
-              breadTypeId={editingType.id}
-              defaultReferenceWeight={
-                typeDetailSizes.find((s) => s.enabled && s.weightGrams != null)?.weightGrams ?? null
-              }
-            />
-
-            {/* Sizes — tag cloud */}
-            {isBaker ? (
-              typeDetailSizes.some((s) => s.enabled) && (
-                <div className="border-t border-border pt-3">
-                  <div className="text-sm font-medium text-muted-foreground mb-2">
-                    {t('settings.enabled_sizes')}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {typeDetailSizes
-                      .filter((s) => s.enabled)
-                      .map((s) => (
-                        <span
-                          key={s.id}
-                          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm"
-                        >
-                          {s.name}
-                          {s.weightGrams != null && (
-                            <span className="text-xs text-muted-foreground tabular-nums">{s.weightGrams}g</span>
-                          )}
-                          <span className="font-mono text-xs text-muted-foreground tabular-nums">· ₪{s.priceOverride ?? s.price}</span>
-                        </span>
-                      ))}
-                  </div>
-                </div>
+      {/* The bread editor. Everything about one bread, one section at a time,
+          each section saving itself. */}
+      {editingType && activeGroupId && (
+        <BreadSheet
+          typeId={editingType.id}
+          typeName={editingType.name}
+          groupId={activeGroupId}
+          isBaker={isBaker}
+          assets={assets}
+          tiers={tiers}
+          onClose={() => setExpandedTypeId(null)}
+          onNameSaved={(name) =>
+            setBreadTypes((prev) =>
+              prev.map((bt) => (bt.id === editingType.id ? { ...bt, name } : bt))
+            )
+          }
+          onSizesSaved={(sizes) =>
+            setBreadTypes((prev) =>
+              prev.map((bt) =>
+                bt.id === editingType.id
+                  ? {
+                      ...bt,
+                      enabledSizes: sizes
+                        .filter((s) => s.enabled)
+                        .map((s) => ({
+                          id: s.id,
+                          name: s.name,
+                          weightGrams: s.weightGrams,
+                          price: s.price,
+                          priceOverride: s.priceOverride,
+                          isActive: true,
+                        })),
+                    }
+                  : bt
               )
-            ) : (
-              <div className="border-t border-border pt-3">
-                <div className="text-sm font-medium text-muted-foreground mb-2">
-                  {t('settings.enabled_sizes')}
-                </div>
-                {typeDetailSizes.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic py-2">
-                    {t('settings.no_enabled_sizes')}
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {typeDetailSizes.map((s) =>
-                      s.enabled ? (
-                        <div
-                          key={s.id}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-primary/50 bg-primary/15 px-3 py-1.5 text-sm font-medium text-foreground"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleEnabled(s.id)}
-                            className="inline-flex items-center gap-1.5"
-                          >
-                            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                            <span>
-                              {s.name}
-                              {s.weightGrams != null && (
-                                <span className="text-xs text-muted-foreground tabular-nums ms-0.5">{s.weightGrams}g</span>
-                              )}
-                            </span>
-                          </button>
-                          <span className="text-muted-foreground/60">·</span>
-                          <span className="inline-flex items-center font-mono text-xs text-muted-foreground">
-                            ₪
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              value={s.priceOverride ?? ''}
-                              placeholder={s.price}
-                              onChange={(e) => updateOverride(s.id, e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={`מחיר · ${s.name}`}
-                              className="w-12 bg-transparent text-center tabular-nums text-foreground placeholder:text-muted-foreground/50 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            />
-                          </span>
-                        </div>
-                      ) : (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => toggleEnabled(s.id)}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-muted-foreground/40"
-                        >
-                          <span>
-                            {s.name}
-                            {s.weightGrams != null && (
-                              <span className="text-xs text-muted-foreground tabular-nums ms-0.5">{s.weightGrams}g</span>
-                            )}
-                          </span>
-                          <span className="font-mono text-xs text-muted-foreground tabular-nums">· ₪{s.price}</span>
-                        </button>
-                      )
-                    )}
-                  </div>
-                )}
-                <TierOverrideEditor
-                  sizes={typeDetailSizes}
-                  tiers={tiers}
-                  breadTypeId={editingType.id}
-                  onSave={(breadSizeId, minQty, price) => saveTier(breadSizeId, editingType.id, minQty, price)}
-                  onDelete={deleteTier}
-                  t={t}
-                />
-              </div>
-            )}
-
-            {/* Per-size badges for the public pricelist (managers only) */}
-            {!isBaker && typeDetailSizes.some((s) => s.enabled) && (
-              <div className="border-t border-border pt-3 space-y-3">
-                <div className="text-sm font-medium text-muted-foreground">{t('site.size_badges')}</div>
-                {typeDetailSizes
-                  .filter((s) => s.enabled)
-                  .map((s) => (
-                    <div key={s.id} className="space-y-1.5">
-                      <div className="text-xs font-semibold">
-                        {s.name}
-                        {s.weightGrams != null && (
-                          <span className="text-muted-foreground tabular-nums"> · {s.weightGrams}g</span>
-                        )}
-                      </div>
-                      <BadgePicker
-                        badgeType={s.badgeType}
-                        badgeLabel={s.badgeLabel}
-                        badgeIcon={s.badgeIcon}
-                        onChange={(type, label, icon) => updateSizeBadge(s.id, type, label, icon)}
-                      />
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            {/* Additions — tag cloud */}
-            {isBaker ? (
-              typeDetailAdditions.some((a) => a.enabled) && (
-                <div className="border-t border-border pt-3">
-                  <div className="text-sm font-medium text-muted-foreground mb-2">
-                    {t('settings.enabled_additions')}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {typeDetailAdditions
-                      .filter((a) => a.enabled)
-                      .map((a) => (
-                        <span
-                          key={a.id}
-                          className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm"
-                        >
-                          {a.name}
-                        </span>
-                      ))}
-                  </div>
-                </div>
+            )
+          }
+          onAdditionsSaved={(additions) =>
+            setBreadTypes((prev) =>
+              prev.map((bt) =>
+                bt.id === editingType.id
+                  ? {
+                      ...bt,
+                      enabledAdditions: additions
+                        .filter((a) => a.enabled)
+                        .map((a) => ({ id: a.id, name: a.name, isActive: true })),
+                    }
+                  : bt
               )
-            ) : (
-              typeDetailAdditions.length > 0 && (
-                <div className="border-t border-border pt-3">
-                  <div className="text-sm font-medium text-muted-foreground mb-2">
-                    {t('settings.enabled_additions')}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {typeDetailAdditions.map((a) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => toggleAdditionEnabledForType(a.id)}
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
-                          a.enabled
-                            ? 'bg-primary/15 border-primary/50 text-foreground font-medium'
-                            : 'border-border text-muted-foreground hover:border-muted-foreground/40'
-                        )}
-                      >
-                        {a.enabled && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                        <span>{a.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            )}
-
-            {/* Save / Delete (managers only) */}
-            {!isBaker && (
-              <div className="flex gap-2 items-center pt-1">
-                <Button size="sm" className="flex-1" loading={savingType} onClick={() => saveType(editingType.id)}>
-                  {t('settings.save')}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-destructive hover:bg-destructive/10 h-8 w-8"
-                  onClick={() => {
-                    if (window.confirm('למחוק את הלחם? פעולה זו בלתי הפיכה.')) deleteType(editingType.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+            )
+          }
+          onTiersSaved={setTiers}
+          onDeleted={() => {
+            setBreadTypes((prev) => prev.filter((bt) => bt.id !== editingType.id));
+            setExpandedTypeId(null);
+          }}
+        />
       )}
     </>
   );
