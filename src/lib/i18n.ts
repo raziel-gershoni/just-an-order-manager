@@ -246,6 +246,7 @@ const translations: Record<string, string> = {
   'catalog.saved': '!נשמר',
   'catalog.save_failed': 'השמירה נכשלה',
   'catalog.invalid_amount': 'סכום לא תקין',
+  'catalog.invalid_price': 'מחיר לא תקין',
   'catalog.back': 'חזרה',
   'catalog.none': 'ללא',
   'catalog.branding_badge': 'תווית',

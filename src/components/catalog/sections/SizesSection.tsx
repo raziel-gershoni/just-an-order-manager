@@ -50,6 +50,11 @@ export function SizesSection({
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const enabled = draft.filter((s) => s.enabled);
+  const PRICE = /^\d+(\.\d{1,2})?$/;
+  const invalid = enabled.filter((s) => {
+    const raw = s.priceOverride?.trim();
+    return !!raw && !PRICE.test(raw);
+  });
 
   function patch(sizeId: number, next: Partial<TypeDetailSize>) {
     setDraft((prev) => prev.map((s) => (s.id === sizeId ? { ...s, ...next } : s)));
@@ -66,6 +71,13 @@ export function SizesSection({
   }
 
   async function save() {
+    // The endpoint rejects a malformed price with a raw zod message and drops
+    // the whole payload — including this section's other edits. Catch it here
+    // and name the size instead.
+    if (invalid.length > 0) {
+      toast.error(`${t('catalog.invalid_price')}: ${invalid.map((s) => s.name).join(', ')}`);
+      return;
+    }
     setSaving(true);
     try {
       await apiFetch(`/groups/${groupId}/bread-types/${typeId}/sizes`, {
@@ -73,10 +85,13 @@ export function SizesSection({
         body: JSON.stringify({
           enabled: enabled.map((s) => ({
             breadSizeId: s.id,
-            // Storing an override equal to the default would be a lie the
-            // pricelist then has to keep telling.
+            // Compared numerically: typing "30" against a default of "30.00"
+            // is not an override, and storing it as one is a lie the pricelist
+            // then has to keep telling.
             priceOverride:
-              s.priceOverride && s.priceOverride !== s.price ? s.priceOverride : null,
+              s.priceOverride?.trim() && Number(s.priceOverride) !== Number(s.price)
+                ? s.priceOverride.trim()
+                : null,
             badgeType: s.badgeType,
             badgeLabel: s.badgeType === 'custom' ? s.badgeLabel?.trim() || null : null,
             badgeIcon: s.badgeIcon,
