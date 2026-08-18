@@ -109,23 +109,44 @@ export const PUT = withGroup(async (request, auth, groupId) => {
       starter_waste_factor = ${starter.wasteFactor.toFixed(2)}
     WHERE id = ${groupId}
   `;
-  const clear = sql`DELETE FROM ingredient_prices WHERE group_id = ${groupId}`;
 
   // One statement, because neon-http has no interactive transactions: a
   // two-statement swap can strand the group with its settings updated and its
   // prices gone, which reads as "nothing is priced" on every cost surface.
-  if (prices.length === 0) {
-    await db.execute(sql`WITH g AS (${starterUpdate}) ${clear}`);
-  } else {
-    const values = prices.map(
-      (p) =>
-        sql`(${groupId}, ${p.name}, ${p.kind}::ingredient_kind, ${p.pricePerKg}, now(), now())`
-    );
-    await db.execute(sql`
-      WITH g AS (${starterUpdate}), cleared AS (${clear})
-      INSERT INTO ingredient_prices (group_id, name, kind, price_per_kg, created_at, updated_at)
-      VALUES ${sql.join(values, sql`, `)}
-    `);
+  //
+  // Upsert-then-prune rather than delete-then-insert. Every statement inside a
+  // WITH sees the same snapshot, so a DELETE in one CTE does not clear the way
+  // for an INSERT in another: the unique index still sees the old rows and
+  // rejects the new ones. That is fine for the recipe write, whose table has no
+  // unique index — here it made the second save of any price book a 500. The
+  // prune and the upsert touch disjoint keys, so sharing a snapshot is safe.
+  try {
+    if (prices.length === 0) {
+      await db.execute(sql`
+        WITH g AS (${starterUpdate})
+        DELETE FROM ingredient_prices WHERE group_id = ${groupId}
+      `);
+    } else {
+      const rows = prices.map(
+        (p) => sql`(${p.name}::varchar, ${p.kind}::ingredient_kind, ${p.pricePerKg}::numeric)`
+      );
+      await db.execute(sql`
+        WITH g AS (${starterUpdate}),
+             input(name, kind, price_per_kg) AS (VALUES ${sql.join(rows, sql`, `)}),
+             upserted AS (
+               INSERT INTO ingredient_prices (group_id, name, kind, price_per_kg, created_at, updated_at)
+               SELECT ${groupId}, name, kind, price_per_kg, now(), now() FROM input
+               ON CONFLICT (group_id, name, kind)
+               DO UPDATE SET price_per_kg = EXCLUDED.price_per_kg, updated_at = now()
+             )
+        DELETE FROM ingredient_prices
+        WHERE group_id = ${groupId}
+          AND (name, kind) NOT IN (SELECT name, kind FROM input)
+      `);
+    }
+  } catch (e) {
+    console.error('[ingredient-prices] write failed', e);
+    return errorResponse('Could not save the ingredient prices', 500);
   }
 
   return jsonResponse({ ok: true });
