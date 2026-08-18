@@ -195,7 +195,7 @@ starter ₪/kg = (flourShare × price(starterFlourName)
 - If `starterFlourName` is null, or names a flour with no price row, every
   starter ingredient is **unpriced** — never silently zero.
 
-### Worked example (`כפרי`, 900 g, ₪5 white / ₪6 whole / ₪0 water / ₪2 salt, starter flour = `קמח לבן`, hydration 100, waste ×1.5)
+### Worked example, verified against production (`כפרי`, 900 g, ₪5 white / ₪6 whole / ₪0 water / ₪2 salt, starter flour = `קמח לבן`, hydration 100, waste ×1.5)
 
 | | pct | grams | ₪/kg | ₪ |
 |---|---|---|---|---|
@@ -204,7 +204,10 @@ starter ₪/kg = (flourShare × price(starterFlourName)
 | מים | 37.2222 | 335.0 | 0.00 | 0.00 |
 | מלח | 1.2222 | 11.0 | 2.00 | 0.02 |
 | מחמצת | 11.1111 | 100.0 | 3.75 *derived* | 0.38 |
-| **סה״כ** | 105.1111 | **946 g dough** | | **₪3.15 · ₪3.50/ק״ג** |
+| **סה״כ** | 105.1111 | **946 g dough** | | **₪3.1470 · ₪3.4967/ק״ג** |
+
+Confirmed end to end against the live endpoint: ₪3.15 at 900 g, ₪2.45 at 700 g,
+₪0.52 at 150 g, ₪3.50/kg at every size.
 
 Derived starter: `(0.5 × 5.00 + 0.5 × 0.00) × 1.5 = ₪3.75/kg`.
 
@@ -252,20 +255,27 @@ and every one of them ships the data to the browser anyway.
 
 ```jsonc
 {
+  "book":    { "pricePerKg": { "קמח לבן|flour": 5 },
+               "starter": { "flourName": "קמח לבן", "hydrationPct": 100, "wasteFactor": 1.5 } },
   "prices":  [{ "name": "קמח לבן", "kind": "flour", "pricePerKg": "5.00" }],
   "inUse":   [{ "name": "קמח לבן", "kind": "flour", "usedBy": ["כפרי"] }],
-  "starter": { "flourName": "קמח לבן", "hydrationPct": 100, "wasteFactor": "1.50" },
-  "loaves":  [{ "breadTypeId": 9, "breadTypeName": "כפרי",
-                "sizes": [{ "sizeId": 2, "sizeName": "כיכר משפחתי",
-                            "weightGrams": 900, "total": 3.15, "perKg": 3.5,
-                            "unpriced": [] }],
-                "noRecipe": false,
-                "sizesMissingWeight": ["בינוני"] }]
+  "orphans": [{ "name": "קמח  לבן", "kind": "flour", "pricePerKg": "5.00" }],
+  "breads":  [{ "breadTypeId": 9, "breadTypeName": "כפרי", "isActive": true,
+                "ingredients": [{ "name": "קמח לבן", "kind": "flour",
+                                  "pctOfFinished": 27.7778, "sortOrder": 0 }],
+                "sizes": [{ "sizeId": 2, "sizeName": "כיכר משפחתי", "weightGrams": 900 }] }]
 }
 ```
 
-`loaves` is computed **server-side** so the cost table is one fetch and the
-client never needs the recipe rows.
+The per-loaf costs are **not** precomputed server-side. The screen recomputes
+them as the owner types — watching a flour price move the loaf is the point —
+so the math has to run on the client anyway, and one implementation used from
+both sides beats a server copy that drifts. `breads` carries the percentages
+and weights the client needs; `book` is `PriceBook`, ready for `cost.ts`.
+
+`?scope=book` returns only `{ book }`. The recipe editor's cost line uses it,
+because shipping every bread's percentages on every sheet open would repeat the
+mistake this work fixes elsewhere.
 
 **PUT** — the whole book plus starter settings, in **one statement**, since
 neon-http has no interactive transactions. Same data-modifying-CTE trick as the
@@ -285,7 +295,7 @@ waste 1.00..10.00.
 
 No `revalidatePublicSite` — cost is internal and appears on no public surface.
 
-## 1.7 The screen — `/miniapp/settings/costs`
+## 1.7 The screen — `/miniapp/settings/catalog/costs`
 
 Title `מחירי חומרי גלם`. Reached from a row at the top of `קטלוג`, hidden for
 bakers and drivers. Own route, own back button, own file. One `שמור`.
@@ -363,19 +373,30 @@ hide the seam rather than fix it.
 ## 2.3 File structure
 
 ```
-src/app/miniapp/settings/catalog/page.tsx     ← list + the two global accordions only
-src/components/catalog/BreadSheet.tsx         ← the overlay shell, dirty tracking, exit guard
-src/components/catalog/SectionCard.tsx        ← title + collapse + dirty dot + conditional save
-src/components/catalog/sections/DetailsSection.tsx
-src/components/catalog/sections/RecipeSection.tsx     ← wraps RecipeEditor + the cost line
-src/components/catalog/sections/SizesSection.tsx      ← size chips, prices, tier overrides
-src/components/catalog/sections/AdditionsSection.tsx
-src/components/catalog/sections/BrandingSection.tsx   ← type badge + image + per-size badges
+src/app/miniapp/settings/catalog/page.tsx     1612 → 1233 lines; list + the two global accordions
+src/components/catalog/BreadSheet.tsx         the shell: detail fetch, dirty map, exit guard
+src/components/catalog/SectionCard.tsx        collapse + summary + dirty dot + conditional save
+src/components/catalog/types.ts               shapes shared by the shell and its sections
+src/components/catalog/sections/DetailsSection.tsx     name            → PATCH bread-types/{id}
+src/components/catalog/sections/RecipeSection.tsx      RecipeEditor    → its own endpoint
+src/components/catalog/sections/SizesSection.tsx       sizes + prices + per-size badges → PUT sizes
+src/components/catalog/sections/TiersSection.tsx       per-bread bulk overrides → bread-size-tiers
+src/components/catalog/sections/AdditionsSection.tsx   additions       → PUT additions
+src/components/catalog/sections/BrandingSection.tsx    type badge + image → PATCH bread-types/{id}
 ```
 
-`SectionCard` owns the interaction contract; each section owns its own draft
-state, its own endpoint, and its own save. Sections communicate with the shell
-only through `onDirtyChange(sectionKey, dirty)`.
+**One section, one endpoint.** Per-size badges live in `SizesSection` rather
+than in `BrandingSection` because the sizes PUT is what writes them, and it is
+clean-slate — two sections writing that row would race. Tier overrides get
+their own section rather than riding along with the sizes, and render only
+where a size already carries default tiers.
+
+`SectionCard` owns the interaction contract. Collapsed sections render
+**hidden, not unmounted**: a collapsed section still has to report its own
+summary and dirty state, and unmounting would throw away a draft while the
+header dot was still promising it was there. Sections talk to the shell only
+through `onDirtyChange(dirty)`, whose callbacks the shell memoises per section
+so the sections can list them as effect dependencies without looping.
 
 ## 2.4 Incidental fixes taken on the way
 
