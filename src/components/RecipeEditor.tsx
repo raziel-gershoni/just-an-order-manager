@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useApi } from '@/hooks/useApi';
+import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Plus, Trash2, Pencil, Calculator, Copy } from 'lucide-react';
-import { groupByKind, type IngredientKind } from '@/lib/recipe';
+import { groupByKind, scaleRecipe, type IngredientKind } from '@/lib/recipe';
+import { costScaledRecipe, type PriceBook } from '@/lib/cost';
 import { IngredientNameInput } from '@/components/recipe/IngredientNameInput';
 import { CopyRecipeFlow } from '@/components/recipe/CopyRecipeFlow';
 import { EMPTY_NAMES, type GroupRecipe, type NamesByKind, type SeedRow } from '@/components/recipe/types';
@@ -90,11 +93,14 @@ export interface RecipeEditorProps {
 
 export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEditorProps) {
   const { apiFetch } = useApi();
+  const { activeGroupRole } = useGroup();
   const t = useT();
   const toast = useToast();
+  const isBaker = activeGroupRole === 'baker' || activeGroupRole === 'driver';
 
   const [recipe, setRecipe] = useState<FetchedRecipe | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadedGroupRecipes = useRef(false);
 
   const [editing, setEditing] = useState(false);
   const [refWeight, setRefWeight] = useState<string>(
@@ -108,11 +114,25 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
   const [namesByKind, setNamesByKind] = useState<NamesByKind>(EMPTY_NAMES);
   const [copying, setCopying] = useState(false);
 
+  // Ingredient prices, for the one-line cost readout. Owner/manager only — the
+  // endpoint 403s for bakers, so asking would just log a failure.
+  const [book, setBook] = useState<PriceBook | null>(null);
+
   // Show-in-grams expander state
   const [displayWeight, setDisplayWeight] = useState<string>(
     defaultReferenceWeight != null ? String(defaultReferenceWeight) : '1000'
   );
+  const [displayWeightTouched, setDisplayWeightTouched] = useState(false);
   const [showGrams, setShowGrams] = useState(false);
+
+  // The bread's sizes load after this component first renders, so the initial
+  // state above sees null and falls back to 1000g. Adopt the real size when it
+  // lands — but never over a weight the owner typed.
+  useEffect(() => {
+    if (defaultReferenceWeight != null && !displayWeightTouched) {
+      setDisplayWeight(String(defaultReferenceWeight));
+    }
+  }, [defaultReferenceWeight, displayWeightTouched]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +151,13 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     };
   }, [breadTypeId]);
 
+  // Every recipe in the group plus every ingredient name — only the copy
+  // sources (shown when this bread has none) and the name autocomplete (shown
+  // while editing) need it, so it no longer loads on every sheet open.
+  const needsGroupRecipes = !loading && (!recipe || editing);
   useEffect(() => {
+    if (!needsGroupRecipes || loadedGroupRecipes.current) return;
+    loadedGroupRecipes.current = true;
     let cancelled = false;
     apiFetch<{ recipes: GroupRecipe[]; namesByKind: NamesByKind }>('/recipes')
       .then((res) => {
@@ -144,7 +170,20 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     return () => {
       cancelled = true;
     };
-  }, [breadTypeId]);
+  }, [needsGroupRecipes, breadTypeId]);
+
+  useEffect(() => {
+    if (isBaker || !recipe) return;
+    let cancelled = false;
+    apiFetch<{ book: PriceBook }>('/ingredient-prices?scope=book')
+      .then((res) => {
+        if (!cancelled) setBook(res.book);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isBaker, recipe]);
 
   function startCreate() {
     const weight = defaultReferenceWeight ?? 1000;
@@ -464,6 +503,11 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
     (sum, i) => sum + (i.pctOfFinished * dispW) / 100,
     0
   );
+  // Costed at the weight on screen, so the grams calculator moves it too.
+  const cost =
+    book && dispW > 0
+      ? costScaledRecipe(scaleRecipe({ ingredients: recipe.ingredients }, dispW), book)
+      : null;
 
   return (
     <div className="border-t border-border pt-3 space-y-2">
@@ -503,6 +547,32 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
         ))}
       </div>
 
+      {/* One line, not a section: the sheet is already long, and the number the
+          owner wants here is "what does this loaf cost me", not a breakdown. */}
+      {cost && (
+        <div className="flex items-baseline justify-between gap-2 border-t border-border/40 pt-2 text-xs">
+          <span className="text-muted-foreground">
+            {t('costs.cost')} ·{' '}
+            <span dir="ltr" className="tabular-nums">
+              {dispW}
+            </span>{' '}
+            {t('settings.grams')}
+          </span>
+          {cost.complete ? (
+            <span className="flex items-baseline gap-1.5 tabular-nums" dir="ltr">
+              <span className="font-semibold">₪{cost.total.toFixed(2)}</span>
+              <span className="text-muted-foreground">
+                ₪{cost.perKg.toFixed(2)} {t('costs.unit')}
+              </span>
+            </span>
+          ) : (
+            <Link href="/miniapp/settings/catalog/costs" className="text-primary hover:underline">
+              {t('costs.missing_price')}: {cost.unpriced.map((u) => u.name).join(', ')}
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Show-in-grams expander */}
       <div className="border-t border-border/40 pt-2">
         {!showGrams ? (
@@ -523,7 +593,10 @@ export function RecipeEditor({ breadTypeId, defaultReferenceWeight }: RecipeEdit
                 type="number"
                 inputMode="numeric"
                 value={displayWeight}
-                onChange={(e) => setDisplayWeight(e.target.value)}
+                onChange={(e) => {
+                  setDisplayWeight(e.target.value);
+                  setDisplayWeightTouched(true);
+                }}
                 className="flex-1 max-w-28"
               />
               <span className="text-xs text-muted-foreground">ג</span>

@@ -4,20 +4,30 @@ import {
   breadTypes,
   breadSizes,
   breadTypeSizes,
-  breadRecipes,
   breadRecipeIngredients,
   ingredientPrices,
 } from '@/db/schema';
 import { eq, and, inArray, asc } from 'drizzle-orm';
-import { scaleRecipe, type IngredientKind, type Recipe } from './recipe';
-import { costScaledRecipe, priceKey, type PriceBook } from './cost';
+import type { IngredientKind } from './recipe';
+import { priceKey, type PriceBook } from './cost';
 
 /**
- * Reading the ingredient price book and turning it into per-loaf costs.
+ * Reading everything the cost screen needs.
  *
- * Shaped like loadGroupTiers in order-pricing.ts: a thin DB wrapper feeding a
+ * Shaped like loadGroupTiers in order-pricing.ts: thin DB wrappers feeding a
  * pure engine (src/lib/cost.ts), so the route stays auth → load → delegate.
+ *
+ * Note what is NOT here: the per-loaf arithmetic. The screen recomputes costs
+ * as the owner types, so the math has to run on the client anyway — and one
+ * implementation used from both sides beats a server copy that drifts.
  */
+
+/** A saved price exactly as the editor round-trips it — decimal string, not float. */
+export interface PriceRow {
+  name: string;
+  kind: IngredientKind;
+  pricePerKg: string;
+}
 
 export interface InUseIngredient {
   name: string;
@@ -26,30 +36,18 @@ export interface InUseIngredient {
   usedBy: string[];
 }
 
-export interface LoafCostRow {
-  sizeId: number;
-  sizeName: string;
-  weightGrams: number;
-  total: number;
-  perKg: number;
-  unpriced: { name: string; kind: IngredientKind }[];
-}
-
-export interface BreadCost {
+/** One bread with everything needed to cost it, and nothing else. */
+export interface BreadForCosting {
   breadTypeId: number;
   breadTypeName: string;
   isActive: boolean;
-  hasRecipe: boolean;
-  sizes: LoafCostRow[];
-  /** Enabled sizes with no weight — a recipe cannot scale to them (e.g. בינוני). */
-  sizesMissingWeight: string[];
-}
-
-/** A saved price exactly as the editor round-trips it — decimal string, not float. */
-export interface PriceRow {
-  name: string;
-  kind: IngredientKind;
-  pricePerKg: string;
+  ingredients: {
+    name: string;
+    kind: IngredientKind;
+    pctOfFinished: number;
+    sortOrder: number;
+  }[];
+  sizes: { sizeId: number; sizeName: string; weightGrams: number | null }[];
 }
 
 export async function loadPriceRows(groupId: number): Promise<PriceRow[]> {
@@ -106,7 +104,6 @@ export async function loadIngredientsInUse(groupId: number): Promise<InUseIngred
       name: breadRecipeIngredients.name,
       kind: breadRecipeIngredients.kind,
       breadTypeName: breadTypes.name,
-      sortOrder: breadRecipeIngredients.sortOrder,
     })
     .from(breadRecipeIngredients)
     .innerJoin(breadTypes, eq(breadTypes.id, breadRecipeIngredients.breadTypeId))
@@ -123,12 +120,8 @@ export async function loadIngredientsInUse(groupId: number): Promise<InUseIngred
   return [...byKey.values()];
 }
 
-/**
- * Cost per loaf for every bread × enabled size that can be computed, and an
- * explicit reason for each one that can't. Computed server-side so the costs
- * screen is one fetch and no recipe row ever reaches the client.
- */
-export async function loadLoafCosts(groupId: number, book: PriceBook): Promise<BreadCost[]> {
+/** Every bread with its recipe percentages and its enabled sizes' weights. */
+export async function loadBreadsForCosting(groupId: number): Promise<BreadForCosting[]> {
   const types = await db
     .select({ id: breadTypes.id, name: breadTypes.name, isActive: breadTypes.isActive })
     .from(breadTypes)
@@ -148,7 +141,6 @@ export async function loadLoafCosts(groupId: number, book: PriceBook): Promise<B
         sortOrder: breadRecipeIngredients.sortOrder,
       })
       .from(breadRecipeIngredients)
-      .innerJoin(breadRecipes, eq(breadRecipes.breadTypeId, breadRecipeIngredients.breadTypeId))
       .where(inArray(breadRecipeIngredients.breadTypeId, typeIds))
       .orderBy(asc(breadRecipeIngredients.sortOrder)),
     db
@@ -165,43 +157,20 @@ export async function loadLoafCosts(groupId: number, book: PriceBook): Promise<B
       .orderBy(asc(breadTypeSizes.sortOrder)),
   ]);
 
-  const recipeByType = new Map<number, Recipe>();
-  for (const row of ingredientRows) {
-    const recipe = recipeByType.get(row.breadTypeId) ?? { ingredients: [] };
-    recipe.ingredients.push({
-      name: row.name,
-      kind: row.kind,
-      pctOfFinished: Number(row.pctOfFinished),
-      sortOrder: row.sortOrder,
-    });
-    recipeByType.set(row.breadTypeId, recipe);
-  }
-
-  return types.map((type) => {
-    const recipe = recipeByType.get(type.id) ?? null;
-    const sizes = sizeRows.filter((s) => s.breadTypeId === type.id);
-
-    return {
-      breadTypeId: type.id,
-      breadTypeName: type.name,
-      isActive: type.isActive,
-      hasRecipe: recipe !== null,
-      sizesMissingWeight: sizes.filter((s) => s.weightGrams == null).map((s) => s.sizeName),
-      sizes: recipe
-        ? sizes
-            .filter((s): s is typeof s & { weightGrams: number } => s.weightGrams != null)
-            .map((s) => {
-              const cost = costScaledRecipe(scaleRecipe(recipe, s.weightGrams), book);
-              return {
-                sizeId: s.sizeId,
-                sizeName: s.sizeName,
-                weightGrams: s.weightGrams,
-                total: cost.total,
-                perKg: cost.perKg,
-                unpriced: cost.unpriced,
-              };
-            })
-        : [],
-    };
-  });
+  return types.map((type) => ({
+    breadTypeId: type.id,
+    breadTypeName: type.name,
+    isActive: type.isActive,
+    ingredients: ingredientRows
+      .filter((r) => r.breadTypeId === type.id)
+      .map((r) => ({
+        name: r.name,
+        kind: r.kind,
+        pctOfFinished: Number(r.pctOfFinished),
+        sortOrder: r.sortOrder,
+      })),
+    sizes: sizeRows
+      .filter((s) => s.breadTypeId === type.id)
+      .map((s) => ({ sizeId: s.sizeId, sizeName: s.sizeName, weightGrams: s.weightGrams })),
+  }));
 }

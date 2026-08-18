@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 import {
   Pencil, Plus, Pause, Play, Trash2, ChevronUp, ChevronDown, ChevronRight, ChevronLeft,
-  Star, Check, Download, Copy, X,
+  Star, Check, Download, Copy, X, Coins,
 } from 'lucide-react';
 import { RecipeEditor } from '@/components/RecipeEditor';
 import { TierOverrideEditor } from '@/components/catalog/TierOverrideEditor';
@@ -95,6 +96,8 @@ export default function CatalogPage() {
   const t = useT();
   const toast = useToast();
   const isBaker = activeGroupRole === 'baker';
+  // Just the count, so the link can say whether anything is priced yet.
+  const [pricedCount, setPricedCount] = useState<number | null>(null);
 
   // Export the pricelist as a Hebrew-keyed JSON (for feeding an LLM).
   const [exporting, setExporting] = useState(false);
@@ -246,6 +249,14 @@ export default function CatalogPage() {
     if (!activeGroupId || isBaker) return;
     apiFetch<{ assets: MediaAsset[] }>('/media')
       .then((r) => setAssets(r.assets))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId, isBaker]);
+
+  useEffect(() => {
+    if (!activeGroupId || isBaker) return;
+    apiFetch<{ book: { pricePerKg: Record<string, number> } }>('/ingredient-prices?scope=book')
+      .then((r) => setPricedCount(Object.keys(r.book.pricePerKg).length))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, isBaker]);
@@ -683,6 +694,28 @@ export default function CatalogPage() {
     <>
       <ControlCenterTabs />
       <div className="p-5 space-y-4 animate-fade-in">
+        {/* Ingredient costs — its own screen, so this page doesn't grow a
+            fourth CRUD domain. Managers only; the endpoint 403s for bakers. */}
+        {!isBaker && (
+          <Link
+            href="/miniapp/settings/catalog/costs"
+            className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-muted/50"
+          >
+            <Coins className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">{t('costs.open')}</span>
+              <span className="block text-[11px] text-muted-foreground">
+                {pricedCount === null
+                  ? ''
+                  : pricedCount === 0
+                    ? t('costs.open_hint_none')
+                    : `${pricedCount} ${t('costs.open_hint')}`}
+              </span>
+            </span>
+            <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </Link>
+        )}
+
         {/* Pricelist JSON export (managers only) */}
         {!isBaker && (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">

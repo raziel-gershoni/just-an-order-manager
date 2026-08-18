@@ -8,7 +8,7 @@ import {
   loadPriceBook,
   loadPriceRows,
   loadIngredientsInUse,
-  loadLoafCosts,
+  loadBreadsForCosting,
 } from '@/lib/ingredient-costs';
 import type { AuthContext } from '@/lib/telegram-auth';
 
@@ -28,20 +28,29 @@ function denyBakers(auth: AuthContext, groupId: number): Response | null {
   return null;
 }
 
-export const GET = withGroup(async (_request, auth, groupId) => {
+export const GET = withGroup(async (request, auth, groupId) => {
   const denied = denyBakers(auth, groupId);
   if (denied) return denied;
 
   const book = await loadPriceBook(groupId);
-  const [prices, inUse, loaves] = await Promise.all([
+
+  // `?scope=book` is the cheap read: the recipe editor wants a cost line and
+  // already holds the recipe, so shipping every bread's percentages to it on
+  // every sheet open would repeat the mistake this work is fixing elsewhere.
+  if (new URL(request.url).searchParams.get('scope') === 'book') {
+    return jsonResponse({ book });
+  }
+
+  const [prices, inUse, breads] = await Promise.all([
     loadPriceRows(groupId),
     loadIngredientsInUse(groupId),
-    loadLoafCosts(groupId, book),
+    loadBreadsForCosting(groupId),
   ]);
 
   const inUseKeys = new Set(inUse.map((i) => priceKey(i.name, i.kind)));
 
   return jsonResponse({
+    book,
     prices,
     // Sorted by kind so the screen can render straight down without regrouping.
     inUse: [...inUse].sort(
@@ -54,8 +63,7 @@ export const GET = withGroup(async (_request, auth, groupId) => {
     // orphans is how that becomes visible the day it happens rather than six
     // months later.
     orphans: prices.filter((p) => !inUseKeys.has(priceKey(p.name, p.kind))),
-    starter: book.starter,
-    loaves,
+    breads,
   });
 });
 
