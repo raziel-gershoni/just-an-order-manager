@@ -169,18 +169,24 @@ export function RecipeEditor({
   const needsGroupRecipes = !loading && (!recipe || editing);
   useEffect(() => {
     if (!needsGroupRecipes || loadedGroupRecipes.current) return;
+    // Latched before the request so a re-render can't start a second one, and
+    // released again if it doesn't land: cancelling the editor mid-flight used
+    // to leave the latch set with nothing loaded, so the name autocomplete
+    // stayed empty for the rest of the sheet's life.
     loadedGroupRecipes.current = true;
-    let cancelled = false;
+    let landed = false;
     apiFetch<{ recipes: GroupRecipe[]; namesByKind: NamesByKind }>('/recipes')
       .then((res) => {
-        if (cancelled) return;
+        landed = true;
         setNamesByKind(res.namesByKind);
         // A bread is never its own copy source.
         setSources(res.recipes.filter((r) => r.breadTypeId !== breadTypeId));
       })
-      .catch(() => {});
+      .catch(() => {
+        loadedGroupRecipes.current = false;
+      });
     return () => {
-      cancelled = true;
+      if (!landed) loadedGroupRecipes.current = false;
     };
   }, [needsGroupRecipes, breadTypeId]);
 

@@ -5,7 +5,7 @@ import { Check } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
 import type { TypeDetailAddition } from '../types';
 
@@ -56,7 +56,7 @@ export function AdditionsSection({
       onSaved(draft);
       toast.success(t('catalog.saved'));
     } catch (e) {
-      toast.error((e as Error).message || t('catalog.save_failed'));
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     } finally {
       setSaving(false);
     }

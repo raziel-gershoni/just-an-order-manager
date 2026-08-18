@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS "ingredient_prices" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "ingredient_prices" ADD CONSTRAINT "ingredient_prices_group_id_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."groups"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+DO $$ BEGIN
+	ALTER TABLE "ingredient_prices" ADD CONSTRAINT "ingredient_prices_group_id_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."groups"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "ingredient_prices_group_name_kind_idx" ON "ingredient_prices" USING btree ("group_id","name","kind");--> statement-breakpoint
 -- מחמצת has no invoice price: it is fed from a flour the baker picks, at a
 -- hydration, and part of it is discarded between feeds. Null flour means

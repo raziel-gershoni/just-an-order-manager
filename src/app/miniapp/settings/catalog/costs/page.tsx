@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Wheat, Trash2, Sparkles, Lock } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
 import {
   KIND_DISPLAY_ORDER,
   kindLabel,
@@ -43,6 +43,13 @@ interface Payload {
   inUse: InUse[];
   orphans: PriceRow[];
   breads: Bread[];
+}
+
+/** A typed number, or the stored fallback when the box is blank or out of range. */
+function clamp(raw: string, fallback: number, min: number, max: number): number {
+  const n = Number(raw);
+  if (raw.trim() === '' || !Number.isFinite(n) || n < min || n > max) return fallback;
+  return n;
 }
 
 /** ₪ with two decimals, kept LTR so it doesn't reorder inside Hebrew text. */
@@ -82,28 +89,46 @@ export default function CostsPage() {
   // and the endpoint 403s. "No recipes yet" would be a lie about why.
   const [denied, setDenied] = useState(false);
 
+  const load = useCallback(
+    () =>
+      apiFetch<Payload>('/ingredient-prices')
+        .then((r) => {
+          setData(r);
+          setPriceByKey(
+            Object.fromEntries(r.prices.map((p) => [priceKey(p.name, p.kind), p.pricePerKg]))
+          );
+          setFlourName(r.book.starter.flourName);
+          setHydration(String(r.book.starter.hydrationPct));
+          setWaste(String(r.book.starter.wasteFactor));
+          setRemoved([]);
+        })
+        .catch((e: Error) => {
+          if (/403|owners and managers/i.test(e.message)) setDenied(true);
+          else toast.error(e.message);
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
   useEffect(() => {
-    apiFetch<Payload>('/ingredient-prices')
-      .then((r) => {
-        setData(r);
-        setPriceByKey(
-          Object.fromEntries(r.prices.map((p) => [priceKey(p.name, p.kind), p.pricePerKg]))
-        );
-        setFlourName(r.book.starter.flourName);
-        setHydration(String(r.book.starter.hydrationPct));
-        setWaste(String(r.book.starter.wasteFactor));
-      })
-      .catch((e: Error) => {
-        if (/403|owners and managers/i.test(e.message)) setDenied(true);
-        else toast.error(e.message);
-      })
-      .finally(() => setLoading(false));
+    load().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function setPrice(key: string, value: string) {
     setPriceByKey((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   }
+
+  /**
+   * A half-typed field falls back to the value already stored, not to a
+   * constant. Clearing מקדם פחת to retype it used to show the loaf at a
+   * different cost than the one about to be saved — and saving in that state
+   * wrote 1.00 over a stored 1.50, a permanent 33% error on every loaf.
+   */
+  const stored = data?.book.starter;
+  const hydrationPct = clamp(hydration, stored?.hydrationPct ?? 100, 1, 500);
+  const wasteFactor = clamp(waste, stored?.wasteFactor ?? 1.5, 1, 10);
 
   /** The draft, in the shape the cost engine reads. Blank ≠ zero: a blank field
    *  is "no price", which keeps the loaf explicitly incomplete. */
@@ -114,18 +139,17 @@ export default function CostsPage() {
       const value = Number(raw);
       if (raw.trim() !== '' && Number.isFinite(value) && value >= 0) pricePerKg[key] = value;
     }
-    return {
-      pricePerKg,
-      starter: {
-        flourName,
-        hydrationPct: Number(hydration) || 0,
-        wasteFactor: Number(waste) || 0,
-      },
-    };
-  }, [priceByKey, removed, flourName, hydration, waste]);
+    return { pricePerKg, starter: { flourName, hydrationPct, wasteFactor } };
+  }, [priceByKey, removed, flourName, hydrationPct, wasteFactor]);
 
   const starterPrice = starterPricePerKg(book);
-  const flourNames = (data?.inUse ?? []).filter((i) => i.kind === 'flour').map((i) => i.name);
+  const inUseFlours = (data?.inUse ?? []).filter((i) => i.kind === 'flour').map((i) => i.name);
+  // A flour renamed in the recipe leaves the setting pointing at a name no
+  // recipe uses. Keep it listed so the box isn't silently blank while the
+  // starter is still being costed off it.
+  const flourNames =
+    flourName && !inUseFlours.includes(flourName) ? [...inUseFlours, flourName] : inUseFlours;
+  const starterFlourOrphaned = !!flourName && !inUseFlours.includes(flourName);
   const orphans = (data?.orphans ?? []).filter((o) => !removed.includes(priceKey(o.name, o.kind)));
   const hasAnyRecipe = (data?.breads ?? []).some((b) => b.ingredients.length > 0);
   const withRecipe = (data?.breads ?? []).filter((b) => b.ingredients.length > 0);
@@ -152,18 +176,17 @@ export default function CostsPage() {
         method: 'PUT',
         body: JSON.stringify({
           prices,
-          starter: {
-            flourName,
-            hydrationPct: Math.round(Number(hydration)) || 100,
-            wasteFactor: Number(waste) || 1,
-          },
+          starter: { flourName, hydrationPct: Math.round(hydrationPct), wasteFactor },
         }),
       });
+      // Reload rather than patch local state: the save changes which prices are
+      // orphaned and which ingredients are in use, and a removed orphan that
+      // stayed in local state would reappear and be re-inserted on the next save.
+      await load();
       setDirty(false);
-      setRemoved([]);
       toast.success(t('costs.saved'));
     } catch (e) {
-      toast.error((e as Error).message || t('costs.save_failed'));
+      toast.error(friendlyError(e, t('costs.save_failed')));
     } finally {
       setSaving(false);
     }
@@ -382,6 +405,10 @@ export default function CostsPage() {
               />
             </label>
           </div>
+
+          {starterFlourOrphaned && (
+            <p className="text-xs text-destructive">{t('costs.starter_flour_orphaned')}</p>
+          )}
 
           <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
             <Sparkles className="h-4 w-4 text-muted-foreground" />

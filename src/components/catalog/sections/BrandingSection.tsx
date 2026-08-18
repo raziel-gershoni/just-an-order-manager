@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/useToast';
 import { BadgePicker } from '@/components/site-editor/BadgePicker';
 import { ImagePicker } from '@/components/site-editor/ImagePicker';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
+import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
 
 export interface Branding {
@@ -64,7 +65,7 @@ export function BrandingSection({
       onSaved(draft);
       toast.success(t('catalog.saved'));
     } catch (e) {
-      toast.error((e as Error).message || t('catalog.save_failed'));
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     } finally {
       setSaving(false);
     }

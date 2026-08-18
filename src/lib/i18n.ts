@@ -318,6 +318,7 @@ const translations: Record<string, string> = {
   'costs.starter_derived': 'מחושב',
   'costs.starter_hint': 'המחמצת אינה נקנית — מחירה מחושב מהקמח שמזין אותה, מהמים ומהפחת שבין ההאכלות',
   'costs.starter_unset': 'בחר/י קמח כדי לתמחר את המחמצת',
+  'costs.starter_flour_orphaned': 'הקמח הזה כבר לא מופיע באף מתכון — ודאו שהשם עדכני',
   'costs.table': 'עלות לכיכר',
   'costs.no_recipe': 'אין מתכון',
   'costs.missing_weight': 'אין משקל',

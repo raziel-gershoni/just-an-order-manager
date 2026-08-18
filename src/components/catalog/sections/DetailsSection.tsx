@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Input } from '@/components/ui/Input';
+import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
 
 /** The bread's name. One field, one PATCH. */
@@ -47,7 +48,7 @@ export function DetailsSection({
       onSaved(breadType.name);
       toast.success(t('catalog.saved'));
     } catch (e) {
-      toast.error((e as Error).message || t('catalog.save_failed'));
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     } finally {
       setSaving(false);
     }

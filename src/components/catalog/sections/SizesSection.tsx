@@ -6,6 +6,7 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { BadgePicker } from '@/components/site-editor/BadgePicker';
+import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
 import { effectivePrice } from '@/lib/pricing';
 import type { TypeDetailSize } from '../types';
@@ -62,12 +63,11 @@ export function SizesSection({
   }
 
   function toggle(sizeId: number) {
+    // The override is kept while disabled rather than nulled: only enabled
+    // sizes are sent, so it costs nothing, and an accidental off-then-on tap
+    // used to silently drop a real per-bread price.
     setDraft((prev) =>
-      prev.map((s) =>
-        s.id === sizeId
-          ? { ...s, enabled: !s.enabled, priceOverride: s.enabled ? null : s.priceOverride }
-          : s
-      )
+      prev.map((s) => (s.id === sizeId ? { ...s, enabled: !s.enabled } : s))
     );
   }
 
@@ -102,7 +102,7 @@ export function SizesSection({
       onSaved(draft);
       toast.success(t('catalog.saved'));
     } catch (e) {
-      toast.error((e as Error).message || t('catalog.save_failed'));
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     } finally {
       setSaving(false);
     }
@@ -137,6 +137,10 @@ export function SizesSection({
                   {s.weightGrams}g
                 </span>
               )}
+              {/* The old overlay showed bakers the price here on purpose. */}
+              <span dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">
+                · ₪{effectivePrice(s)}
+              </span>
             </span>
           ))}
         </div>

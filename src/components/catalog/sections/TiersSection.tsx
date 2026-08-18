@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
+import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
 import { TierOverrideEditor, tierGroups, tierKey } from '../TierOverrideEditor';
 import type { Tier, TypeDetailSize } from '../types';
@@ -54,15 +55,45 @@ export function TiersSection({
   const [draft, setDraft] = useState(saved);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => setDraft(saved), [saved]);
+  // Reconcile, never replace. `saved` is rebuilt from the `sizes` prop, so
+  // saving the SIZES section hands this one a fresh object — and a plain
+  // setDraft(saved) would throw away everything typed here and clear the dirty
+  // dot with it, so the exit guard would stop warning about work it just lost.
+  // Rows that appear or disappear follow `saved`; rows already on screen keep
+  // what the owner typed.
+  const savedKey = JSON.stringify(saved);
+  useEffect(() => {
+    setDraft((prev) => {
+      const next: Record<string, string> = JSON.parse(savedKey);
+      for (const key of Object.keys(next)) if (key in prev) next[key] = prev[key];
+      return next;
+    });
+  }, [savedKey]);
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(saved), [draft, saved]);
+  const dirty = useMemo(() => JSON.stringify(draft) !== savedKey, [draft, savedKey]);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const groups = tierGroups(sizes, tiers);
+  const PRICE = /^\d+(\.\d{1,2})?$/;
+  const invalid = groups.flatMap(({ size, defaults }) =>
+    defaults
+      .filter((d) => {
+        const raw = (draft[tierKey(size.id, d.minQty)] ?? '').trim();
+        return raw !== '' && !PRICE.test(raw);
+      })
+      .map((d) => `${size.name} · ${d.minQty}`)
+  );
+
   if (groups.length === 0) return null;
 
   async function save() {
+    // An unparseable value used to be read as "inherit", which DELETED the
+    // existing override. Typing 110.555 by accident would silently drop a real
+    // per-bread price. Refuse the save and name the row instead.
+    if (invalid.length > 0) {
+      toast.error(`${t('catalog.invalid_price')}: ${invalid.join(', ')}`);
+      return;
+    }
     setSaving(true);
     let next = [...tiers];
     try {
@@ -74,9 +105,9 @@ export function TiersSection({
             (x) => x.breadSizeId === size.id && x.breadTypeId === typeId && x.minQty === d.minQty
           );
 
-          // Blank, equal to the default, or unparseable → inherit.
-          const inherits =
-            value === '' || Number(value) === Number(d.price) || !/^\d+(\.\d{1,2})?$/.test(value);
+          // Blank or equal to the default → inherit. Unparseable can't reach
+          // here; the guard above refuses the save.
+          const inherits = value === '' || Number(value) === Number(d.price);
 
           if (inherits) {
             if (existing) {
@@ -105,7 +136,7 @@ export function TiersSection({
       // Whatever landed before the failure is real; hand it back so the UI
       // matches the database rather than the draft.
       onSaved(next);
-      toast.error((e as Error).message || t('catalog.tier_save_failed'));
+      toast.error(friendlyError(e, t('catalog.tier_save_failed')));
     } finally {
       setSaving(false);
     }
