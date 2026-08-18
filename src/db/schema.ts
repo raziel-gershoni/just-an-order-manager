@@ -111,6 +111,16 @@ export const groups = pgTable('groups', {
   // Master switch for the automatic twice-weekly recurring-order reminders.
   // Off by default — the feature ships dark until the owner turns it on.
   recurringRemindersEnabled: boolean('recurring_reminders_enabled').notNull().default(false),
+  // מחמצת is never bought, so it has no invoice price: it is fed from a flour
+  // the baker picks, at a hydration, and part of it is discarded between feeds.
+  // These three settings price every starter in the bakery (src/lib/cost.ts).
+  // Null flour means "not configured yet" — starter then reads as unpriced
+  // rather than free.
+  starterFlourName: varchar('starter_flour_name', { length: 100 }),
+  starterHydrationPct: integer('starter_hydration_pct').notNull().default(100),
+  starterWasteFactor: decimal('starter_waste_factor', { precision: 4, scale: 2 })
+    .notNull()
+    .default('1.50'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -273,6 +283,41 @@ export const breadRecipeIngredients = pgTable('bread_recipe_ingredients', {
   pctOfFinished: numeric('pct_of_finished', { precision: 7, scale: 4 }).notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
 });
+
+/**
+ * What a kilo of each ingredient costs, per group.
+ *
+ * Keyed on (name, kind) rather than an ingredient id because recipe rows carry
+ * no id — bread_recipe_ingredients.name is free text, and sumScaledByType
+ * (src/lib/recipe.ts) already aggregates on that same name|kind pair. Carries
+ * group_id directly: unlike the recipe tables it has no bread-type parent to
+ * inherit tenancy from, which is also what lets withGroup serve it.
+ *
+ * No is_active and no sort_order: the list the owner edits is derived from the
+ * ingredients actually present in recipes, ordered by KIND_DISPLAY_ORDER.
+ */
+export const ingredientPrices = pgTable(
+  'ingredient_prices',
+  {
+    id: serial('id').primaryKey(),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    name: varchar('name', { length: 100 }).notNull(),
+    kind: ingredientKindEnum('kind').notNull(),
+    // Shekels per kilogram. Recipes scale to grams, so per-kg divides cleanly.
+    pricePerKg: decimal('price_per_kg', { precision: 10, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('ingredient_prices_group_name_kind_idx').on(
+      table.groupId,
+      table.name,
+      table.kind
+    ),
+  ]
+);
 
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),

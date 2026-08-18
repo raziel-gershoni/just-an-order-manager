@@ -176,6 +176,13 @@
       "when": 1786916109750,
       "tag": "0024_settle_covered_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787002509750,
+      "tag": "0025_ingredient_prices",
+      "breakpoints": true
     }
   ]
 }
