@@ -576,11 +576,19 @@ export function RecipeEditor({
             </span>{' '}
             {t('settings.grams')}
           </span>
+          {/* Isolate the numbers, not the row: dir="ltr" on the container flips
+              the two figures against the RTL flow, so this line and the costs
+              screen would order them differently. */}
           {cost.complete ? (
-            <span className="flex items-baseline gap-1.5 tabular-nums" dir="ltr">
-              <span className="font-semibold">₪{cost.total.toFixed(2)}</span>
-              <span className="text-muted-foreground">
-                ₪{cost.perKg.toFixed(2)} {t('costs.unit')}
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+              <span dir="ltr" className="font-semibold tabular-nums">
+                ₪{cost.total.toFixed(2)}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                <span dir="ltr" className="tabular-nums">
+                  ₪{cost.perKg.toFixed(2)}
+                </span>{' '}
+                {t('costs.unit')}
               </span>
             </span>
           ) : (
