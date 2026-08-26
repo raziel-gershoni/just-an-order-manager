@@ -410,9 +410,12 @@ function AvatarMark({
 }) {
   const inner = <>{getInitial(name)}</>;
   // A ring around the avatar, not a repaint of it: the fill stays what it has
-  // always been, and only the circle drawn around it says who. Violet for
-  // mine, ink for someone else's, dashed for nobody yet — so the state reads
-  // from the ring's colour AND its texture, not from hue alone.
+  // always been, and only the circle drawn around it says who.
+  //
+  // Violet and ink were tried first and read as the same dark ring at 2px.
+  // These two are the widest-separated hues in the palette — cool violet
+  // against warm amber — and the third state is dashed, so unassigned differs
+  // in texture too rather than being a third shade to squint at.
   const className = cn(
     'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
     'bg-primary/10 text-sm font-bold text-primary border-2',
@@ -420,7 +423,7 @@ function AvatarMark({
       ? 'border-dashed border-muted-foreground/45'
       : mine
         ? 'border-primary'
-        : 'border-foreground/70'
+        : 'border-warning'
   );
 
   if (!onPick) return <div className={className}>{inner}</div>;
