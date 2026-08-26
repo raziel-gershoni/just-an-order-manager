@@ -408,22 +408,19 @@ function AvatarMark({
   label: string;
   onPick?: (e: React.MouseEvent) => void;
 }) {
-  const inner = (
-    <>
-      {getInitial(name)}
-      {assigned && (
-        <span
-          aria-hidden
-          className={cn(
-            'absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full border-2 border-card',
-            mine ? 'bg-primary' : 'bg-foreground/70'
-          )}
-        />
-      )}
-    </>
+  const inner = <>{getInitial(name)}</>;
+  // The whole avatar carries the state, not a 10px dot on its corner: solid for
+  // mine, grey for someone else's, outline for nobody yet. Thirty-six pixels of
+  // difference reads at a glance where ten did not — and the outline makes an
+  // unassigned customer look unfinished, which is what invites the sweep.
+  const className = cn(
+    'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+    !assigned
+      ? 'border border-dashed border-muted-foreground/60 text-muted-foreground'
+      : mine
+        ? 'bg-primary text-primary-foreground'
+        : 'bg-muted text-muted-foreground'
   );
-  const className =
-    'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary';
 
   if (!onPick) return <div className={className}>{inner}</div>;
   return (
