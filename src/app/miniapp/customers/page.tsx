@@ -409,17 +409,18 @@ function AvatarMark({
   onPick?: (e: React.MouseEvent) => void;
 }) {
   const inner = <>{getInitial(name)}</>;
-  // The whole avatar carries the state, not a 10px dot on its corner: solid for
-  // mine, grey for someone else's, outline for nobody yet. Thirty-six pixels of
-  // difference reads at a glance where ten did not — and the outline makes an
-  // unassigned customer look unfinished, which is what invites the sweep.
+  // A ring around the avatar, not a repaint of it: the fill stays what it has
+  // always been, and only the circle drawn around it says who. Violet for
+  // mine, ink for someone else's, dashed for nobody yet — so the state reads
+  // from the ring's colour AND its texture, not from hue alone.
   const className = cn(
-    'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+    'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+    'bg-primary/10 text-sm font-bold text-primary border-2',
     !assigned
-      ? 'border border-dashed border-muted-foreground/60 text-muted-foreground'
+      ? 'border-dashed border-muted-foreground/45'
       : mine
-        ? 'bg-primary text-primary-foreground'
-        : 'bg-muted text-muted-foreground'
+        ? 'border-primary'
+        : 'border-foreground/70'
   );
 
   if (!onPick) return <div className={className}>{inner}</div>;
