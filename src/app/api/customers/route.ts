@@ -5,7 +5,7 @@ import { eq, and, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { sanitizePhoneInput } from '@/lib/customer-phones';
 
-export const GET = withGroup(async (request, _auth, groupId) => {
+export const GET = withGroup(async (request, auth, groupId) => {
   const url = new URL(request.url);
   const activeOnly = url.searchParams.get('active') !== 'false';
 
@@ -39,7 +39,9 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     phones: phonesByCustomer[c.id] ?? [],
   }));
 
-  return jsonResponse({ customers: result });
+  // The caller's own id travels with the list so the client can sort its own
+  // customers first without a second round trip to /auth/me.
+  return jsonResponse({ customers: result, meId: auth.dbUser.id });
 });
 
 const createCustomerSchema = z.object({
@@ -52,16 +54,20 @@ const createCustomerSchema = z.object({
   deliveryNotes: z.string().max(1000).optional(),
 });
 
-export const POST = withGroup(async (request, _auth, groupId) => {
+export const POST = withGroup(async (request, auth, groupId) => {
   const body = await request.json();
   const parsed = createCustomerSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
   const { phone, ...customerData } = parsed.data;
 
+  // Whoever adds a customer works with them. Taken from the signed-in user
+  // rather than asked for: both add forms are a single name field — the order
+  // form's inline one has no room for a second — and an attribution nobody has
+  // to fill in is one that stays accurate. Reassign from the customers list.
   const [customer] = await db
     .insert(customers)
-    .values({ ...customerData, groupId })
+    .values({ ...customerData, groupId, handlerUserId: auth.dbUser.id })
     .returning();
 
   // If a phone was provided at creation time, insert it as the first phone

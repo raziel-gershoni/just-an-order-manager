@@ -108,6 +108,9 @@ const translations: Record<string, string> = {
   'customers.saved': '!הלקוח נשמר',
   'customers.save_failed': 'השמירה נכשלה',
   'customers.not_found': 'לקוח לא נמצא',
+  'customers.handler': 'מי מטפל בלקוח',
+  'customers.handler_me': 'שלי',
+  'customers.handler_unassigned': 'ללא שיוך',
 
   // Payments
   'payments.title': 'רשום תשלום',

@@ -183,6 +183,13 @@
       "when": 1787002509750,
       "tag": "0025_ingredient_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787088909750,
+      "tag": "0026_customer_handler",
+      "breakpoints": true
     }
   ]
 }

@@ -13,8 +13,9 @@ import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
+import { HandlerPicker, type GroupMember } from '@/components/customers/HandlerPicker';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
 import Link from 'next/link';
 
 interface CustomerPhone { id: number; phone: string; sortOrder: number }
@@ -23,7 +24,25 @@ interface Customer {
   name: string;
   isActive: boolean;
   reminderOptOut?: boolean;
+  /** Which staff member works with them. Null = nobody has said yet. */
+  handlerUserId: number | null;
   phones: CustomerPhone[];
+}
+
+/**
+ * Mine first, then by name.
+ *
+ * One comparator, used by both the initial load and the optimistic insert —
+ * there used to be two copies and one of them had lost the 'he' locale, so a
+ * freshly added customer sorted by code point instead of by Hebrew collation.
+ */
+function sortCustomers(list: Customer[], meId: number | null): Customer[] {
+  return [...list].sort(
+    (a, b) =>
+      Number(b.handlerUserId === meId && meId != null) -
+        Number(a.handlerUserId === meId && meId != null) ||
+      a.name.localeCompare(b.name, 'he')
+  );
 }
 
 export default function CustomersPage() {
@@ -43,6 +62,10 @@ export default function CustomersPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [showSend, setShowSend] = useState(false);
+  const [meId, setMeId] = useState<number | null>(null);
+  const [members, setMembers] = useState<GroupMember[]>([]);
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
+  const [savingHandler, setSavingHandler] = useState(false);
 
   function toggleSelect(id: number, optOut?: boolean) {
     if (optOut) return; // opted-out customers can't be selected
@@ -65,8 +88,11 @@ export default function CustomersPage() {
     if (!activeGroupId) return;
     setLoading(true);
     setError(false);
-    apiFetch<{ customers: Customer[] }>('/customers')
-      .then((d) => setCustomers([...d.customers].sort((a, b) => a.name.localeCompare(b.name, 'he'))))
+    apiFetch<{ customers: Customer[]; meId: number }>('/customers')
+      .then((d) => {
+        setMeId(d.meId);
+        setCustomers(sortCustomers(d.customers, d.meId));
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }
@@ -76,6 +102,35 @@ export default function CustomersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
+  useEffect(() => {
+    if (!activeGroupId) return;
+    apiFetch<{ members: GroupMember[] }>(`/groups/${activeGroupId}/members`)
+      .then((d) => setMembers(d.members))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId]);
+
+  async function setHandler(customerId: number, handlerUserId: number | null) {
+    setSavingHandler(true);
+    try {
+      await apiFetch(`/customers/${customerId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ handlerUserId }),
+      });
+      setCustomers((prev) =>
+        sortCustomers(
+          prev.map((c) => (c.id === customerId ? { ...c, handlerUserId } : c)),
+          meId
+        )
+      );
+      setPickerFor(null);
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
+    } finally {
+      setSavingHandler(false);
+    }
+  }
+
   async function handleAdd() {
     if (!newName.trim()) return;
     setAdding(true);
@@ -84,7 +139,9 @@ export default function CustomersPage() {
         method: 'POST',
         body: JSON.stringify({ name: newName.trim() }),
       });
-      setCustomers((prev) => [...prev, { ...customer, phones: customer.phones ?? [] }].sort((a, b) => a.name.localeCompare(b.name)));
+      setCustomers((prev) =>
+        sortCustomers([...prev, { ...customer, phones: customer.phones ?? [] }], meId)
+      );
       setNewName('');
       setShowAdd(false);
       toast.success(t('customers.saved'));
@@ -104,6 +161,13 @@ export default function CustomersPage() {
         c.phones.some((p) => p.phone.replace(/\D/g, '').includes(phoneQuery)))
   );
   const hasSearch = search.trim() !== '';
+  const picked = pickerFor == null ? null : customers.find((c) => c.id === pickerFor) ?? null;
+
+  function handlerLabel(handlerUserId: number | null): string {
+    if (handlerUserId == null) return t('customers.handler_unassigned');
+    if (handlerUserId === meId) return t('customers.handler_me');
+    return members.find((m) => m.userId === handlerUserId)?.name ?? t('customers.handler');
+  }
   const selectedPhoneCount = [...selected].reduce(
     (sum, id) => sum + (customers.find((c) => c.id === id)?.phones.length ?? 0),
     0
@@ -217,9 +281,25 @@ export default function CustomersPage() {
                       className="h-4 w-4 accent-primary shrink-0"
                     />
                   )}
-                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                    {getInitial(c.name)}
-                  </div>
+                  {/* The avatar doubles as the handler control. A dot rather
+                      than a name or an initial: the second member's Telegram
+                      name is Latin script, so an initial would read "Y" in an
+                      otherwise Hebrew list. Names live in the picker. */}
+                  <AvatarMark
+                    name={c.name}
+                    mine={c.handlerUserId != null && c.handlerUserId === meId}
+                    assigned={c.handlerUserId != null}
+                    onPick={
+                      selectMode
+                        ? undefined
+                        : (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setPickerFor(c.id);
+                          }
+                    }
+                    label={handlerLabel(c.handlerUserId)}
+                  />
                   <div className="min-w-0">
                     <span className="block font-medium truncate">{c.name}</span>
                     {firstPhone && (
@@ -276,6 +356,63 @@ export default function CustomersPage() {
           onSent={exitSelect}
         />
       )}
+
+      {/* Outside the list, not inside a row: a sheet rendered within the row's
+          <Link> turns every tap in it into a navigation. */}
+      {picked && (
+        <HandlerPicker
+          customerName={picked.name}
+          members={members}
+          value={picked.handlerUserId}
+          meId={meId}
+          saving={savingHandler}
+          onPick={(userId) => setHandler(picked.id, userId)}
+          onClose={() => setPickerFor(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * The customer's initial, with a dot showing who works with them: filled for
+ * yours, muted for someone else's, absent when nobody has said. Tapping it
+ * opens the picker — and must not follow the row's link.
+ */
+function AvatarMark({
+  name,
+  mine,
+  assigned,
+  label,
+  onPick,
+}: {
+  name: string;
+  mine: boolean;
+  assigned: boolean;
+  label: string;
+  onPick?: (e: React.MouseEvent) => void;
+}) {
+  const inner = (
+    <>
+      {getInitial(name)}
+      {assigned && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full border-2 border-card',
+            mine ? 'bg-primary' : 'bg-muted-foreground/50'
+          )}
+        />
+      )}
+    </>
+  );
+  const className =
+    'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary';
+
+  if (!onPick) return <div className={className}>{inner}</div>;
+  return (
+    <button type="button" onClick={onPick} aria-label={label} className={className}>
+      {inner}
+    </button>
   );
 }

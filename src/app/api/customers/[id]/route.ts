@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { customers, customerPhones, reminderSends } from '@/db/schema';
+import { customers, customerPhones, groupMembers, reminderSends } from '@/db/schema';
 import { eq, and, asc, desc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 
@@ -46,6 +46,8 @@ const updateCustomerSchema = z.object({
   deliveryNotes: z.string().max(1000).optional(),
   isActive: z.boolean().optional(),
   reminderOptOut: z.boolean().optional(),
+  // null clears the assignment; a number must belong to this group.
+  handlerUserId: z.number().int().positive().nullable().optional(),
 });
 
 export const PATCH = withGroup(async (request, _auth, groupId) => {
@@ -54,6 +56,19 @@ export const PATCH = withGroup(async (request, _auth, groupId) => {
   const body = await request.json();
   const parsed = updateCustomerSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
+
+  // A bare users.id would accept anyone who has ever pressed /start on the bot
+  // — there is already such a row in production. Only members of this group can
+  // be a handler.
+  const handlerUserId = parsed.data.handlerUserId;
+  if (handlerUserId != null) {
+    const [member] = await db
+      .select({ userId: groupMembers.userId })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, handlerUserId)))
+      .limit(1);
+    if (!member) return errorResponse('That person is not a member of this bakery', 400);
+  }
 
   const [updated] = await db
     .update(customers)

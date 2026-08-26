@@ -332,6 +332,14 @@ export const customers = pgTable('customers', {
   deliveryNotes: text('delivery_notes'),
   isActive: boolean('is_active').notNull().default(true),
   reminderOptOut: boolean('reminder_opt_out').notNull().default(false),
+  // Which staff member works with this customer. Set to the creator on insert,
+  // changeable from the customers list. Nullable because the customers that
+  // predate this column have no recorded provenance — "unassigned" is a real
+  // state, not a gap to be guessed at.
+  //
+  // NOT a visibility boundary: everyone in the group still sees every customer.
+  // It only decides sort order and a mark on the row.
+  handlerUserId: integer('handler_user_id').references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
