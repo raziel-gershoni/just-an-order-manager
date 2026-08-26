@@ -36,14 +36,20 @@ export function HandlerPicker({
 }) {
   const t = useT();
 
-  const rows: { id: number | null; label: string; hint?: string }[] = [
-    ...members.map((m) => ({
-      id: m.userId,
-      label: m.userId === meId ? t('customers.handler_me') : m.name,
-      hint: m.userId === meId ? m.name : t(`role.${m.role}`),
-    })),
-    { id: null, label: t('customers.handler_unassigned') },
-  ];
+  // With no members loaded, the only row left would be "nobody" — a sheet
+  // asking who works with this customer whose single answer is that no one
+  // does. Say what actually happened instead.
+  const rows: { id: number | null; label: string; hint?: string }[] =
+    members.length === 0
+      ? []
+      : [
+          ...members.map((m) => ({
+            id: m.userId,
+            label: m.userId === meId ? t('customers.handler_me') : m.name,
+            hint: m.userId === meId ? m.name : t(`role.${m.role}`),
+          })),
+          { id: null, label: t('customers.handler_unassigned') },
+        ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40 animate-fade-in" onClick={onClose}>
@@ -57,6 +63,11 @@ export function HandlerPicker({
         </div>
 
         <div className="px-2 pb-2">
+          {rows.length === 0 && (
+            <p className="px-3 py-4 text-sm text-muted-foreground">
+              {t('customers.handler_unavailable')}
+            </p>
+          )}
           {rows.map((row) => {
             const active = row.id === value;
             return (

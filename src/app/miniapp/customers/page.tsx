@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
@@ -102,13 +102,21 @@ export default function CustomersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
-  useEffect(() => {
+  const loadMembers = useCallback(() => {
     if (!activeGroupId) return;
     apiFetch<{ members: GroupMember[] }>(`/groups/${activeGroupId}/members`)
       .then((d) => setMembers(d.members))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
+
+  useEffect(loadMembers, [loadMembers]);
+
+  function openPicker(customerId: number) {
+    // One more try on open: without members the sheet has nothing to offer.
+    if (members.length === 0) loadMembers();
+    setPickerFor(customerId);
+  }
 
   async function setHandler(customerId: number, handlerUserId: number | null) {
     setSavingHandler(true);
@@ -295,7 +303,7 @@ export default function CustomersPage() {
                         : (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            setPickerFor(c.id);
+                            openPicker(c.id);
                           }
                     }
                     label={handlerLabel(c.handlerUserId)}
