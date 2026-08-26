@@ -20,6 +20,7 @@ export interface GroupMember {
 export function HandlerPicker({
   customerName,
   members,
+  state,
   value,
   meId,
   saving,
@@ -28,6 +29,7 @@ export function HandlerPicker({
 }: {
   customerName: string;
   members: GroupMember[];
+  state: 'loading' | 'ready' | 'failed';
   value: number | null;
   meId: number | null;
   saving: boolean;
@@ -38,7 +40,8 @@ export function HandlerPicker({
 
   // With no members loaded, the only row left would be "nobody" — a sheet
   // asking who works with this customer whose single answer is that no one
-  // does. Say what actually happened instead.
+  // does. Say what actually happened instead, distinguishing a fetch still in
+  // flight from one that failed.
   const rows: { id: number | null; label: string; hint?: string }[] =
     members.length === 0
       ? []
@@ -65,7 +68,9 @@ export function HandlerPicker({
         <div className="px-2 pb-2">
           {rows.length === 0 && (
             <p className="px-3 py-4 text-sm text-muted-foreground">
-              {t('customers.handler_unavailable')}
+              {state === 'failed'
+                ? t('customers.handler_unavailable')
+                : t('customers.handler_loading')}
             </p>
           )}
           {rows.map((row) => {

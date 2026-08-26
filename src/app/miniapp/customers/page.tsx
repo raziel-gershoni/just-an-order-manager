@@ -64,6 +64,9 @@ export default function CustomersPage() {
   const [showSend, setShowSend] = useState(false);
   const [meId, setMeId] = useState<number | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
+  // "No members" is ambiguous on its own — it is also the state before the
+  // fetch resolves, and a picker that shows an error mid-flight is crying wolf.
+  const [membersState, setMembersState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [savingHandler, setSavingHandler] = useState(false);
 
@@ -104,9 +107,13 @@ export default function CustomersPage() {
 
   const loadMembers = useCallback(() => {
     if (!activeGroupId) return;
+    setMembersState('loading');
     apiFetch<{ members: GroupMember[] }>(`/groups/${activeGroupId}/members`)
-      .then((d) => setMembers(d.members))
-      .catch(() => {});
+      .then((d) => {
+        setMembers(d.members);
+        setMembersState('ready');
+      })
+      .catch(() => setMembersState('failed'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
@@ -114,7 +121,7 @@ export default function CustomersPage() {
 
   function openPicker(customerId: number) {
     // One more try on open: without members the sheet has nothing to offer.
-    if (members.length === 0) loadMembers();
+    if (membersState === 'failed') loadMembers();
     setPickerFor(customerId);
   }
 
@@ -174,7 +181,7 @@ export default function CustomersPage() {
   function handlerLabel(handlerUserId: number | null): string {
     if (handlerUserId == null) return t('customers.handler_unassigned');
     if (handlerUserId === meId) return t('customers.handler_me');
-    return members.find((m) => m.userId === handlerUserId)?.name ?? t('customers.handler');
+    return members.find((m) => m.userId === handlerUserId)?.name ?? t('customers.handler_unknown');
   }
   const selectedPhoneCount = [...selected].reduce(
     (sum, id) => sum + (customers.find((c) => c.id === id)?.phones.length ?? 0),
@@ -371,6 +378,7 @@ export default function CustomersPage() {
         <HandlerPicker
           customerName={picked.name}
           members={members}
+          state={membersState}
           value={picked.handlerUserId}
           meId={meId}
           saving={savingHandler}
@@ -408,7 +416,7 @@ function AvatarMark({
           aria-hidden
           className={cn(
             'absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full border-2 border-card',
-            mine ? 'bg-primary' : 'bg-muted-foreground/50'
+            mine ? 'bg-primary' : 'bg-foreground/70'
           )}
         />
       )}
