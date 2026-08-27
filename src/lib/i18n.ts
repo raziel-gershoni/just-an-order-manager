@@ -118,6 +118,12 @@ const translations: Record<string, string> = {
   'customers.view_temperature': 'טמפרטורה',
   'customers.pick_phone': 'לאיזה מספר לשלוח',
 
+  // Render-error boundary (src/app/miniapp/error.tsx)
+  'error.title': 'משהו השתבש',
+  'error.body': 'המסך לא הצליח להיטען',
+  'error.retry': 'נסו שוב',
+  'error.reload': 'רענון מלא',
+
   // Payments
   'payments.title': 'רשום תשלום',
   'payments.payment_plus': '(+) תשלום',
