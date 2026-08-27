@@ -409,13 +409,16 @@ function AvatarMark({
   onPick?: (e: React.MouseEvent) => void;
 }) {
   const inner = <>{getInitial(name)}</>;
-  // A ring around the avatar, not a repaint of it: the fill stays what it has
-  // always been, and only the circle drawn around it says who.
+  // The ring is an ACTION scale, not an identity one — which is why someone
+  // else's customer gets no ring at all rather than a second colour:
   //
-  // Violet and ink were tried first and read as the same dark ring at 2px.
-  // These two are the widest-separated hues in the palette — cool violet
-  // against warm amber — and the third state is dashed, so unassigned differs
-  // in texture too rather than being a third shade to squint at.
+  //   solid violet — yours, act on it
+  //   dashed       — nobody yet, needs attention
+  //   nothing      — someone else's, nothing for you to do
+  //
+  // Two coloured rings were tried (violet + amber) and worked, but marking a
+  // row you have no business with is noise. The border stays 2px transparent
+  // in that state so the avatars never shift between the three.
   const className = cn(
     'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
     'bg-primary/10 text-sm font-bold text-primary border-2',
@@ -423,7 +426,7 @@ function AvatarMark({
       ? 'border-dashed border-muted-foreground/45'
       : mine
         ? 'border-primary'
-        : 'border-warning'
+        : 'border-transparent'
   );
 
   if (!onPick) return <div className={className}>{inner}</div>;
