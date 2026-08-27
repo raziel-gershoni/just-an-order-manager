@@ -111,10 +111,20 @@ export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
  * scale here — the oldest debt is the one that most needs a number on it.
  */
 export function daysAgoLabel(dateStr: string): string {
-  const days = differenceInCalendarDays(
-    startOfDay(new Date()),
-    startOfDay(new Date(dateStr + 'T00:00:00'))
+  return daysAgoFromCount(
+    differenceInCalendarDays(startOfDay(new Date()), startOfDay(new Date(dateStr + 'T00:00:00')))
   );
+}
+
+/**
+ * The same wording from a count someone else already worked out.
+ *
+ * Needed because the customer temperature is computed on the server against
+ * the server's day, and re-deriving the age in the browser would let the two
+ * disagree by one for the three hours a night when UTC and the bakery's
+ * calendar are on different dates.
+ */
+export function daysAgoFromCount(days: number): string {
   if (days <= 0) return 'היום';
   if (days === 1) return 'אתמול';
   if (days === 2) return 'לפני יומיים';

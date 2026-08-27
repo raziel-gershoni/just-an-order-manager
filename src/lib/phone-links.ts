@@ -54,10 +54,14 @@ export function waHref(phone: string): string | null {
  * Leave the app for an external https URL.
  *
  * Inside Telegram the WebView needs WebApp.openLink — a bare navigation works
- * but hands the user a one-way trip out of the mini app. Everywhere else, and
- * this app is meant to work in any browser, a plain navigation is the whole
- * story. Never window.open: nothing else in this codebase uses it and its
- * behaviour in the Telegram WebView is the least predictable of the three.
+ * but hands the user a one-way trip out of the mini app, and openLink is never
+ * reached in a plain browser.
+ *
+ * Everywhere else it opens a new tab, because the picker sheet's links are
+ * plain <a target="_blank"> and one green icon must not behave two ways: a
+ * same-tab navigation would throw away the search text and the current view on
+ * the thirteen customers who have exactly one number. Falls back to a plain
+ * navigation when a popup blocker returns null.
  */
 export function openExternal(url: string): void {
   const webApp = (window as unknown as {
@@ -68,5 +72,6 @@ export function openExternal(url: string): void {
     webApp.openLink(url);
     return;
   }
-  window.location.href = url;
+  const tab = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!tab) window.location.href = url;
 }

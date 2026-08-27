@@ -60,7 +60,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
     // Computed here rather than on the client: it is fixed for the life of the
     // page, and "today" has to mean one thing across the SQL and the scoring.
     temperature: temperatureOf(
-      rhythms.get(c.id) ?? { pastOrders: 0, lastOrder: null, nextOrder: null, medianGap: null },
+      rhythms.get(c.id) ?? NO_ORDERS,
       today
     ),
   }));
@@ -69,6 +69,15 @@ export const GET = withGroup(async (request, auth, groupId) => {
   // customers first without a second round trip to /auth/me.
   return jsonResponse({ customers: result, meId: auth.dbUser.id });
 });
+
+/** A customer nobody has ordered for yet — also the shape a brand new one gets. */
+const NO_ORDERS: OrderRhythm = {
+  pastOrders: 0,
+  lastOrder: null,
+  nextOrder: null,
+  openOrders: 0,
+  medianGap: null,
+};
 
 /**
  * One grouped pass over the group's orders: how many each customer has taken,
@@ -100,13 +109,16 @@ async function loadRhythms(
       from orders o
       where o.group_id = ${groupId}
         and o.order_status <> 'cancelled'
-        and o.delivery_date is not null
         and o.customer_id in (${ids})
     )
     select customer_id,
-           count(*) filter (where dd <= ${today})::int as past_orders,
-           max(dd) filter (where dd <= ${today}) as last_order,
-           min(dd) filter (where dd >  ${today}) as next_order,
+           count(*) filter (where dd is not null and dd <= ${today})::int as past_orders,
+           max(dd) filter (where dd is not null and dd <= ${today}) as last_order,
+           min(dd) filter (where dd > ${today}) as next_order,
+           -- A live ASAP order carries no date until it is delivered, so it
+           -- never lands in either bucket above. Counted separately rather
+           -- than filtered away, because it means bread is on the way.
+           count(*) filter (where dd is null)::int as open_orders,
            percentile_cont(0.5) within group (order by gap)::float8 as median_gap
     from d
     group by customer_id
@@ -119,6 +131,7 @@ async function loadRhythms(
       pastOrders: Number(row.past_orders),
       lastOrder: (row.last_order as string | null) ?? null,
       nextOrder: (row.next_order as string | null) ?? null,
+      openOrders: Number(row.open_orders ?? 0),
       medianGap: row.median_gap == null ? null : Number(row.median_gap),
     });
   }
@@ -161,5 +174,17 @@ export const POST = withGroup(async (request, auth, groupId) => {
     });
   }
 
-  return jsonResponse({ customer: { ...customer, phones: cleanPhone ? [{ phone: cleanPhone }] : [] } }, 201);
+  // The temperature travels with the new row so the list's optimistic insert
+  // produces the same shape the GET does — without it, switching to the
+  // temperature view right after adding someone read `band` off undefined.
+  return jsonResponse(
+    {
+      customer: {
+        ...customer,
+        phones: cleanPhone ? [{ phone: cleanPhone }] : [],
+        temperature: temperatureOf(NO_ORDERS, todayStr()),
+      },
+    },
+    201
+  );
 });

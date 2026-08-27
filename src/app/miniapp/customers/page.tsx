@@ -16,7 +16,7 @@ import { getInitial } from '@/lib/name-utils';
 import { HandlerPicker, type GroupMember } from '@/components/customers/HandlerPicker';
 import { PhonePicker } from '@/components/customers/PhonePicker';
 import { waHref, openExternal } from '@/lib/phone-links';
-import { daysAgoLabel } from '@/lib/date-utils';
+import { daysAgoFromCount } from '@/lib/date-utils';
 import { temperatureRank, type Temperature, type TemperatureBand } from '@/lib/customer-temperature';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { cn, friendlyError } from '@/lib/utils';
@@ -46,6 +46,17 @@ interface Customer {
  * either is worth. Fresh and booked get nothing at all: the point is the
  * exception, and a list where every row is tinted marks nothing.
  */
+/** A row that somehow arrived without one reads as brand new, never as a crash. */
+const NO_TEMPERATURE: Temperature = {
+  band: 'fresh',
+  lastOrder: null,
+  daysSince: null,
+  ratio: null,
+  fromOwnRhythm: false,
+};
+
+const tempOf = (c: Customer): Temperature => c.temperature ?? NO_TEMPERATURE;
+
 const TEMPERATURE_TINT: Record<TemperatureBand, string> = {
   booked: '',
   fresh: '',
@@ -225,7 +236,7 @@ export default function CustomersPage() {
     view === 'temperature'
       ? [...customers].sort(
           (a, b) =>
-            temperatureRank(b.temperature) - temperatureRank(a.temperature) ||
+            temperatureRank(tempOf(b)) - temperatureRank(tempOf(a)) ||
             a.name.localeCompare(b.name, 'he')
         )
       : customers;
@@ -371,7 +382,7 @@ export default function CustomersPage() {
                   // Before the select-mode branch, not after: cn is twMerge, so
                   // a later bg-* wins outright and would silently swallow the
                   // selection highlight.
-                  view === 'temperature' && TEMPERATURE_TINT[c.temperature.band],
+                  view === 'temperature' && TEMPERATURE_TINT[tempOf(c).band],
                   selectMode && selected.has(c.id) ? 'bg-primary/5' : 'hover:bg-muted/40',
                   idx > 0 && 'border-t border-dashed border-border',
                   selectMode && c.reminderOptOut && 'opacity-40'
@@ -418,7 +429,10 @@ export default function CustomersPage() {
                           {firstPhone}
                         </span>
                         {extraCount > 0 && (
-                          <span className="text-muted-foreground/60"> +{extraCount}</span>
+                          <span dir="ltr" className="text-muted-foreground/60">
+                            {' '}
+                            +{extraCount}
+                          </span>
                         )}
                       </span>
                     )}
@@ -431,9 +445,9 @@ export default function CustomersPage() {
                     )
                   ) : (
                     <div className="ms-auto flex shrink-0 items-center gap-1">
-                      {view === 'temperature' && c.temperature.daysSince != null && (
+                      {view === 'temperature' && tempOf(c).daysSince != null && (
                         <span className="text-[11px] tabular-nums text-muted-foreground">
-                          {c.temperature.lastOrder && daysAgoLabel(c.temperature.lastOrder)}
+                          {daysAgoFromCount(tempOf(c).daysSince!)}
                         </span>
                       )}
                       {dialable(c).length > 0 && (

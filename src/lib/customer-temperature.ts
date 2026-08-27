@@ -22,6 +22,8 @@ export interface OrderRhythm {
   lastOrder: string | null;
   /** Earliest future delivery date, if one is already on the calendar. */
   nextOrder: string | null;
+  /** Live orders with no delivery date yet — an ASAP that hasn't gone out. */
+  openOrders: number;
   /** Median days between consecutive orders. Null below two gaps. */
   medianGap: number | null;
 }
@@ -69,7 +71,10 @@ export function temperatureOf(rhythm: OrderRhythm, todayISO: string): Temperatur
   // are coming in on Friday. This flips a quarter of the list, and for a brand
   // new customer whose first order has not arrived yet it is the difference
   // between "arriving tomorrow" and "no data at all".
-  if (rhythm.nextOrder && rhythm.nextOrder > todayISO) {
+  // An ASAP order is created with no delivery date and only gets one stamped
+  // when it's marked delivered, so it is invisible to any date comparison —
+  // but a customer with bread on the way is the opposite of going cold.
+  if (rhythm.openOrders > 0 || (rhythm.nextOrder && rhythm.nextOrder > todayISO)) {
     return { band: 'booked', lastOrder: rhythm.lastOrder, daysSince: null, ratio: null, fromOwnRhythm: false };
   }
 

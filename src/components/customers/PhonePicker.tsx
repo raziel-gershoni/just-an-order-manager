@@ -63,11 +63,11 @@ export function PhonePicker({
                   <span className="block truncate text-sm font-medium">
                     {p.name?.trim() || t('customers.phone')}
                   </span>
-                  {/* dir on the number, never on the row: an unisolated number
-                      in an RTL line reorders, and a leading + lands at the far
-                      end where nobody can read it. */}
-                  <span dir="ltr" className="block truncate text-[11px] tabular-nums text-muted-foreground">
-                    {p.phone}
+                  {/* The isolate goes on the digits, not on the block. dir on a
+                      block element also flips its text-align, which would pull
+                      the number to the far side from the Hebrew label above it. */}
+                  <span className="block truncate text-[11px] tabular-nums text-muted-foreground">
+                    <span dir="ltr">{p.phone}</span>
                   </span>
                 </span>
                 {p.notify === false && (
