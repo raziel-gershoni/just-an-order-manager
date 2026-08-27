@@ -114,6 +114,9 @@ const translations: Record<string, string> = {
   'customers.handler_unavailable': 'רשימת אנשי הצוות לא נטענה — נסו שוב בעוד רגע',
   'customers.handler_loading': '…טוען את אנשי הצוות',
   'customers.handler_unknown': 'לא ידוע',
+  'customers.view_list': 'רשימה',
+  'customers.view_temperature': 'טמפרטורה',
+  'customers.pick_phone': 'לאיזה מספר לשלוח',
 
   // Payments
   'payments.title': 'רשום תשלום',

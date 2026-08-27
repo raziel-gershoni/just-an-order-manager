@@ -11,14 +11,24 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send, MessageCircle } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { HandlerPicker, type GroupMember } from '@/components/customers/HandlerPicker';
+import { PhonePicker } from '@/components/customers/PhonePicker';
+import { waHref, openExternal } from '@/lib/phone-links';
+import { daysAgoLabel } from '@/lib/date-utils';
+import { temperatureRank, type Temperature, type TemperatureBand } from '@/lib/customer-temperature';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { cn, friendlyError } from '@/lib/utils';
 import Link from 'next/link';
 
-interface CustomerPhone { id: number; phone: string; sortOrder: number }
+interface CustomerPhone {
+  id: number;
+  phone: string;
+  sortOrder: number;
+  name: string | null;
+  notify: boolean;
+}
 interface Customer {
   id: number;
   name: string;
@@ -27,7 +37,23 @@ interface Customer {
   /** Which staff member works with them. Null = nobody has said yet. */
   handlerUserId: number | null;
   phones: CustomerPhone[];
+  temperature: Temperature;
 }
+
+/**
+ * How overdue a row looks. A warm ramp, kept faint — the avatar already carries
+ * a violet ring, and two colours fighting on one row would cost more than
+ * either is worth. Fresh and booked get nothing at all: the point is the
+ * exception, and a list where every row is tinted marks nothing.
+ */
+const TEMPERATURE_TINT: Record<TemperatureBand, string> = {
+  booked: '',
+  fresh: '',
+  easing: 'bg-warning/5',
+  slipping: 'bg-warning/10',
+  late: 'bg-warning/[0.18]',
+  cold: 'bg-warning/25',
+};
 
 /**
  * Mine first, then by name.
@@ -69,6 +95,11 @@ export default function CustomersPage() {
   const [membersState, setMembersState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [savingHandler, setSavingHandler] = useState(false);
+  const [phonePickerFor, setPhonePickerFor] = useState<number | null>(null);
+  // The temperature view is the same list read for a different question, so it
+  // is a mode rather than a screen — and the mode owns the sort, which is why
+  // there is no second toggle for it.
+  const [view, setView] = useState<'list' | 'temperature'>('list');
 
   function toggleSelect(id: number, optOut?: boolean) {
     if (optOut) return; // opted-out customers can't be selected
@@ -119,6 +150,24 @@ export default function CustomersPage() {
 
   useEffect(loadMembers, [loadMembers]);
 
+  /** Numbers we can actually open a chat with — the icon hides when there are none. */
+  function dialable(c: Customer): CustomerPhone[] {
+    return c.phones.filter((p) => waHref(p.phone) !== null);
+  }
+
+  function openWhatsApp(c: Customer) {
+    const list = dialable(c);
+    // One number is the common case (13 of 17 customers) and deserves no
+    // intervening tap. Two is a real question — both customers who have two
+    // have labelled them — so it opens the picker.
+    if (list.length === 1) {
+      const href = waHref(list[0].phone);
+      if (href) openExternal(href);
+      return;
+    }
+    setPhonePickerFor(c.id);
+  }
+
   function openPicker(customerId: number) {
     // One more try on open: without members the sheet has nothing to offer.
     if (membersState === 'failed') loadMembers();
@@ -167,9 +216,23 @@ export default function CustomersPage() {
     }
   }
 
+  // The mode decides the order. In the list you are looking someone up, so
+  // mine-first then Hebrew alphabetical, stable and memorised. In temperature
+  // you are triaging, so most overdue first — which is also what keeps a
+  // lapsed regular above a lead that never converted when the two last ordered
+  // on the very same day.
+  const ordered =
+    view === 'temperature'
+      ? [...customers].sort(
+          (a, b) =>
+            temperatureRank(b.temperature) - temperatureRank(a.temperature) ||
+            a.name.localeCompare(b.name, 'he')
+        )
+      : customers;
+
   const phoneQuery = search.replace(/\D/g, '');
   const idW = docketWidth(customers.map((c) => c.id));
-  const filtered = customers.filter(
+  const filtered = ordered.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       (phoneQuery !== '' &&
@@ -177,6 +240,8 @@ export default function CustomersPage() {
   );
   const hasSearch = search.trim() !== '';
   const picked = pickerFor == null ? null : customers.find((c) => c.id === pickerFor) ?? null;
+  const phonePicked =
+    phonePickerFor == null ? null : customers.find((c) => c.id === phonePickerFor) ?? null;
 
   function handlerLabel(handlerUserId: number | null): string {
     if (handlerUserId == null) return t('customers.handler_unassigned');
@@ -245,6 +310,29 @@ export default function CustomersPage() {
         />
       </div>
 
+      {/* One control, and it owns the sort: the list is for finding someone,
+          the temperature view is for deciding who to chase. Two questions, two
+          orders — which is exactly why neither needs its own toggle. */}
+      {!selectMode && (
+        <div className="flex gap-1 rounded-lg bg-muted p-1">
+          {(['list', 'temperature'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={cn(
+                'flex-1 rounded-md py-2 text-center text-sm font-medium transition-all',
+                view === v
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t(v === 'list' ? 'customers.view_list' : 'customers.view_temperature')}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
@@ -280,6 +368,10 @@ export default function CustomersPage() {
               <div
                 className={cn(
                   'flex items-stretch transition-colors',
+                  // Before the select-mode branch, not after: cn is twMerge, so
+                  // a later bg-* wins outright and would silently swallow the
+                  // selection highlight.
+                  view === 'temperature' && TEMPERATURE_TINT[c.temperature.band],
                   selectMode && selected.has(c.id) ? 'bg-primary/5' : 'hover:bg-muted/40',
                   idx > 0 && 'border-t border-dashed border-border',
                   selectMode && c.reminderOptOut && 'opacity-40'
@@ -319,7 +411,12 @@ export default function CustomersPage() {
                     <span className="block font-medium truncate">{c.name}</span>
                     {firstPhone && (
                       <span className="block text-sm text-muted-foreground truncate">
-                        {firstPhone}
+                        {/* Three of these are stored as "+972 50-201-0650", and
+                            an unisolated + in an RTL line lands at the far end:
+                            the owner was reading "972 50-201-0650+". */}
+                        <span dir="ltr" className="tabular-nums">
+                          {firstPhone}
+                        </span>
                         {extraCount > 0 && (
                           <span className="text-muted-foreground/60"> +{extraCount}</span>
                         )}
@@ -333,7 +430,28 @@ export default function CustomersPage() {
                       </span>
                     )
                   ) : (
-                    <Chevron className="ms-auto h-4 w-4 text-muted-foreground/30 shrink-0" />
+                    <div className="ms-auto flex shrink-0 items-center gap-1">
+                      {view === 'temperature' && c.temperature.daysSince != null && (
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                          {c.temperature.lastOrder && daysAgoLabel(c.temperature.lastOrder)}
+                        </span>
+                      )}
+                      {dialable(c).length > 0 && (
+                        <button
+                          type="button"
+                          aria-label={`WhatsApp · ${c.name}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openWhatsApp(c);
+                          }}
+                          className="-my-1 flex h-9 w-9 items-center justify-center rounded-lg py-1 text-success transition-colors hover:bg-success/10"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                      <Chevron className="h-4 w-4 text-muted-foreground/30" />
+                    </div>
                   )}
                 </div>
               </div>
@@ -374,6 +492,14 @@ export default function CustomersPage() {
 
       {/* Outside the list, not inside a row: a sheet rendered within the row's
           <Link> turns every tap in it into a navigation. */}
+      {phonePicked && (
+        <PhonePicker
+          customerName={phonePicked.name}
+          phones={dialable(phonePicked)}
+          onClose={() => setPhonePickerFor(null)}
+        />
+      )}
+
       {picked && (
         <HandlerPicker
           customerName={picked.name}
