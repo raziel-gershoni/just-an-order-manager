@@ -1,33 +1,10 @@
+import { normalizePhoneNumber } from './phone-links';
+
+export { normalizePhoneNumber };
+
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 
-/**
- * Normalize an Israeli phone number to E.164 format (without +).
- * Handles: 050-1234567, 0501234567, +972501234567, 972501234567
- */
-export function normalizePhoneNumber(phone: string): string | null {
-  // Strip every non-digit: spaces, dashes, parens, +, and — crucially —
-  // invisible bidi-control marks (U+202A–202E, U+200E/200F). Those get baked
-  // into a number when it's typed or pasted into an RTL/Hebrew field; the old
-  // character-class strip left them in place, so a valid number like
-  // "‭051-2774420‬" normalized to null and the send failed silently.
-  let digits = phone.replace(/\D/g, '');
-
-  // Tolerate an international 00 prefix: 00972… → 972…
-  if (digits.startsWith('00')) digits = digits.slice(2);
-
-  // Already in international format
-  if (digits.startsWith('972') && digits.length === 12) {
-    return digits;
-  }
-
-  // Israeli local format: 0XX-XXXXXXX
-  if (digits.startsWith('0') && digits.length === 10) {
-    return '972' + digits.slice(1);
-  }
-
-  return null;
-}
 
 export async function sendWhatsAppTemplate(
   to: string,
