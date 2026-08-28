@@ -1,4 +1,5 @@
 import { getBot } from './bot';
+import { outboundAllowed, logSuppressed } from './outbound';
 import { InlineKeyboard } from 'grammy';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
@@ -62,6 +63,14 @@ async function sendToRecipients(
   messageFn: (lang: 'en' | 'he') => string,
   replyMarkup?: InlineKeyboard
 ): Promise<{ sent: number; failed: number }> {
+  // A branch isolates the database, not Telegram. Without this, testing a
+  // delivery against a scratch branch messages the real owner and the real
+  // baker about an order that does not exist outside it.
+  if (!outboundAllowed()) {
+    logSuppressed(`Telegram message to ${recipients.length} recipient(s)`);
+    return { sent: 0, failed: 0 };
+  }
+
   const results = await Promise.allSettled(
     recipients.map((r) =>
       getBot().api.sendMessage(r.chatId, messageFn(r.language), {

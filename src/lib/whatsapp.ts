@@ -1,4 +1,5 @@
 import { normalizePhoneNumber } from './phone-links';
+import { outboundAllowed, logSuppressed } from './outbound';
 
 export { normalizePhoneNumber };
 
@@ -17,6 +18,13 @@ export async function sendWhatsAppTemplate(
   headerImageUrl?: string
 ): Promise<boolean> {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) return false;
+
+  // Same reason as the Telegram guard: a scratch branch isolates rows, not the
+  // customer's phone.
+  if (!outboundAllowed()) {
+    logSuppressed(`WhatsApp template "${templateName}"`);
+    return false;
+  }
 
   const normalized = normalizePhoneNumber(to);
   if (!normalized) {
