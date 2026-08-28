@@ -733,6 +733,12 @@ function PaymentOptions({
           )}
         </div>
       )}
+
+      {/* The two actions look alike and are not: one records money and moves
+          the balance, the other only stops the order asking. Say which. */}
+      {showMarkPaid && !showPaymentInput && (
+        <p className="text-[11px] text-muted-foreground">{t('orders.mark_paid_hint')}</p>
+      )}
     </div>
   );
 }
