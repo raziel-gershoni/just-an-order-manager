@@ -1,4 +1,5 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
+import { outboundAllowed, logSuppressed } from '@/lib/outbound';
 import { db } from '@/db';
 import { customers, customerPhones } from '@/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
@@ -58,6 +59,12 @@ export const POST = withGroup(async (request, auth, groupId) => {
       if (addr) lines.push(`ADR;TYPE=HOME:;;${esc(addr)};;;;`);
       lines.push('END:VCARD');
       const vcard = lines.join('\n').slice(0, 2048);
+      // Also reaches getBot() directly. Self-directed, but still a live send
+      // that would push scratch-database names and addresses into a real chat.
+      if (!outboundAllowed()) {
+        logSuppressed(`contact card for ${p.phone}`);
+        continue;
+      }
       await getBot().api.sendContact(auth.dbUser.telegramId, p.phone, firstName, {
         ...(lastName ? { last_name: lastName } : {}),
         vcard,

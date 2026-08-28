@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { outboundAllowed, logSuppressed } from '@/lib/outbound';
 import { db } from '@/db';
 import {
   groups,
@@ -103,6 +104,13 @@ async function handler(request: Request) {
         }
 
         try {
+          // Reaches getBot() directly rather than through notifications.ts, so
+          // it needs its own check — this is the send that would message every
+          // member of every group.
+          if (!outboundAllowed()) {
+            logSuppressed(`weekly summary to ${member.telegramId}`);
+            continue;
+          }
           await getBot().api.sendMessage(member.telegramId, lines.join('\n'), {
             parse_mode: 'HTML',
           });

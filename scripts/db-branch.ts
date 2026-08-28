@@ -18,18 +18,26 @@ config({ path: '.env.local', quiet: true });
  *   npx tsx scripts/db-branch.ts list
  *   npx tsx scripts/db-branch.ts drop     # removes every scratch branch
  *
- * Then point a dev server at it — process env beats the .env files:
- *   DATABASE_URL="$(npx tsx scripts/db-branch.ts create --quiet)" npx next dev
+ * Then point a dev server at it. DISABLE_OUTBOUND is not optional: the branch
+ * isolates rows, not Telegram or WhatsApp, and several send paths sit outside
+ * the notification layer entirely.
+ *   DATABASE_URL="$(npx tsx scripts/db-branch.ts create --quiet)" DISABLE_OUTBOUND=1 npx next dev
  *
  * Two guards, because this key can delete branches: nothing is ever deleted
  * unless its name carries the scratch prefix AND it is not the default branch.
  *
- * IMPORTANT: the database is branched, the outside world is not. Telegram,
- * WhatsApp and QStash still hit their real endpoints, so a transition into
- * `ready` or `cancelled` will message actual people no matter which database
- * is behind it. Branch freely for anything that only touches rows; for the
- * paths that notify, pass notifyCustomer:false and know the staff Telegram
- * message still goes out.
+ * IMPORTANT: the database is branched, the outside world is not, and the
+ * boundary is leakier than it looks. Even with DISABLE_OUTBOUND=1, an audit on
+ * 2026-08-28 found that a local server pointed at a branch can still reach
+ * outside in ways the flag does not cover:
+ *   - `npm run build` runs scripts/provision-schedules.ts, which upserts the
+ *     LIVE QStash cron registry using the local CRON_SECRET. Never build here.
+ *   - Vercel Blob deletes are permanent and blobs are not branchable, so
+ *     removing a photo from branch data destroys the real one. Inert only
+ *     because BLOB_READ_WRITE_TOKEN is absent locally.
+ *   - `delivered` is not database-only: createNextRecurringOrder notifies.
+ *
+ * Before assuming any path is silent, grep it for `notify` and `getBot`.
  */
 
 const API = 'https://console.neon.tech/api/v2';
