@@ -709,7 +709,7 @@ function PaymentOptions({
           </div>
         </div>
       ) : (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex flex-wrap items-start gap-2">
           {hasEnoughCredit && (
             <Button className="flex-1" loading={submittingPay} onClick={() => onPayAction('credit')}>
               {t('orders.deduct_credit')}
@@ -723,21 +723,28 @@ function PaymentOptions({
             {t('orders.customer_paid')}
           </Button>
           {showMarkPaid ? (
-            <Button variant="ghost" className="flex-1" loading={submittingPay} onClick={() => onPayAction('mark_paid')}>
-              {t('orders.mark_paid')}
-            </Button>
+            /* The caption belongs to this button, not to the row: the two
+               actions look alike and are not — one records money and moves the
+               balance, this one only stops the order asking. */
+            <div className="flex flex-1 flex-col items-center gap-1">
+              <Button
+                variant="ghost"
+                className="w-full"
+                loading={submittingPay}
+                onClick={() => onPayAction('mark_paid')}
+              >
+                {t('orders.mark_paid')}
+              </Button>
+              <span className="text-center text-[11px] leading-tight text-muted-foreground">
+                {t('orders.mark_paid_hint')}
+              </span>
+            </div>
           ) : (
             <Button variant="danger" className="flex-1" loading={submittingPay} onClick={() => onPayAction('unpaid')}>
               {t('orders.not_yet_paid')}
             </Button>
           )}
         </div>
-      )}
-
-      {/* The two actions look alike and are not: one records money and moves
-          the balance, the other only stops the order asking. Say which. */}
-      {showMarkPaid && !showPaymentInput && (
-        <p className="text-[11px] text-muted-foreground">{t('orders.mark_paid_hint')}</p>
       )}
     </div>
   );

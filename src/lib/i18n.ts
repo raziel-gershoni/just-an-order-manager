@@ -464,7 +464,7 @@ const translations: Record<string, string> = {
   'orders.covered_by_credit': 'כוסה מקרדיט',
   'orders.payment_recorded': 'תשלום נרשם!',
   'orders.mark_paid': 'סגור בלי תשלום',
-  'orders.mark_paid_hint': 'סגירה בלי תשלום לא משנה את היתרה',
+  'orders.mark_paid_hint': 'היתרה לא תשתנה',
   'orders.deliver_and_pay': 'מסור ורשום תשלום',
 
   // Order edit
