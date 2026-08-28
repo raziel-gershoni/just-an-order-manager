@@ -468,6 +468,7 @@ const translations: Record<string, string> = {
 
   // Order edit
   'orders.edit': 'עריכה',
+  'orders.undo_to': ':חזרה ל',
   'orders.updated': 'הזמנה עודכנה!',
   'orders.update_failed': 'עדכון ההזמנה נכשל',
   'form.update_order': 'עדכן הזמנה',

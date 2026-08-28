@@ -13,7 +13,8 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft, Undo2 } from 'lucide-react';
+import { ORDER_STATUS_REVERSALS } from '@/lib/constants';
 import { useGroup } from '@/hooks/useGroup';
 import { buildWazeLink } from '@/lib/delivery';
 import { groupByKind } from '@/lib/recipe';
@@ -72,6 +73,9 @@ interface OrderDetail {
   customerDeliveryNotes: string | null;
 }
 
+// Forward actions only — the primary buttons. Reversals come from the shared
+// state machine so the undo row and the server can never disagree about what
+// is safe to walk back.
 const statusActions: Record<string, string[]> = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['baking', 'ready', 'cancelled'],
@@ -263,6 +267,7 @@ export default function OrderDetailPage() {
 
   const hasEnoughCredit = balance !== null && balance >= order.totalPrice;
   const actions = statusActions[order.status] || [];
+  const reversals = ORDER_STATUS_REVERSALS[order.status] ?? [];
   const nonDeliverActions = actions.filter((s) => s !== 'delivered');
   const canDeliver = actions.includes('delivered');
 
@@ -273,6 +278,28 @@ export default function OrderDetailPage() {
         {/* Status Flow */}
         <Card>
           <StatusFlow status={order.status} labels={statusLabels} />
+
+          {/* Quietly subordinate to the forward buttons: this is a correction,
+              not a step in the flow. Only appears where stepping back sends
+              nothing and charges nothing. */}
+          {reversals.length > 0 && (
+            <div className="-mt-2 flex flex-wrap items-center justify-center gap-1 pb-1">
+              <span className="text-xs text-muted-foreground">{t('orders.undo_to')}</span>
+              {reversals.map((s) => (
+                <Button
+                  key={s}
+                  size="sm"
+                  variant="ghost"
+                  disabled={updating}
+                  onClick={() => handleStatusAction(s)}
+                  className="h-8 gap-1 px-2 text-xs"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  {translate(`status.${s}`, lang)}
+                </Button>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Next recurring order — created just now on delivery, links to it */}
