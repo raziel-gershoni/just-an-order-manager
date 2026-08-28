@@ -209,5 +209,9 @@ async function sendBakingSummary(groupId: number, today: string, stats: Stats) {
   }
 }
 
-export const GET = handler;
+// POST only. QStash calls these with POST (Upstash-Method: POST in
+// scripts/provision-schedules.ts) and there are no Vercel crons — vercel.json
+// is empty — so nothing needs GET. Exporting it meant the secret in a URL bar
+// was enough to fire the job from a browser tab; the weekly summary messages
+// every member of every group.
 export const POST = handler;

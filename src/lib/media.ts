@@ -16,11 +16,18 @@ export async function uploadImage(
   return { url: blob.url, pathname: blob.pathname };
 }
 
-/** Remove a blob by its pathname (or URL). Best-effort — never throws. */
-export async function deleteImage(pathname: string): Promise<void> {
+/**
+ * Remove a blob by its pathname (or URL). Never throws, but says whether it
+ * worked — the caller is about to delete the row that records where the blob
+ * lives, and doing that after a failed delete strands the file in storage with
+ * nothing left pointing at it. A blob delete is permanent and there is no undo.
+ */
+export async function deleteImage(pathname: string): Promise<boolean> {
   try {
     await del(pathname);
+    return true;
   } catch (err) {
-    console.error('[media] delete failed:', err);
+    console.error('[media] delete failed for', pathname, err);
+    return false;
   }
 }

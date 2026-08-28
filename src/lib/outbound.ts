@@ -1,22 +1,15 @@
 /**
  * Whether this process may send messages to real people.
  *
- * A scratch database branch isolates rows; it does not isolate Telegram or
- * WhatsApp. Delivering a recurring order against a branch still messaged the
- * owner and the baker about an order that existed only on the branch, because
- * `createNextRecurringOrder` calls `notifyNewOrder` two levels down.
+ * Local development points at the production database, so anything that runs
+ * here can message real people. Set this when poking at the app locally and
+ * every Telegram and WhatsApp send is suppressed and logged instead.
  *
- * The first version of this guard derived the answer by reading `.env.local`
- * and comparing its DATABASE_URL to the running one. That was worse than the
- * problem: a literal `readFileSync('.env.local')` is statically traced by
- * Vercel's bundler, which duly added the secrets file to the copy manifest of
- * eleven deployed routes — and on a `--prebuilt` deploy it would have shipped,
- * then compared a laptop's connection string against production's and muted
- * every real notification the bakery sends. It also failed open in every
- * ambiguous case: wrong working directory, an `export` prefix, an unset var.
- *
- * So it is an explicit flag now. No filesystem, nothing for a bundler to
- * follow, and only one way to read it.
+ * An earlier version derived the answer by reading `.env.local`. That was
+ * worse than the problem: a literal `readFileSync('.env.local')` is statically
+ * traced by Vercel's bundler, which added the secrets file to the copy
+ * manifest of eleven deployed routes. An explicit flag has nothing for a
+ * bundler to follow and only one way to be read.
  *
  *   DISABLE_OUTBOUND=1 npx next dev
  */

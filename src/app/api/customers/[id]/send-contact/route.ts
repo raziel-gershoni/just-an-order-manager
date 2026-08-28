@@ -59,8 +59,9 @@ export const POST = withGroup(async (request, auth, groupId) => {
       if (addr) lines.push(`ADR;TYPE=HOME:;;${esc(addr)};;;;`);
       lines.push('END:VCARD');
       const vcard = lines.join('\n').slice(0, 2048);
-      // Also reaches getBot() directly. Self-directed, but still a live send
-      // that would push scratch-database names and addresses into a real chat.
+      // Reaches getBot() directly rather than through notifications.ts, so it
+      // needs its own check — this pushes real names, numbers and home
+      // addresses into a Telegram chat.
       if (!outboundAllowed()) {
         logSuppressed(`contact card for ${p.phone}`);
         continue;

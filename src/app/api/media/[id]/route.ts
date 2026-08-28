@@ -54,9 +54,15 @@ export const DELETE = withGroup(async (request, auth, groupId) => {
     .limit(1);
   if (!asset) return errorResponse('Not found', 404);
 
+  // Blob first, row second, and only if the blob actually went. Dropping the
+  // row after a failed delete leaves the file in storage with nothing pointing
+  // at it — still public, still billed, and no longer findable from the app.
+  if (!(await deleteImage(asset.blobPathname))) {
+    return errorResponse('Could not remove the image file — nothing was deleted', 502);
+  }
+
   // FK references (hero/logo/bread image) are ON DELETE SET NULL, so deleting
-  // the row clears them automatically. Remove the blob too.
-  await deleteImage(asset.blobPathname);
+  // the row clears them automatically.
   await db.delete(mediaAssets).where(eq(mediaAssets.id, id));
 
   revalidatePublicSite(groupId);

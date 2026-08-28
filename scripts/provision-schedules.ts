@@ -117,6 +117,15 @@ async function upsert(
 }
 
 async function main() {
+  // Vercel production deploys only. This rewrites the LIVE cron registry and
+  // stamps each schedule with whatever CRON_SECRET is in scope — run from a
+  // laptop it would point production's crons at a local secret, and every job
+  // would start returning 401 with the `|| true` in the build script hiding it.
+  if (process.env.VERCEL_ENV !== 'production') {
+    console.log('[schedules] skipped — not a Vercel production deploy');
+    return;
+  }
+
   const token = process.env.QSTASH_TOKEN;
   const cronSecret = process.env.CRON_SECRET;
   if (!token || !cronSecret) {
