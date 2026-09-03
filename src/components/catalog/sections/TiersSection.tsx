@@ -6,13 +6,8 @@ import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
-import {
-  TierOverrideEditor,
-  TIER_PRICE,
-  canonicalTierPrice,
-  tierGroups,
-  tierKey,
-} from '../TierOverrideEditor';
+import { PRICE_INPUT, canonicalOverridePrice } from '@/lib/pricing';
+import { TierOverrideEditor, tierGroups, tierKey } from '../TierOverrideEditor';
 import type { Tier, TypeDetailSize } from '../types';
 
 type TierGroups = ReturnType<typeof tierGroups>;
@@ -79,20 +74,18 @@ export function TiersSection({
     });
   }, [savedKey]);
 
-  // Dirty means "the database does not hold this", not "the text differs".
-  // Both sides go through canonicalTierPrice: a typed 9 and a stored 9.00 are
-  // the same row, and so are a typed default and no row at all. Comparing the
-  // raw strings left the section dirty forever after a successful save, because
-  // numeric(10,2) never hands back the text that was typed into it.
+  // Dirty means "saving would change the row": what the save would store, put
+  // against what the server actually holds. A typed 9 and a stored 9.00 are the
+  // same row, so the dot clears — comparing the raw strings left the section
+  // dirty forever, because numeric(10,2) never hands back the text typed into
+  // it. Only the draft is canonicalised: a stored row that merely repeats the
+  // default is still a real row, and the save that deletes it must stay offered.
   const dirty = useMemo(
     () =>
       groups.some(({ size, defaults }) =>
         defaults.some((d) => {
           const key = tierKey(size.id, d.minQty);
-          return (
-            canonicalTierPrice(draft[key] ?? '', d.price) !==
-            canonicalTierPrice(saved[key] ?? '', d.price)
-          );
+          return canonicalOverridePrice(draft[key] ?? '', d.price) !== (saved[key] ?? '');
         })
       ),
     [groups, draft, saved]
@@ -103,7 +96,7 @@ export function TiersSection({
     defaults
       .filter((d) => {
         const raw = (draft[tierKey(size.id, d.minQty)] ?? '').trim();
-        return raw !== '' && !TIER_PRICE.test(raw);
+        return raw !== '' && !PRICE_INPUT.test(raw);
       })
       .map((d) => `${size.name} · ${d.minQty}`)
   );
@@ -127,7 +120,7 @@ export function TiersSection({
           // The row as the database would hold it: '' inherits the default, and
           // anything else is already in the two-decimal form the column returns,
           // so what comes back matches what is on screen.
-          const price = canonicalTierPrice(draft[key] ?? '', d.price);
+          const price = canonicalOverridePrice(draft[key] ?? '', d.price);
           const existing = next.find(
             (x) => x.breadSizeId === size.id && x.breadTypeId === typeId && x.minQty === d.minQty
           );
@@ -140,7 +133,7 @@ export function TiersSection({
             continue;
           }
           // Already stored, whatever it was typed as — no write, no new row id.
-          if (existing && canonicalTierPrice(existing.price, d.price) === price) continue;
+          if (existing && canonicalOverridePrice(existing.price, d.price) === price) continue;
 
           const { tier } = await apiFetch<{ tier: Tier }>('/bread-size-tiers', {
             method: 'POST',
@@ -155,6 +148,10 @@ export function TiersSection({
         }
       }
       onSaved(next);
+      // Every box now shows what the row holds: a typed 9 becomes 9.00, and one
+      // that turned out to inherit empties back to its placeholder. The sizes
+      // section reads back the same way after its own save.
+      setDraft(draftFrom(groups, next, typeId));
       toast.success(t('catalog.saved'));
     } catch (e) {
       // Whatever landed before the failure is real; hand it back so the UI
@@ -172,7 +169,7 @@ export function TiersSection({
     (n, { size, defaults }) =>
       n +
       defaults.filter(
-        (d) => canonicalTierPrice(saved[tierKey(size.id, d.minQty)] ?? '', d.price) !== ''
+        (d) => canonicalOverridePrice(saved[tierKey(size.id, d.minQty)] ?? '', d.price) !== ''
       ).length,
     0
   );

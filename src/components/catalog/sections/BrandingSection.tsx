@@ -17,6 +17,25 @@ export interface Branding {
   imageId: number | null;
 }
 
+/**
+ * What the PATCH stores for a branding draft: the custom label is trimmed, and
+ * a label belongs to nothing but the custom badge.
+ *
+ * Used on both sides of the dirty check and as the payload. The badge picker
+ * hands back '' where the row holds null, so tapping the already-selected custom
+ * chip used to raise a שמור for a change nobody made; and a label typed with a
+ * stray space used to sit in the box looking saved while the row held the
+ * trimmed one.
+ */
+function stored(b: Branding) {
+  return {
+    badgeType: b.badgeType,
+    badgeLabel: b.badgeType === 'custom' ? b.badgeLabel?.trim() || null : null,
+    badgeIcon: b.badgeIcon,
+    imageId: b.imageId,
+  };
+}
+
 /** How this bread appears on the public site: one badge and one photo. */
 export function BrandingSection({
   typeId,
@@ -45,7 +64,7 @@ export function BrandingSection({
   useEffect(() => setDraft(branding), [branding]);
 
   const dirty = useMemo(
-    () => JSON.stringify(draft) !== JSON.stringify(branding),
+    () => JSON.stringify(stored(draft)) !== JSON.stringify(stored(branding)),
     [draft, branding]
   );
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -53,16 +72,18 @@ export function BrandingSection({
   async function save() {
     setSaving(true);
     try {
-      await apiFetch(`/bread-types/${typeId}`, {
+      // The route returns the updated row, so the baseline is what was stored
+      // rather than what was typed.
+      const { breadType } = await apiFetch<{ breadType: Branding }>(`/bread-types/${typeId}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          badgeType: draft.badgeType,
-          badgeLabel: draft.badgeType === 'custom' ? draft.badgeLabel?.trim() || null : null,
-          badgeIcon: draft.badgeIcon,
-          imageId: draft.imageId,
-        }),
+        body: JSON.stringify(stored(draft)),
       });
-      onSaved(draft);
+      onSaved({
+        badgeType: breadType.badgeType,
+        badgeLabel: breadType.badgeLabel,
+        badgeIcon: breadType.badgeIcon,
+        imageId: breadType.imageId,
+      });
       toast.success(t('catalog.saved'));
     } catch (e) {
       toast.error(friendlyError(e, t('catalog.save_failed')));

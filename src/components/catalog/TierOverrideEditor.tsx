@@ -1,6 +1,7 @@
 'use client';
 
 import { RotateCcw } from 'lucide-react';
+import { canonicalOverridePrice } from '@/lib/pricing';
 import { cn } from '@/lib/utils';
 
 export type OverrideTier = {
@@ -21,35 +22,6 @@ export type OverrideSize = {
 /** One row's identity in the draft map: a (size, quantity) pair. */
 export function tierKey(sizeId: number, minQty: number): string {
   return `${sizeId}|${minQty}`;
-}
-
-/** The price shape the tiers endpoint accepts; anything else is refused by name. */
-export const TIER_PRICE = /^\d+(\.\d{1,2})?$/;
-
-/**
- * What the database would actually hold for a typed override — '' meaning "no
- * row, inherit the default".
- *
- * Both normalisations here are invisible in the input box and both are fatal to
- * a plain string comparison. `bread_size_tiers.price` is numeric(10,2), so a
- * saved "9" comes back as "9.00"; and a value equal to the size-wide default is
- * not an override at all, so the save deletes the row and the stored value
- * becomes nothing. Comparing raw text against either one left the section
- * permanently dirty after a save that had in fact succeeded — the dot, the
- * שמור and the exit warning all kept insisting on work that was already done.
- *
- * Run it over BOTH sides of the comparison. A legacy row that happens to equal
- * its default is then "nothing to save" rather than a bread that opens dirty.
- *
- * An unparseable value is handed back as typed: it matches nothing, so the
- * section stays dirty and the save refuses it by name.
- */
-export function canonicalTierPrice(value: string, defaultPrice: string): string {
-  const raw = value.trim();
-  if (raw === '') return '';
-  if (!TIER_PRICE.test(raw)) return raw;
-  if (Number(raw) === Number(defaultPrice)) return '';
-  return Number(raw).toFixed(2);
 }
 
 /**
@@ -97,7 +69,7 @@ export function TierOverrideEditor({
           {defaults.map((d) => {
             const key = tierKey(size.id, d.minQty);
             const value = draft[key] ?? '';
-            const overridden = canonicalTierPrice(value, d.price) !== '';
+            const overridden = canonicalOverridePrice(value, d.price) !== '';
             return (
               <div
                 key={key}

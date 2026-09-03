@@ -18,6 +18,32 @@ export function effectivePrice(size: { price: string; priceOverride?: string | n
   return size.priceOverride ?? size.price;
 }
 
+/** The price shape both override endpoints accept; anything else is refused by name. */
+export const PRICE_INPUT = /^\d+(\.\d{1,2})?$/;
+
+/**
+ * What the database would actually hold for a typed override — '' meaning "no
+ * override, follow the base price".
+ *
+ * Both normalisations here are invisible in the input box and both are fatal to
+ * a plain string comparison. Every price column is numeric(10,2), so a saved
+ * "9" comes back as "9.00"; and a value equal to the base price is not an
+ * override at all, so it is stored as nothing. An editor that compares raw text
+ * against either one is left permanently dirty after a save that in fact
+ * succeeded, or — worse — clears its dot while showing a price the row does not
+ * hold. Run it over BOTH sides of any such comparison, and over the payload.
+ *
+ * An unparseable value is handed back as typed: it matches nothing, so the
+ * editor stays dirty and the save refuses it by name.
+ */
+export function canonicalOverridePrice(value: string, basePrice: string): string {
+  const raw = value.trim();
+  if (raw === '') return '';
+  if (!PRICE_INPUT.test(raw)) return raw;
+  if (Number(raw) === Number(basePrice)) return '';
+  return Number(raw).toFixed(2);
+}
+
 export type PricedUnit = {
   breadTypeId: number;
   unitPrice: number; // single (per-unit) shekel price for this (type, size)

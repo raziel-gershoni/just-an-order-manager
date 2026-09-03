@@ -296,6 +296,23 @@ export default function CatalogPage() {
     setShowAddSize(false);
   }
 
+  /**
+   * The bread rows below carry their own copy of each size, loaded once with the
+   * page — which is where their ₪ range comes from. Editing a size in the
+   * catalog left every bread using it quoting the old price until a full reload,
+   * so the catalog and the list have to be updated together.
+   */
+  function syncEnabledSize(id: number, next: Partial<EnabledSize> | null) {
+    setBreadTypes((prev) =>
+      prev.map((bt) => ({
+        ...bt,
+        enabledSizes: next
+          ? bt.enabledSizes.map((s) => (s.id === id ? { ...s, ...next } : s))
+          : bt.enabledSizes.filter((s) => s.id !== id),
+      }))
+    );
+  }
+
   async function saveSize(id: number) {
     if (!editSizeName.trim() || !editSizePrice) return;
     const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
@@ -307,6 +324,7 @@ export default function CatalogPage() {
       }),
     });
     setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
+    syncEnabledSize(id, { name: size.name, weightGrams: size.weightGrams, price: size.price });
     setEditingSizeId(null);
   }
 
@@ -330,6 +348,8 @@ export default function CatalogPage() {
     try {
       await apiFetch(`/bread-sizes/${id}?hard=true`, { method: 'DELETE' });
       setSizes((prev) => prev.filter((s) => s.id !== id));
+      // The endpoint drops the junction rows with it, so no bread offers it now.
+      syncEnabledSize(id, null);
       setEditingSizeId(null);
     } catch {
       toast.error(t('settings.delete_failed'));

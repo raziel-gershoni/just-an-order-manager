@@ -8,8 +8,37 @@ import { useToast } from '@/hooks/useToast';
 import { BadgePicker } from '@/components/site-editor/BadgePicker';
 import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
-import { effectivePrice } from '@/lib/pricing';
+import { PRICE_INPUT, canonicalOverridePrice, effectivePrice } from '@/lib/pricing';
 import type { TypeDetailSize } from '../types';
+
+/**
+ * The rows as this section's PUT leaves them in the database.
+ *
+ * The endpoint is clean-slate and is only sent the enabled sizes, so a disabled
+ * size ends up with no row at all — no override, no badge — while an enabled one
+ * carries a canonical override (numeric(10,2), and nothing at all when it merely
+ * repeats the size's own price) and a trimmed custom label.
+ *
+ * Both the payload and the new baseline are built from this, and the dirty check
+ * runs it over both sides. Handing the raw draft back as the baseline used to
+ * clear the dot while the sheet — and the bread's row in the catalog list, which
+ * is fed the same object — went on showing a per-bread price that
+ * bread_type_sizes never held; raise that size's price later and the bread moved
+ * with it, against what the screen had promised.
+ */
+function stored(rows: TypeDetailSize[]): TypeDetailSize[] {
+  return rows.map((s) => {
+    if (!s.enabled) {
+      return { ...s, priceOverride: null, badgeType: null, badgeLabel: null, badgeIcon: null };
+    }
+    const override = canonicalOverridePrice(s.priceOverride ?? '', s.price);
+    return {
+      ...s,
+      priceOverride: override === '' ? null : override,
+      badgeLabel: s.badgeType === 'custom' ? s.badgeLabel?.trim() || null : null,
+    };
+  });
+}
 
 /**
  * Which sizes this bread comes in, what each costs, and the public-site badge
@@ -45,17 +74,22 @@ export function SizesSection({
 
   useEffect(() => setDraft(sizes), [sizes]);
 
+  // Dirty means "saving would change the row": what the save would store,
+  // against what the server actually holds. A typed 30 against a size priced
+  // 30.00 is not an override and a typed 9 is the 9.00 already stored, so
+  // neither lights up — but a stored override that merely repeats the base
+  // price is still a real row, and clearing it has to remain saveable.
+  const target = useMemo(() => stored(draft), [draft]);
   const dirty = useMemo(
-    () => !isBaker && JSON.stringify(draft) !== JSON.stringify(sizes),
-    [draft, sizes, isBaker]
+    () => !isBaker && JSON.stringify(target) !== JSON.stringify(sizes),
+    [target, sizes, isBaker]
   );
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const enabled = draft.filter((s) => s.enabled);
-  const PRICE = /^\d+(\.\d{1,2})?$/;
   const invalid = enabled.filter((s) => {
     const raw = s.priceOverride?.trim();
-    return !!raw && !PRICE.test(raw);
+    return !!raw && !PRICE_INPUT.test(raw);
   });
 
   function patch(sizeId: number, next: Partial<TypeDetailSize>) {
@@ -63,9 +97,10 @@ export function SizesSection({
   }
 
   function toggle(sizeId: number) {
-    // The override is kept while disabled rather than nulled: only enabled
-    // sizes are sent, so it costs nothing, and an accidental off-then-on tap
-    // used to silently drop a real per-bread price.
+    // The override is kept in the draft rather than nulled, because an
+    // accidental off-then-on tap used to silently drop a real per-bread price.
+    // It survives only until the next save: the PUT is clean slate, so stored()
+    // clears it along with the row the endpoint deletes.
     setDraft((prev) =>
       prev.map((s) => (s.id === sizeId ? { ...s, enabled: !s.enabled } : s))
     );
@@ -84,22 +119,20 @@ export function SizesSection({
       await apiFetch(`/groups/${groupId}/bread-types/${typeId}/sizes`, {
         method: 'PUT',
         body: JSON.stringify({
-          enabled: enabled.map((s) => ({
-            breadSizeId: s.id,
-            // Compared numerically: typing "30" against a default of "30.00"
-            // is not an override, and storing it as one is a lie the pricelist
-            // then has to keep telling.
-            priceOverride:
-              s.priceOverride?.trim() && Number(s.priceOverride) !== Number(s.price)
-                ? s.priceOverride.trim()
-                : null,
-            badgeType: s.badgeType,
-            badgeLabel: s.badgeType === 'custom' ? s.badgeLabel?.trim() || null : null,
-            badgeIcon: s.badgeIcon,
-          })),
+          enabled: target
+            .filter((s) => s.enabled)
+            .map((s) => ({
+              breadSizeId: s.id,
+              priceOverride: s.priceOverride,
+              badgeType: s.badgeType,
+              badgeLabel: s.badgeLabel,
+              badgeIcon: s.badgeIcon,
+            })),
         }),
       });
-      onSaved(draft);
+      // The stored shape, never the draft: what the boxes show now is what a
+      // reopen of this sheet would load.
+      onSaved(target);
       toast.success(t('catalog.saved'));
     } catch (e) {
       toast.error(friendlyError(e, t('catalog.save_failed')));
