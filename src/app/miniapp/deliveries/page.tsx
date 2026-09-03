@@ -48,14 +48,20 @@ export default function DeliveriesPage() {
         method: 'PATCH',
         body: JSON.stringify({ status: 'delivered', notifyCustomer: false }),
       });
+      let alreadyRecorded = false;
       if (collect) {
-        await apiFetch(`/orders/${d.id}/pay`, {
+        const res = await apiFetch<{ alreadyRecorded?: boolean }>(`/orders/${d.id}/pay`, {
           method: 'POST',
           body: JSON.stringify({ action: 'paid', amount: d.amount.toFixed(2) }),
         });
+        alreadyRecorded = !!res.alreadyRecorded;
       }
       setDeliveries((p) => p.filter((x) => x.id !== d.id));
-      toast.success(collect ? t('deliv.collected_done') : t('deliv.delivered_done'));
+      // The delivery is done either way, but cash that was not recorded has to
+      // be said out loud rather than confirmed. A driver has only this tab, so
+      // this one does not send them to a customer card they cannot open.
+      if (alreadyRecorded) toast.error(t('deliv.payment_already'));
+      else toast.success(collect ? t('deliv.collected_done') : t('deliv.delivered_done'));
     } catch {
       toast.error(t('site.save_failed'));
     }

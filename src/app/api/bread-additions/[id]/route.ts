@@ -1,6 +1,6 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadAdditions, breadTypeAdditions } from '@/db/schema';
+import { breadAdditions, breadTypeAdditions, orderItemAdditions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { revalidatePublicSite } from '@/lib/public-site';
@@ -60,22 +60,35 @@ export const DELETE = withAuth(async (request, auth) => {
   const hard = url.searchParams.get('hard') === 'true';
 
   if (hard) {
-    // Junction rows on bread_type_additions reference this; clear them first.
-    // order_item_additions still has its own FK and will block (correctly) if any
-    // historical order line item used this addition.
-    await db.delete(breadTypeAdditions).where(eq(breadTypeAdditions.breadAdditionId, id));
-    // No transactions here: the unlink already removed the addition from the
-    // public modal — purge before the row delete that may still 409 on an order FK.
-    revalidatePublicSite(authz.groupId);
-    try {
-      await db.delete(breadAdditions).where(eq(breadAdditions.id, id));
-      return jsonResponse({ deleted: true });
-    } catch {
+    // order_item_additions blocks this delete, and it used to be discovered only
+    // after every bread had been unlinked from the addition — the addition then
+    // sat in the catalog offered by nothing, while the owner was told the delete
+    // had failed. Ask first; unlink only what is actually going away. There is no
+    // confirmation dialog on this button, which is the other half of why it hurt.
+    const [used] = await db
+      .select({ orderItemId: orderItemAdditions.orderItemId })
+      .from(orderItemAdditions)
+      .where(eq(orderItemAdditions.breadAdditionId, id))
+      .limit(1);
+    if (used) {
       return errorResponse(
         'Cannot delete: addition is used in existing orders. Disable it instead.',
         409
       );
     }
+
+    await db.delete(breadTypeAdditions).where(eq(breadTypeAdditions.breadAdditionId, id));
+    try {
+      await db.delete(breadAdditions).where(eq(breadAdditions.id, id));
+    } catch {
+      revalidatePublicSite(authz.groupId);
+      return errorResponse(
+        'Cannot delete: addition is used in existing orders. Disable it instead.',
+        409
+      );
+    }
+    revalidatePublicSite(authz.groupId);
+    return jsonResponse({ deleted: true });
   }
 
   const [updated] = await db

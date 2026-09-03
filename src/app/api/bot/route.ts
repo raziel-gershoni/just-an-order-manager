@@ -536,13 +536,29 @@ function setupHandlers(bot: import('grammy').Bot) {
         .where(eq(customers.id, order.customerId))
         .limit(1);
       // Shared post-delivery payment sequence (charge + payment + paid + notify).
-      await recordOrderPayment(
+      const { alreadyRecorded } = await recordOrderPayment(
         { id: order.id, groupId: order.groupId, customerId: order.customerId, customerName: customer?.name ?? '' },
         'paid',
         amount
       );
 
-      await ctx.answerCallbackQuery(`✅ ${t('bot.payment_recorded', lang)}`);
+      // These buttons outlive their orders — the unpaid nudge mints a fresh one
+      // every week and Telegram will not let a bot edit a message older than
+      // 48h, so an old ✅ is always tappable. It must never claim to have
+      // recorded a payment it did not write.
+      // show_alert on the warning: a callback toast fades in a few seconds, and
+      // on a multi-order nudge the pressed button just disappears like any other
+      // — pixel-identical to a payment that was recorded. This is the one path
+      // where money changed hands and nothing was written, so it takes a dialog
+      // the owner has to dismiss.
+      if (alreadyRecorded) {
+        await ctx.answerCallbackQuery({
+          text: `⚠️ ${t('bot.payment_already', lang)}`,
+          show_alert: true,
+        });
+      } else {
+        await ctx.answerCallbackQuery(`✅ ${t('bot.payment_recorded', lang)}`);
+      }
       // Rewriting the text is right for the one-order payment dialog, but it
       // would erase a whole unpaid-nudge list; when other orders are still
       // listed, retire just this button and leave the message standing.
@@ -551,7 +567,9 @@ function setupHandlers(bot: import('grammy').Bot) {
         await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });
       } else {
         await ctx.editMessageText(
-          `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
+          alreadyRecorded
+            ? `⚠️ ${t('bot.payment_already', lang)}`
+            : `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
         );
       }
     } else {

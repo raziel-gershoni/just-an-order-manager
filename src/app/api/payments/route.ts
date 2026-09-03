@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { payments, customers } from '@/db/schema';
+import { payments, customers, orders } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { notifyPrepayment, notifyBalanceAlert } from '@/lib/notifications';
@@ -59,6 +59,23 @@ export const POST = withGroup(async (request, _auth, groupId) => {
     .where(and(eq(customers.id, customerId), eq(customers.groupId, groupId)))
     .limit(1);
   if (!customer) return errorResponse('Customer not found', 404);
+
+  // An order id arrives from the client, and everything downstream trusted it:
+  // calculateOrderTotal resolves an order by id alone, so a charge could be
+  // written on this ledger for the total of an order in another group — or
+  // simply the wrong customer's order inside this one. Prove it belongs here
+  // before it is used or stored, the way the pay route already does.
+  if (orderId != null) {
+    const [order] = await db
+      .select({ customerId: orders.customerId })
+      .from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.groupId, groupId)))
+      .limit(1);
+    if (!order) return errorResponse('Order not found', 404);
+    if (order.customerId !== customerId) {
+      return errorResponse('Order belongs to a different customer', 400);
+    }
+  }
 
   // Auto-create the charge (idempotent) when recording a payment against an
   // order that hasn't been charged yet — one charge source of truth.

@@ -78,16 +78,18 @@ export async function ensureOrderCharge(
 
 /**
  * Insert a `payment` row for the order if one doesn't already exist.
- * Idempotent. Returns true if a new row was inserted.
+ * Idempotent. Reports whether a row was written, and what the existing row
+ * holds when one was not — a retry of the same amount is a duplicate request,
+ * while a different amount is money the ledger has not been told about.
  */
 export async function ensureOrderPayment(
   orderId: number,
   groupId: number,
   customerId: number,
   amount: string
-): Promise<boolean> {
+): Promise<{ inserted: boolean; existingAmount?: string }> {
   const [existing] = await db
-    .select({ id: payments.id })
+    .select({ id: payments.id, amount: payments.amount })
     .from(payments)
     .where(
       and(
@@ -98,7 +100,7 @@ export async function ensureOrderPayment(
     )
     .limit(1);
 
-  if (existing) return false;
+  if (existing) return { inserted: false, existingAmount: existing.amount };
 
   await db.insert(payments).values({
     groupId,
@@ -107,7 +109,7 @@ export async function ensureOrderPayment(
     type: 'payment',
     orderId,
   });
-  return true;
+  return { inserted: true };
 }
 
 /**
@@ -115,37 +117,54 @@ export async function ensureOrderPayment(
  * charge/payment/paid-flag/notify sequence lives, shared by the web pay route
  * and the Telegram payment buttons. `mark_paid` just flips the flag; the others
  * ensure the charge (idempotent), record the payment when the customer paid,
- * set paid (false only for 'unpaid'), and notify. Returns the new balance +
- * paid flag. Callers own authorization and the "must be delivered" precondition.
+ * set paid (false only for 'unpaid'), and notify. Callers own authorization and
+ * the "must be delivered" precondition.
+ *
+ * Returns the new balance, the paid flag, and — the part that used to be
+ * swallowed — whether this order already had a payment row, so nothing was
+ * written this time. One payment row per order is the model, but the money is
+ * real: a customer who pays half and settles the rest later would have his
+ * second payment silently dropped while the bot answered "התשלום נרשם: ₪150",
+ * leaving the ledger short and the customer in debt for what he had handed
+ * over. Callers must say so rather than confirm a row that was never inserted.
  */
 export async function recordOrderPayment(
   order: { id: number; groupId: number; customerId: number; customerName: string },
   action: 'paid' | 'credit' | 'unpaid' | 'mark_paid',
   amount?: string
-): Promise<{ balance: string; paid: boolean }> {
+): Promise<{ balance: string; paid: boolean; alreadyRecorded: boolean }> {
   if (action === 'mark_paid') {
     await db.update(orders).set({ paid: true, updatedAt: new Date() }).where(eq(orders.id, order.id));
     const balance = await getCustomerBalance(order.customerId, order.groupId);
-    return { balance, paid: true };
+    return { balance, paid: true, alreadyRecorded: false };
   }
 
   await ensureOrderCharge(order.id, order.groupId, order.customerId);
+  let inserted = false;
+  let alreadyRecorded = false;
   if (action === 'paid' && amount) {
-    await ensureOrderPayment(order.id, order.groupId, order.customerId, amount);
+    const row = await ensureOrderPayment(order.id, order.groupId, order.customerId, amount);
+    inserted = row.inserted;
+    // Only a DIFFERENT amount is an alarm. A tap repeated after a dropped
+    // response asks for the row that is already there, and telling the owner to
+    // go and record the balance would have him credit the order twice.
+    alreadyRecorded = !inserted && Number(row.existingAmount) !== Number(amount);
   }
 
   const paid = action !== 'unpaid';
   await db.update(orders).set({ paid, updatedAt: new Date() }).where(eq(orders.id, order.id));
 
   const balance = await getCustomerBalance(order.customerId, order.groupId);
-  if (action === 'paid' && amount && order.customerName) {
+  // No row written, no announcement: a stale ✅ on an old Telegram message used
+  // to ping both of them a second time for one payment.
+  if (action === 'paid' && amount && order.customerName && inserted) {
     await notifyPrepayment(order.groupId, {
       customerName: order.customerName,
       amount,
       balance: Number(balance),
     });
   }
-  return { balance, paid };
+  return { balance, paid, alreadyRecorded };
 }
 
 /**

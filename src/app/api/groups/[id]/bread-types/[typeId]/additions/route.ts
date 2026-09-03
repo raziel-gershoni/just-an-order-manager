@@ -54,8 +54,27 @@ export const PUT = withAuth(async (request, auth) => {
     }
   }
 
-  // Clean slate: replace the full set of junction rows for this type
-  await db.delete(breadTypeAdditions).where(eq(breadTypeAdditions.breadTypeId, typeId));
+  // Clean slate — but only over the additions this editor could actually see.
+  // The detail GET lists active additions only, so a PAUSED one is never in the
+  // payload, and a delete scoped to the bread alone dropped its link every time
+  // any bread was saved: unpause the addition weeks later and it is quietly no
+  // longer offered on that bread. Requested ids are in scope too, so one paused
+  // between load and save is replaced rather than colliding with its own key.
+  const activeAdditions = await db
+    .select({ id: breadAdditions.id })
+    .from(breadAdditions)
+    .where(and(eq(breadAdditions.groupId, groupId), eq(breadAdditions.isActive, true)));
+  const scope = [...new Set([...activeAdditions.map((a) => a.id), ...parsed.data.enabled])];
+  if (scope.length > 0) {
+    await db
+      .delete(breadTypeAdditions)
+      .where(
+        and(
+          eq(breadTypeAdditions.breadTypeId, typeId),
+          inArray(breadTypeAdditions.breadAdditionId, scope)
+        )
+      );
+  }
 
   if (parsed.data.enabled.length > 0) {
     await db.insert(breadTypeAdditions).values(

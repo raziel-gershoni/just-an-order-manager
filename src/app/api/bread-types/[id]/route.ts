@@ -1,6 +1,12 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadTypes, breadTypeSizes } from '@/db/schema';
+import {
+  breadSizeTiers,
+  breadTypeAdditions,
+  breadTypes,
+  breadTypeSizes,
+  orderItems,
+} from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { revalidatePublicSite } from '@/lib/public-site';
@@ -73,17 +79,37 @@ export const DELETE = withAuth(async (request, auth) => {
   const hard = url.searchParams.get('hard') === 'true';
 
   if (hard) {
-    // Clear junction rows first so the bread_type_sizes FK doesn't block
-    await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, breadTypeId));
-    // No transactions here: purge now, before the row delete that may still 409
-    // on an order FK (the type is gone from the pricelist either way).
-    revalidatePublicSite(breadType.groupId);
-    try {
-      await db.delete(breadTypes).where(eq(breadTypes.id, breadTypeId));
-      return jsonResponse({ deleted: true });
-    } catch {
+    // Ask before destroying anything. This used to clear the size links first "so
+    // the FK doesn't block the delete", but three other tables block it too —
+    // order_items, bread_type_additions and bread_size_tiers, all no-action. A
+    // new bread type auto-links every default addition, so the delete was refused
+    // for practically every bread in the catalog — after its sizes, per-bread
+    // prices, badges and sort order had already been thrown away. Nothing
+    // recreated them, and the owner was told the delete had failed.
+    const [used] = await db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .where(eq(orderItems.breadTypeId, breadTypeId))
+      .limit(1);
+    if (used) {
       return errorResponse('Cannot delete: bread type is used in existing orders. Disable it instead.', 409);
     }
+
+    // Nothing historical depends on it, so the catalog rows that only exist to
+    // describe it go with it. bread_recipes cascades on its own.
+    await db.delete(breadSizeTiers).where(eq(breadSizeTiers.breadTypeId, breadTypeId));
+    await db.delete(breadTypeAdditions).where(eq(breadTypeAdditions.breadTypeId, breadTypeId));
+    await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, breadTypeId));
+    try {
+      await db.delete(breadTypes).where(eq(breadTypes.id, breadTypeId));
+    } catch {
+      // An order placed in the gap between the check and here: the type is
+      // unlinked but still listed, which is the 409 the owner asked for.
+      revalidatePublicSite(breadType.groupId);
+      return errorResponse('Cannot delete: bread type is used in existing orders. Disable it instead.', 409);
+    }
+    revalidatePublicSite(breadType.groupId);
+    return jsonResponse({ deleted: true });
   }
 
   // Soft-delete: deactivate instead of deleting

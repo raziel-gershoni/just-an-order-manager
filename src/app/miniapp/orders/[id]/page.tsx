@@ -73,6 +73,21 @@ interface OrderDetail {
   customerDeliveryNotes: string | null;
 }
 
+/**
+ * What the price box opens on: the goods figure, which is what a custom price
+ * replaces.
+ *
+ * It used to prefill order.totalPrice, which already has the delivery fee in it
+ * — and the fee is then added to the override on the way back out. Saving the
+ * pencil without touching the number grew a ₪220 delivery order to ₪240, then to
+ * ₪260 on the next open, and the customer was charged it: the same total drives
+ * the charge row. The order form has always sent the goods figure here.
+ */
+function goodsPriceInput(order: { totalOverride: string | null; calculatedTotal: number }): string {
+  const goods = order.totalOverride != null ? Number(order.totalOverride) : order.calculatedTotal;
+  return Number.isInteger(goods) ? String(goods) : goods.toFixed(2);
+}
+
 // Forward actions only — the primary buttons. Reversals come from the shared
 // state machine so the undo row and the server can never disagree about what
 // is safe to walk back.
@@ -183,16 +198,20 @@ export default function OrderDetailPage() {
       if (order.status === 'ready') {
         await updateStatus('delivered');
       }
-      const { balance: newBalance, paid } = await apiFetch<{ balance: string; paid: boolean }>(
-        `/orders/${id}/pay`,
-        { method: 'POST', body: JSON.stringify({ action, amount }) }
-      );
+      const { balance: newBalance, paid, alreadyRecorded } = await apiFetch<{
+        balance: string;
+        paid: boolean;
+        alreadyRecorded?: boolean;
+      }>(`/orders/${id}/pay`, { method: 'POST', body: JSON.stringify({ action, amount }) });
       setBalance(Number(newBalance));
       setOrder((prev) => prev ? { ...prev, status: 'delivered', paid } : prev);
       setShowDeliveryPay(false);
       setShowPaymentInput(false);
       setPaymentAmount('');
-      toast.success(action === 'unpaid' ? t('orders.charge_recorded') : t('orders.payment_recorded'));
+      // The order already carries a payment row, so this amount was not stored.
+      // Say it plainly — the ledger is short until it goes on the customer.
+      if (alreadyRecorded) toast.error(t('orders.payment_already'));
+      else toast.success(action === 'unpaid' ? t('orders.charge_recorded') : t('orders.payment_recorded'));
     } catch {
       toast.error(t('orders.update_failed'));
     } finally {
@@ -489,8 +508,12 @@ export default function OrderDetailPage() {
                 <div className="flex items-center gap-2">
                   {order.totalOverride ? (
                     <>
+                      {/* Both figures include the delivery fee, or a ₪20 discount
+                          on a ₪20-fee order struck ₪220 through and printed ₪220
+                          beside it — the same goods-against-total mix-up the
+                          price box carried. */}
                       <span className="line-through text-muted-foreground text-sm tabular-nums">
-                        ₪{order.calculatedTotal.toFixed(0)}
+                        ₪{(order.calculatedTotal + order.deliveryFee).toFixed(0)}
                       </span>
                       <span className="font-bold text-lg tabular-nums">₪{order.totalPrice.toFixed(0)}</span>
                     </>
@@ -500,7 +523,7 @@ export default function OrderDetailPage() {
                   {order.status !== 'delivered' && order.status !== 'cancelled' && (
                     <button
                       className="inline-flex items-center justify-center w-11 h-11 -m-2.5 rounded hover:bg-muted transition-colors"
-                      onClick={() => { setPriceInput(order.totalPrice.toFixed(0)); setShowPriceEdit(true); }}
+                      onClick={() => { setPriceInput(goodsPriceInput(order)); setShowPriceEdit(true); }}
                     >
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
@@ -508,23 +531,32 @@ export default function OrderDetailPage() {
                 </div>
               </div>
               {showPriceEdit && (
-                <div className="flex gap-2 mt-3 animate-expand">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={priceInput}
-                    onChange={(e) => setPriceInput(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button size="sm" disabled={!priceInput} loading={savingPrice} onClick={() => handleSetPrice(priceInput)}>
-                    {t('settings.save')}
-                  </Button>
-                  {order.totalOverride && (
-                    <Button size="sm" variant="ghost" disabled={savingPrice} onClick={() => handleSetPrice(null)}>✕</Button>
+                <div className="mt-3 animate-expand">
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button size="sm" disabled={!priceInput} loading={savingPrice} onClick={() => handleSetPrice(priceInput)}>
+                      {t('settings.save')}
+                    </Button>
+                    {order.totalOverride && (
+                      <Button size="sm" variant="ghost" disabled={savingPrice} onClick={() => handleSetPrice(null)}>✕</Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => setShowPriceEdit(false)}>
+                      {t('payments.cancel')}
+                    </Button>
+                  </div>
+                  {/* On a delivery order the box holds the goods, not the total —
+                      say so, rather than leaving a number that looks ₪20 short. */}
+                  {order.deliveryFee > 0 && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      {t('orders.price_goods_hint')}
+                    </p>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => setShowPriceEdit(false)}>
-                    {t('payments.cancel')}
-                  </Button>
                 </div>
               )}
             </div>
