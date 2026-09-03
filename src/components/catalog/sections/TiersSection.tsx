@@ -6,13 +6,21 @@ import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { friendlyError } from '@/lib/utils';
 import { SectionCard } from '../SectionCard';
-import { TierOverrideEditor, tierGroups, tierKey } from '../TierOverrideEditor';
+import {
+  TierOverrideEditor,
+  TIER_PRICE,
+  canonicalTierPrice,
+  tierGroups,
+  tierKey,
+} from '../TierOverrideEditor';
 import type { Tier, TypeDetailSize } from '../types';
 
+type TierGroups = ReturnType<typeof tierGroups>;
+
 /** Draft state keyed by (size, quantity), seeded from this bread's overrides. */
-function draftFrom(sizes: TypeDetailSize[], tiers: Tier[], typeId: number) {
+function draftFrom(groups: TierGroups, tiers: Tier[], typeId: number) {
   const draft: Record<string, string> = {};
-  for (const { size, defaults } of tierGroups(sizes, tiers)) {
+  for (const { size, defaults } of groups) {
     for (const d of defaults) {
       const override = tiers.find(
         (x) => x.breadSizeId === size.id && x.breadTypeId === typeId && x.minQty === d.minQty
@@ -51,7 +59,8 @@ export function TiersSection({
   const t = useT();
   const toast = useToast();
 
-  const saved = useMemo(() => draftFrom(sizes, tiers, typeId), [sizes, tiers, typeId]);
+  const groups = useMemo(() => tierGroups(sizes, tiers), [sizes, tiers]);
+  const saved = useMemo(() => draftFrom(groups, tiers, typeId), [groups, tiers, typeId]);
   const [draft, setDraft] = useState(saved);
   const [saving, setSaving] = useState(false);
 
@@ -70,16 +79,31 @@ export function TiersSection({
     });
   }, [savedKey]);
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== savedKey, [draft, savedKey]);
+  // Dirty means "the database does not hold this", not "the text differs".
+  // Both sides go through canonicalTierPrice: a typed 9 and a stored 9.00 are
+  // the same row, and so are a typed default and no row at all. Comparing the
+  // raw strings left the section dirty forever after a successful save, because
+  // numeric(10,2) never hands back the text that was typed into it.
+  const dirty = useMemo(
+    () =>
+      groups.some(({ size, defaults }) =>
+        defaults.some((d) => {
+          const key = tierKey(size.id, d.minQty);
+          return (
+            canonicalTierPrice(draft[key] ?? '', d.price) !==
+            canonicalTierPrice(saved[key] ?? '', d.price)
+          );
+        })
+      ),
+    [groups, draft, saved]
+  );
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
-  const groups = tierGroups(sizes, tiers);
-  const PRICE = /^\d+(\.\d{1,2})?$/;
   const invalid = groups.flatMap(({ size, defaults }) =>
     defaults
       .filter((d) => {
         const raw = (draft[tierKey(size.id, d.minQty)] ?? '').trim();
-        return raw !== '' && !PRICE.test(raw);
+        return raw !== '' && !TIER_PRICE.test(raw);
       })
       .map((d) => `${size.name} · ${d.minQty}`)
   );
@@ -100,23 +124,23 @@ export function TiersSection({
       for (const { size, defaults } of groups) {
         for (const d of defaults) {
           const key = tierKey(size.id, d.minQty);
-          const value = (draft[key] ?? '').trim();
+          // The row as the database would hold it: '' inherits the default, and
+          // anything else is already in the two-decimal form the column returns,
+          // so what comes back matches what is on screen.
+          const price = canonicalTierPrice(draft[key] ?? '', d.price);
           const existing = next.find(
             (x) => x.breadSizeId === size.id && x.breadTypeId === typeId && x.minQty === d.minQty
           );
 
-          // Blank or equal to the default → inherit. Unparseable can't reach
-          // here; the guard above refuses the save.
-          const inherits = value === '' || Number(value) === Number(d.price);
-
-          if (inherits) {
+          if (price === '') {
             if (existing) {
               await apiFetch(`/bread-size-tiers/${existing.id}`, { method: 'DELETE' });
               next = next.filter((x) => x.id !== existing.id);
             }
             continue;
           }
-          if (existing?.price === value) continue;
+          // Already stored, whatever it was typed as — no write, no new row id.
+          if (existing && canonicalTierPrice(existing.price, d.price) === price) continue;
 
           const { tier } = await apiFetch<{ tier: Tier }>('/bread-size-tiers', {
             method: 'POST',
@@ -124,7 +148,7 @@ export function TiersSection({
               breadSizeId: size.id,
               breadTypeId: typeId,
               minQty: d.minQty,
-              price: value,
+              price,
             }),
           });
           next = [...next.filter((x) => x.id !== existing?.id), tier];
@@ -142,7 +166,16 @@ export function TiersSection({
     }
   }
 
-  const overrides = Object.entries(saved).filter(([, v]) => v !== '').length;
+  // Counted by the same rule the dot and the row highlight use, so a stored row
+  // that merely matches its default is not advertised as an override.
+  const overrides = groups.reduce(
+    (n, { size, defaults }) =>
+      n +
+      defaults.filter(
+        (d) => canonicalTierPrice(saved[tierKey(size.id, d.minQty)] ?? '', d.price) !== ''
+      ).length,
+    0
+  );
 
   return (
     <SectionCard
