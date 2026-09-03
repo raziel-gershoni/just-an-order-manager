@@ -29,14 +29,17 @@ export const POST = withAuth(async (request, auth) => {
   if (!file.type.startsWith('image/')) return errorResponse('Not an image');
   if (file.size > MAX_BYTES) return errorResponse('Image too large (max 8MB)');
 
-  // Remove the previous logo blob, if any.
   const [existing] = await db
     .select({ logoPathname: groups.logoPathname })
     .from(groups)
     .where(eq(groups.id, groupId))
     .limit(1);
-  if (existing?.logoPathname) await deleteImage(existing.logoPathname);
 
+  // Upload, then point the row at it, and only then drop the old blob. The old
+  // one used to go first, so an upload that failed afterwards left logoUrl
+  // aimed at a file that no longer existed — the sticky header, the hero
+  // fallback and the site's structured data all 404 for every visitor, while
+  // the owner saw nothing but a "save failed" toast.
   const { url, pathname } = await uploadImage(file, groupId);
 
   const [updated] = await db
@@ -44,6 +47,10 @@ export const POST = withAuth(async (request, auth) => {
     .set({ logoUrl: url, logoPathname: pathname })
     .where(eq(groups.id, groupId))
     .returning({ logoUrl: groups.logoUrl });
+
+  if (existing?.logoPathname && existing.logoPathname !== pathname) {
+    await deleteImage(existing.logoPathname);
+  }
 
   revalidatePublicSite(groupId);
   return jsonResponse({ logoUrl: updated.logoUrl }, 201);

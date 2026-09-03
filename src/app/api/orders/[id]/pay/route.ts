@@ -52,6 +52,6 @@ export const POST = withGroup(async (request, auth, groupId) => {
   return jsonResponse({
     balance: result.balance,
     paid: result.paid,
-    alreadyRecorded: result.alreadyRecorded,
+    outcome: result.outcome,
   });
 });

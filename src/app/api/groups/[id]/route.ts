@@ -42,6 +42,12 @@ const DELIVERY_KEYS = [
   'deliveryCities',
 ] as const;
 
+// Everything on this row that the storefront renders. Only the delivery block
+// used to purge the cache, so renaming the bakery or moving the per-addition
+// surcharge from ₪2 to ₪3 left the public pricelist advertising the old figure
+// for up to an hour while the order screen already charged the new one.
+const PUBLIC_KEYS = ['name', 'additionsSurcharge', ...DELIVERY_KEYS] as const;
+
 export const PATCH = withAuth(async (request, auth) => {
   const groupId = Number(new URL(request.url).pathname.split('/').at(-1));
   const membership = auth.memberships.find((m) => m.groupId === groupId);
@@ -53,6 +59,7 @@ export const PATCH = withAuth(async (request, auth) => {
 
   const canManage = membership.role === 'owner' || membership.role === 'manager';
   const touchesDelivery = DELIVERY_KEYS.some((k) => parsed.data[k] !== undefined);
+  const touchesPublic = PUBLIC_KEYS.some((k) => parsed.data[k] !== undefined);
 
   if (parsed.data.name !== undefined && membership.role !== 'owner') {
     return errorResponse('Only owner can edit group name', 403);
@@ -85,7 +92,7 @@ export const PATCH = withAuth(async (request, auth) => {
     .where(eq(groups.id, groupId))
     .returning();
 
-  if (touchesDelivery) revalidatePublicSite(groupId);
+  if (touchesPublic) revalidatePublicSite(groupId);
 
   return jsonResponse({ group: updated });
 });

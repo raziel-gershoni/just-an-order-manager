@@ -113,6 +113,30 @@ export async function ensureOrderPayment(
 }
 
 /**
+ * What happened to the order's payment row, so a caller never confirms money it
+ * did not move. One row per order is the model; the money is real.
+ *
+ *  - `written`   a payment row was inserted.
+ *  - `duplicate` a row for the same amount was already there — a repeated tap
+ *                after a dropped response, not missing money. Report success.
+ *  - `already`   a row exists for a DIFFERENT amount, so this money was NOT
+ *                recorded: half paid on Tuesday, the rest on Wednesday, and the
+ *                second half silently dropped while the bot answered
+ *                "התשלום נרשם: ₪150". The owner has to be told.
+ *  - `undone`    the row that ✅ wrote was removed — the undo of a mistaken tap.
+ *  - `kept`      the order was called unpaid, but its payment row is for some
+ *                other amount, so it was left alone rather than erased.
+ *  - `none`      there was nothing to write or take back.
+ */
+export type PaymentOutcome =
+  | 'written'
+  | 'duplicate'
+  | 'already'
+  | 'undone'
+  | 'kept'
+  | 'none';
+
+/**
  * Apply a post-delivery payment decision to an order — the one place the
  * charge/payment/paid-flag/notify sequence lives, shared by the web pay route
  * and the Telegram payment buttons. `mark_paid` just flips the flag; the others
@@ -120,35 +144,61 @@ export async function ensureOrderPayment(
  * set paid (false only for 'unpaid'), and notify. Callers own authorization and
  * the "must be delivered" precondition.
  *
- * Returns the new balance, the paid flag, and — the part that used to be
- * swallowed — whether this order already had a payment row, so nothing was
- * written this time. One payment row per order is the model, but the money is
- * real: a customer who pays half and settles the rest later would have his
- * second payment silently dropped while the bot answered "התשלום נרשם: ₪150",
- * leaving the ledger short and the customer in debt for what he had handed
- * over. Callers must say so rather than confirm a row that was never inserted.
+ * `unpaid` is also the undo of a mistaken ✅: in Telegram both buttons sit in one
+ * row, so ✅ leaves 📝 standing forever, and it used to answer "סומן לתשלום"
+ * without writing anything — the bogus payment stood and the customer kept a
+ * credit he never earned. The undo only takes back a row for the FULL order
+ * total, which is the only row ✅ can have written. A partial payment recorded
+ * by hand is somebody's actual money: it is kept, and the caller says so.
  */
 export async function recordOrderPayment(
   order: { id: number; groupId: number; customerId: number; customerName: string },
   action: 'paid' | 'credit' | 'unpaid' | 'mark_paid',
   amount?: string
-): Promise<{ balance: string; paid: boolean; alreadyRecorded: boolean }> {
+): Promise<{ balance: string; paid: boolean; outcome: PaymentOutcome }> {
   if (action === 'mark_paid') {
     await db.update(orders).set({ paid: true, updatedAt: new Date() }).where(eq(orders.id, order.id));
     const balance = await getCustomerBalance(order.customerId, order.groupId);
-    return { balance, paid: true, alreadyRecorded: false };
+    return { balance, paid: true, outcome: 'none' };
   }
 
   await ensureOrderCharge(order.id, order.groupId, order.customerId);
-  let inserted = false;
-  let alreadyRecorded = false;
+
+  let outcome: PaymentOutcome = 'none';
+
   if (action === 'paid' && amount) {
     const row = await ensureOrderPayment(order.id, order.groupId, order.customerId, amount);
-    inserted = row.inserted;
-    // Only a DIFFERENT amount is an alarm. A tap repeated after a dropped
-    // response asks for the row that is already there, and telling the owner to
-    // go and record the balance would have him credit the order twice.
-    alreadyRecorded = !inserted && Number(row.existingAmount) !== Number(amount);
+    outcome = row.inserted
+      ? 'written'
+      : Number(row.existingAmount) === Number(amount)
+        ? 'duplicate'
+        : 'already';
+  }
+
+  if (action === 'unpaid') {
+    const [existing] = await db
+      .select({ id: payments.id, amount: payments.amount })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.orderId, order.id),
+          eq(payments.type, 'payment'),
+          eq(payments.groupId, order.groupId)
+        )
+      )
+      .limit(1);
+    if (existing) {
+      const total = await calculateOrderTotal(order.id);
+      if (Number(existing.amount) === total) {
+        await db.delete(payments).where(eq(payments.id, existing.id));
+        outcome = 'undone';
+      } else {
+        // Not ours to erase. A ₪150 against a ₪300 order is money somebody
+        // counted; deleting it would move the balance by an amount nothing
+        // records, and re-tapping ✅ would then re-file the full ₪300.
+        outcome = 'kept';
+      }
+    }
   }
 
   const paid = action !== 'unpaid';
@@ -157,14 +207,14 @@ export async function recordOrderPayment(
   const balance = await getCustomerBalance(order.customerId, order.groupId);
   // No row written, no announcement: a stale ✅ on an old Telegram message used
   // to ping both of them a second time for one payment.
-  if (action === 'paid' && amount && order.customerName && inserted) {
+  if (outcome === 'written' && order.customerName && amount) {
     await notifyPrepayment(order.groupId, {
       customerName: order.customerName,
       amount,
       balance: Number(balance),
     });
   }
-  return { balance, paid, alreadyRecorded };
+  return { balance, paid, outcome };
 }
 
 /**

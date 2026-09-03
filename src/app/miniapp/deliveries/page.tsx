@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useT, useLang } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
@@ -41,20 +41,38 @@ export default function DeliveriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Orders whose status flip already landed this session.
+  const deliveredRef = useRef<Set<number>>(new Set());
+
   async function complete(d: Delivery, collect: boolean) {
+    // The status already landed, which only happens here after a collect whose
+    // PAYMENT failed. "סמן נמסר" then has nothing left to do — and letting it
+    // through would clear the row with a success toast while the cash in the
+    // driver's pocket is still unrecorded. Retrying the collect is the way out.
+    if (!collect && deliveredRef.current.has(d.id)) {
+      toast.error(t('deliv.payment_failed'));
+      return;
+    }
     setBusy(d.id);
     try {
-      await apiFetch(`/orders/${d.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'delivered', notifyCustomer: false }),
-      });
+      // Two calls, and the second one can fail on its own. Once the status has
+      // landed there is no edge out of `delivered`, so a naive retry died on the
+      // FIRST call and the driver was left holding cash beside a row he could
+      // not clear. Remember what already went through and retry only the rest.
+      if (!deliveredRef.current.has(d.id)) {
+        await apiFetch(`/orders/${d.id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'delivered', notifyCustomer: false }),
+        });
+        deliveredRef.current.add(d.id);
+      }
       let alreadyRecorded = false;
       if (collect) {
-        const res = await apiFetch<{ alreadyRecorded?: boolean }>(`/orders/${d.id}/pay`, {
+        const res = await apiFetch<{ outcome?: string }>(`/orders/${d.id}/pay`, {
           method: 'POST',
           body: JSON.stringify({ action: 'paid', amount: d.amount.toFixed(2) }),
         });
-        alreadyRecorded = !!res.alreadyRecorded;
+        alreadyRecorded = res.outcome === 'already';
       }
       setDeliveries((p) => p.filter((x) => x.id !== d.id));
       // The delivery is done either way, but cash that was not recorded has to
@@ -63,7 +81,11 @@ export default function DeliveriesPage() {
       if (alreadyRecorded) toast.error(t('deliv.payment_already'));
       else toast.success(collect ? t('deliv.collected_done') : t('deliv.delivered_done'));
     } catch {
-      toast.error(t('site.save_failed'));
+      // Name the step that failed: "delivered but the payment did not record"
+      // is a different problem, and a different retry, from "nothing happened".
+      toast.error(
+        deliveredRef.current.has(d.id) ? t('deliv.payment_failed') : t('site.save_failed')
+      );
     }
     setBusy(null);
   }

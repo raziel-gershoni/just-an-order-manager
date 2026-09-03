@@ -64,7 +64,7 @@ async function handler(request: Request) {
     return NextResponse.json({ ok: false, error: 'load-groups-failed' });
   }
 
-  const stats = { sent: 0, failed: 0, skippedOptOut: 0, skippedDup: 0, skippedNoPhone: 0 };
+  const stats = { sent: 0, failed: 0, errored: 0, skippedOptOut: 0, skippedDup: 0, skippedNoPhone: 0 };
   const startOfToday = new Date(`${dayStr(0)}T00:00:00`);
 
   for (const group of allGroups) {
@@ -113,75 +113,89 @@ async function handler(request: Request) {
         if (seen.has(c.customerId)) continue;
         seen.add(c.customerId);
 
-        if (c.optOut) {
-          stats.skippedOptOut++;
-          continue;
-        }
+        // Per customer, so one bad query cannot mute the rest of the run. The
+        // only try used to wrap this whole loop: a throw on the third customer
+        // skipped the fourth, fifth and sixth, and the route still answered ok
+        // so QStash never retried — and the Sun/Wed windows are disjoint, so
+        // nothing else would ever cover those deliveries. The morning cron
+        // already isolates per recipient for exactly this reason.
+        try {
+          if (c.optOut) {
+            stats.skippedOptOut++;
+            continue;
+          }
 
-        // Dedup: skip if this customer already got a recurring reminder today.
-        // This serializes SEQUENTIAL re-deliveries (the realistic QStash retry).
-        // Two genuinely-overlapping deliveries could both pass this check before
-        // either inserts — accepted here: runs are tiny (a few recurring
-        // customers) and finish in seconds, far under maxDuration, so QStash
-        // never times out to trigger an overlapping redelivery in the first place.
-        const [dup] = await db
-          .select({ id: reminderSends.id })
-          .from(reminderSends)
-          .where(
-            and(
-              eq(reminderSends.customerId, c.customerId),
-              eq(reminderSends.occasion, 'recurring'),
-              gte(reminderSends.sentAt, startOfToday)
+          // Dedup: skip if this customer already got a recurring reminder today.
+          // This serializes SEQUENTIAL re-deliveries (the realistic QStash retry).
+          // Two genuinely-overlapping deliveries could both pass this check before
+          // either inserts — accepted here: runs are tiny (a few recurring
+          // customers) and finish in seconds, far under maxDuration, so QStash
+          // never times out to trigger an overlapping redelivery in the first place.
+          const [dup] = await db
+            .select({ id: reminderSends.id })
+            .from(reminderSends)
+            .where(
+              and(
+                eq(reminderSends.customerId, c.customerId),
+                eq(reminderSends.occasion, 'recurring'),
+                gte(reminderSends.sentAt, startOfToday)
+              )
             )
-          )
-          .limit(1);
-        if (dup) {
-          stats.skippedDup++;
-          continue;
-        }
+            .limit(1);
+          if (dup) {
+            stats.skippedDup++;
+            continue;
+          }
 
-        // Notifiable phones (id + number) — respects the per-phone notify flag.
-        const phones = await db
-          .select({ id: customerPhones.id, phone: customerPhones.phone })
-          .from(customerPhones)
-          .where(and(eq(customerPhones.customerId, c.customerId), eq(customerPhones.notify, true)))
-          .orderBy(asc(customerPhones.sortOrder));
-        if (phones.length === 0) {
-          stats.skippedNoPhone++;
-          continue;
-        }
+          // Notifiable phones (id + number) — respects the per-phone notify flag.
+          const phones = await db
+            .select({ id: customerPhones.id, phone: customerPhones.phone })
+            .from(customerPhones)
+            .where(and(eq(customerPhones.customerId, c.customerId), eq(customerPhones.notify, true)))
+            .orderBy(asc(customerPhones.sortOrder));
+          if (phones.length === 0) {
+            stats.skippedNoPhone++;
+            continue;
+          }
 
-        // Rotate the template per customer (usually just one recurring template).
-        const [last] = await db
-          .select({ templateId: reminderSends.templateId })
-          .from(reminderSends)
-          .where(and(eq(reminderSends.customerId, c.customerId), eq(reminderSends.occasion, 'recurring')))
-          .orderBy(desc(reminderSends.sentAt))
-          .limit(1);
-        const template = pickNextTemplate(templates, last?.templateId ?? null);
-        if (!template) continue;
+          // Rotate the template per customer (usually just one recurring template).
+          const [last] = await db
+            .select({ templateId: reminderSends.templateId })
+            .from(reminderSends)
+            .where(and(eq(reminderSends.customerId, c.customerId), eq(reminderSends.occasion, 'recurring')))
+            .orderBy(desc(reminderSends.sentAt))
+            .limit(1);
+          const template = pickNextTemplate(templates, last?.templateId ?? null);
+          if (!template) continue;
 
-        // {{1}} = this order's items, single comma-joined line (no newline).
-        const summary = await buildOrderItemsSummary(c.orderId);
-        if (!summary) {
-          // A recurring order should always have items; guard so a malformed one
-          // never sends a blank {{1}} (which Meta would reject anyway).
-          console.warn(`[cron/recurring-reminder] order ${c.orderId} has no items — skipping`);
-          continue;
-        }
+          // {{1}} = this order's items, single comma-joined line (no newline).
+          const summary = await buildOrderItemsSummary(c.orderId);
+          if (!summary) {
+            // A recurring order should always have items; guard so a malformed one
+            // never sends a blank {{1}} (which Meta would reject anyway).
+            console.warn(`[cron/recurring-reminder] order ${c.orderId} has no items — skipping`);
+            continue;
+          }
 
-        for (const ph of phones) {
-          const ok = await sendWhatsAppTemplate(ph.phone, template.metaTemplateName, 'he', [summary]);
-          await db.insert(reminderSends).values({
-            groupId: group.id,
-            customerId: c.customerId,
-            phoneId: ph.id,
-            templateId: template.id,
-            occasion: 'recurring',
-            status: ok ? 'sent' : 'failed',
-          });
-          if (ok) stats.sent++;
-          else stats.failed++;
+          for (const ph of phones) {
+            const ok = await sendWhatsAppTemplate(ph.phone, template.metaTemplateName, 'he', [summary]);
+            await db.insert(reminderSends).values({
+              groupId: group.id,
+              customerId: c.customerId,
+              phoneId: ph.id,
+              templateId: template.id,
+              occasion: 'recurring',
+              status: ok ? 'sent' : 'failed',
+            });
+            if (ok) stats.sent++;
+            else stats.failed++;
+          }
+        } catch (err) {
+          stats.errored++;
+          console.error(
+            `[cron/recurring-reminder] customer ${c.customerId} failed:`,
+            err instanceof Error ? err.message : err
+          );
         }
       }
     } catch (err) {

@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
+import { friendlyError } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -106,11 +107,17 @@ export default function RemindersPage() {
   }
 
   async function toggleActive(tpl: Template) {
-    const { template } = await apiFetch<{ template: Template }>(`/reminder-templates/${tpl.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isActive: !tpl.isActive }),
-    });
-    setTemplates((prev) => prev.map((x) => (x.id === template.id ? template : x)));
+    try {
+      const { template } = await apiFetch<{ template: Template }>(`/reminder-templates/${tpl.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive: !tpl.isActive }),
+      });
+      setTemplates((prev) => prev.map((x) => (x.id === template.id ? template : x)));
+    } catch (e) {
+      // Silently nothing-happened is the worst answer for a switch that decides
+      // whether customers get messaged at all.
+      toast.error(friendlyError(e, t('reminders.template_toggle_failed')));
+    }
   }
 
   async function remove(tpl: Template) {
@@ -118,8 +125,12 @@ export default function RemindersPage() {
       await apiFetch(`/reminder-templates/${tpl.id}`, { method: 'DELETE' });
       setTemplates((prev) => prev.filter((x) => x.id !== tpl.id));
       toast.success(t('reminders.template_deleted'));
-    } catch {
-      toast.error(t('reminders.delete_has_history'));
+    } catch (e) {
+      // 409 is the real "it has history"; anything else is a request that never
+      // landed, and blaming history for a dropped connection sends the owner
+      // looking for a problem that isn't there.
+      const refused = (e as { status?: number })?.status === 409;
+      toast.error(refused ? t('reminders.delete_has_history') : t('reminders.template_delete_failed'));
     }
   }
 

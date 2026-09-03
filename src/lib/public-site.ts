@@ -369,10 +369,17 @@ export async function getPublicSite(
   try {
     return await assembleSite(groupId);
   } catch (err) {
-    // No DB at build time / transient error → render the "coming soon" state
-    // rather than crashing the route. ISR retries on the next revalidation.
     console.error('[public-site] assemble failed:', err);
-    return null;
+    // Rethrow. This used to return null — which is also what an unpublished
+    // site returns — so one transient neon-http rejection rendered the "coming
+    // soon" placeholder SUCCESSFULLY, and ISR then cached that as the site for
+    // the next hour, noindex and all. A failed render keeps the last good page
+    // instead. The build prerenders this route, but migrations run before it,
+    // so the database is provably reachable by then; if it somehow isn't, a
+    // failed build leaves the previous deployment up, which is the outcome we
+    // want anyway. Callers that must never fail (the manifest, the favicon)
+    // catch this themselves.
+    throw err;
   }
 }
 

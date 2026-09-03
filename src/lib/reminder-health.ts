@@ -35,23 +35,45 @@ export interface MissedReminder {
   deliveryDate: string;
 }
 
+export interface ReminderHealth {
+  /** Recurring deliveries that passed unreminded, newest first. Empty is normal. */
+  missed: MissedReminder[];
+  /**
+   * Why nothing landed. 'delivery' when the cron ran and every send failed —
+   * an expired WhatsApp token, a paused template, a customer who blocked the
+   * number; 'schedule' when there were no attempts at all. The warning used to
+   * blame the schedule either way, which sent the owner to re-check three
+   * healthy QStash entries every morning.
+   */
+  cause: 'schedule' | 'delivery';
+}
+
 /**
- * Recurring deliveries that passed unreminded, newest first — empty whenever
- * the feature is off, nothing was due, or the cron has sent anything recently.
- * Empty is the normal answer; a non-empty one means the schedule needs looking at.
+ * Recurring deliveries that passed unreminded — empty whenever the feature is
+ * off, nothing was due, or the cron has actually delivered something recently.
+ * A non-empty answer means the reminders need looking at, and `cause` says
+ * where to look.
  */
 export async function findMissedRecurringReminders(
   groupId: number
-): Promise<MissedReminder[]> {
+): Promise<ReminderHealth> {
   const [group] = await db
     .select({ enabled: groups.recurringRemindersEnabled })
     .from(groups)
     .where(eq(groups.id, groupId))
     .limit(1);
-  if (!group?.enabled) return [];
+  if (!group?.enabled) return { missed: [], cause: 'schedule' };
 
-  const [alive] = await db
-    .select({ n: sql<number>`COUNT(*)` })
+  // status='sent', not merely a row. The cron writes a row for every attempt,
+  // failures included — so when the WhatsApp token expired, every send failed,
+  // the rows kept appearing, and this probe reported the schedule alive for the
+  // whole outage it exists to catch. A run where nothing lands is exactly the
+  // silence the owner needs told about.
+  const [counts] = await db
+    .select({
+      attempts: sql<number>`COUNT(*)`,
+      landed: sql<number>`COUNT(*) FILTER (WHERE ${reminderSends.status} = 'sent')`,
+    })
     .from(reminderSends)
     .where(
       and(
@@ -60,9 +82,11 @@ export async function findMissedRecurringReminders(
         gte(reminderSends.sentAt, subDays(new Date(), ALIVE_WINDOW_DAYS))
       )
     );
-  if (Number(alive?.n ?? 0) > 0) return [];
+  if (Number(counts?.landed ?? 0) > 0) return { missed: [], cause: 'schedule' };
+  const cause: 'schedule' | 'delivery' =
+    Number(counts?.attempts ?? 0) > 0 ? 'delivery' : 'schedule';
 
-  return db
+  const missed = await db
     .select({
       orderId: orders.id,
       customerName: customers.name,
@@ -92,4 +116,6 @@ export async function findMissedRecurringReminders(
           deliveryDate: r.deliveryDate,
         }))
     );
+
+  return { missed, cause };
 }

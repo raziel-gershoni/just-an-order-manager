@@ -351,18 +351,32 @@ export function RecipeEditor({
           })),
         }),
       });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('settings.recipe_save_failed'));
+      setSaving(false);
+      return;
+    }
+
+    // Stored. Anything that fails from here is a stale screen, not a lost
+    // recipe — reporting "save failed" would send the owner off to re-enter
+    // something the database already has.
+    try {
       const fresh = await apiFetch<{ recipe: FetchedRecipe | null }>(
         `/bread-types/${breadTypeId}/recipe`
       );
       setRecipe(fresh.recipe);
-      setEditing(false);
-      setDisplayWeight(String(refW));
-      setShowGrams(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('settings.recipe_save_failed'));
-    } finally {
+    } catch {
+      // Stay open, showing the rows that were just saved. Closing would put the
+      // PRE-save recipe back on the card — and the next edit would seed from it
+      // and write the old ingredient list back over what the database accepted.
+      toast.error(t('settings.recipe_reload_failed'));
       setSaving(false);
+      return;
     }
+    setEditing(false);
+    setDisplayWeight(String(refW));
+    setShowGrams(false);
+    setSaving(false);
   }
 
   async function deleteRecipe() {

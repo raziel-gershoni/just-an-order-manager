@@ -8,7 +8,7 @@ import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
 import { Copy, Check, ChevronRight, ChevronLeft, ChefHat, Upload, Trash2, Truck, Plus, X } from 'lucide-react';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { getInitial } from '@/lib/name-utils';
@@ -148,12 +148,16 @@ export default function SettingsPage() {
 
   async function createInvite() {
     if (!activeGroupId) return;
-    const result = await apiFetch<{ invite: Invite; inviteLink: string | null }>(
-      `/groups/${activeGroupId}/invites`,
-      { method: 'POST', body: JSON.stringify({ role: inviteRole }) }
-    );
-    setInvites((prev) => [...prev, result.invite]);
-    setInviteLink(result.inviteLink);
+    try {
+      const result = await apiFetch<{ invite: Invite; inviteLink: string | null }>(
+        `/groups/${activeGroupId}/invites`,
+        { method: 'POST', body: JSON.stringify({ role: inviteRole }) }
+      );
+      setInvites((prev) => [...prev, result.invite]);
+      setInviteLink(result.inviteLink);
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.invite_failed')));
+    }
   }
 
   async function copyInviteLink() {

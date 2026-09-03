@@ -1,4 +1,5 @@
 import { getBot } from './bot';
+import { escapeHtml } from './telegram-html';
 import { outboundAllowed, logSuppressed } from './outbound';
 import { InlineKeyboard } from 'grammy';
 import { db } from '@/db';
@@ -22,17 +23,8 @@ function shortName(name: string, max = 18): string {
   return name.length > max ? `${name.slice(0, max - 1)}…` : name;
 }
 
-/**
- * Escape text that goes into an HTML-parsed message body. Every send here uses
- * parse_mode: 'HTML', so a customer or bread type carrying an `&` or a `<` makes
- * Telegram reject the whole message. That was one lost ping before; the daily
- * nudges batch a dozen names into a single message, where one bad character
- * would take the entire backlog down with it. Button labels are plain text and
- * must NOT be escaped — they'd render the entities literally.
- */
-function esc(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+/** Shared with the bot and the cron digests — see src/lib/telegram-html.ts. */
+const esc = escapeHtml;
 
 interface Recipient {
   chatId: string;
@@ -223,7 +215,11 @@ export async function notifyUnpaidOrders(
  */
 export async function notifyRemindersStalled(
   groupId: number,
-  missed: { orderId: number; customerName: string; deliveryDate: string }[]
+  missed: { orderId: number; customerName: string; deliveryDate: string }[],
+  // Where to look: sends that all failed are a WhatsApp problem, no sends at
+  // all are a schedule problem. Naming the wrong one sent the owner to check
+  // three healthy QStash entries, every morning, until he stopped reading it.
+  cause: 'schedule' | 'delivery' = 'schedule'
 ): Promise<{ sent: number; failed: number }> {
   const recipients = await getRecipientsByRole(groupId, ['manager']);
 
@@ -234,7 +230,11 @@ export async function notifyRemindersStalled(
         `<b>#${m.orderId} ${esc(m.customerName)}</b> — ${formatWeekdayShort(m.deliveryDate)}`
       );
     }
-    lines.push(``, `<i>${t('notify.reminders_stalled_hint', lang)}</i>`);
+    const hint =
+      cause === 'delivery'
+        ? t('notify.reminders_stalled_delivery', lang)
+        : t('notify.reminders_stalled_hint', lang);
+    lines.push(``, `<i>${hint}</i>`);
     return lines.join('\n');
   });
 }

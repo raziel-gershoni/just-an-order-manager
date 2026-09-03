@@ -31,7 +31,10 @@ export function useApi() {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(error.error || 'Request failed');
+      // The status rides along so a caller can tell "the server refused this,
+      // and said why" from "the request never landed" — a 409 deserves its own
+      // sentence, a dropped connection does not.
+      throw Object.assign(new Error(error.error || 'Request failed'), { status: res.status });
     }
 
     return res.json();
@@ -55,7 +58,7 @@ export function useApi() {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(error.error || 'Upload failed');
+      throw Object.assign(new Error(error.error || 'Upload failed'), { status: res.status });
     }
 
     return res.json();

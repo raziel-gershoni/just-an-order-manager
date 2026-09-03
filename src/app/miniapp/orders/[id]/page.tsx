@@ -198,10 +198,10 @@ export default function OrderDetailPage() {
       if (order.status === 'ready') {
         await updateStatus('delivered');
       }
-      const { balance: newBalance, paid, alreadyRecorded } = await apiFetch<{
+      const { balance: newBalance, paid, outcome } = await apiFetch<{
         balance: string;
         paid: boolean;
-        alreadyRecorded?: boolean;
+        outcome?: 'written' | 'duplicate' | 'already' | 'undone' | 'kept' | 'none';
       }>(`/orders/${id}/pay`, { method: 'POST', body: JSON.stringify({ action, amount }) });
       setBalance(Number(newBalance));
       setOrder((prev) => prev ? { ...prev, status: 'delivered', paid } : prev);
@@ -210,7 +210,9 @@ export default function OrderDetailPage() {
       setPaymentAmount('');
       // The order already carries a payment row, so this amount was not stored.
       // Say it plainly — the ledger is short until it goes on the customer.
-      if (alreadyRecorded) toast.error(t('orders.payment_already'));
+      if (outcome === 'already') toast.error(t('orders.payment_already'));
+      else if (outcome === 'kept') toast.error(t('orders.payment_kept'));
+      else if (outcome === 'undone') toast.success(t('orders.payment_undone'));
       else toast.success(action === 'unpaid' ? t('orders.charge_recorded') : t('orders.payment_recorded'));
     } catch {
       toast.error(t('orders.update_failed'));
@@ -239,15 +241,31 @@ export default function OrderDetailPage() {
   async function handleSetPrice(override: string | null) {
     setSavingPrice(true);
     try {
-      const { order: updated } = await apiFetch<{ order: OrderDetail }>(
-        `/orders/${id}`,
-        { method: 'PATCH', body: JSON.stringify({ totalOverride: override }) }
-      );
-      setOrder(updated);
+      await apiFetch(`/orders/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ totalOverride: override }),
+      });
+    } catch {
+      toast.error(t('orders.update_failed'));
+      setSavingPrice(false);
+      return;
+    }
+
+    // Stored. What follows is a re-read, not the write — and it has to be its
+    // own failure, because "העדכון נכשל" over a price that DID save leaves the
+    // card showing the old total, which is then what the payment box prefills.
+    //
+    // Re-read rather than installing the PATCH's own row: that one carries no
+    // phone count, no address block and no per-item weight or recipe, so
+    // adopting it blanked the Waze link, the baker's recipe toggles and the
+    // WhatsApp checkbox until the screen was reloaded.
+    try {
+      const { order: fresh } = await apiFetch<{ order: OrderDetail }>(`/orders/${id}`);
+      setOrder(fresh);
       setShowPriceEdit(false);
       setPriceInput('');
     } catch {
-      toast.error(t('orders.update_failed'));
+      toast.error(t('orders.reload_failed'));
     } finally {
       setSavingPrice(false);
     }

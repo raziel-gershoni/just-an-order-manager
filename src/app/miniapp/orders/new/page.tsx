@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
 import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
@@ -184,16 +184,29 @@ function OrderFormContent() {
     setItems((prev) => [...prev, { breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [], quantity: 1 }]);
   }
 
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+
   async function handleCreateCustomer() {
-    if (!newCustomerName.trim()) return;
-    const { customer } = await apiFetch<{ customer: Customer }>('/customers', {
-      method: 'POST',
-      body: JSON.stringify({ name: newCustomerName.trim() }),
-    });
-    setCustomers((prev) => [...prev, customer]);
-    setCustomerId(customer.id);
-    setShowNewCustomer(false);
-    setNewCustomerName('');
+    // Guarded and caught. A failed POST rejected into nothing at all — no
+    // toast, no line in front of the owner — and a second tap during a slow
+    // one created the customer twice, splitting that person's history and
+    // temperature score between two rows nothing merges.
+    if (!newCustomerName.trim() || creatingCustomer) return;
+    setCreatingCustomer(true);
+    try {
+      const { customer } = await apiFetch<{ customer: Customer }>('/customers', {
+        method: 'POST',
+        body: JSON.stringify({ name: newCustomerName.trim() }),
+      });
+      setCustomers((prev) => [...prev, customer]);
+      setCustomerId(customer.id);
+      setShowNewCustomer(false);
+      setNewCustomerName('');
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
+    } finally {
+      setCreatingCustomer(false);
+    }
   }
 
   function openAddSize(idx: number) {
@@ -267,7 +280,11 @@ function OrderFormContent() {
             deliveryType,
             deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
             items,
-            notes: notes || undefined,
+            // Sent even when empty. `|| undefined` drops the key from the JSON
+            // and the route's "did they send notes?" guard never runs, so
+            // deleting a note saved nothing, said "ההזמנה עודכנה", and left the
+            // old text on the print sheet and in every recurring clone.
+            notes,
             totalOverride: totalOverride || null,
             isDelivery,
             deliveryFee: effectiveFee.toFixed(2),
@@ -449,7 +466,14 @@ function OrderFormContent() {
                     onChange={(e) => setNewCustomerName(e.target.value)}
                     className="flex-1"
                   />
-                  <Button size="sm" onClick={handleCreateCustomer}>{t('form.add')}</Button>
+                  <Button
+                    size="sm"
+                    loading={creatingCustomer}
+                    disabled={!newCustomerName.trim()}
+                    onClick={handleCreateCustomer}
+                  >
+                    {t('form.add')}
+                  </Button>
                 </div>
               )}
             </div>

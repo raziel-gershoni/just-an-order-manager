@@ -186,10 +186,13 @@ export default function CustomerDetailPage() {
           method: 'PATCH',
           body: JSON.stringify({
             name: editName.trim(),
-            address: editAddress || undefined,
-            city: editCity || undefined,
-            notes: editNotes || undefined,
-            deliveryNotes: editDeliveryNotes || undefined,
+            // null, not undefined: undefined vanishes in JSON.stringify and the
+            // field is left exactly as it was, so an emptied box saved nothing
+            // and the old value came straight back onto the card.
+            address: editAddress.trim() || null,
+            city: editCity.trim() || null,
+            notes: editNotes.trim() || null,
+            deliveryNotes: editDeliveryNotes.trim() || null,
           }),
         }
       );
@@ -244,8 +247,10 @@ export default function CustomerDetailPage() {
         ...prev,
         phones: prev.phones.filter((p) => p.id !== phoneId),
       } : prev);
-    } catch {
-      toast.error(t('customers.save_failed'));
+    } catch (e) {
+      // A number that has been reminded is locked, not broken — say which.
+      const refused = (e as { status?: number })?.status === 409;
+      toast.error(refused ? t('customers.phone_has_history') : t('customers.save_failed'));
     }
   }
 

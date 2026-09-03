@@ -1,6 +1,6 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { customers, customerPhones } from '@/db/schema';
+import { customerPhones, customers, reminderSends } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { sanitizePhoneInput } from '@/lib/customer-phones';
@@ -64,6 +64,19 @@ export const DELETE = withAuth(async (request, auth) => {
   const phoneId = getPhoneId(request.url);
   const denied = await authorize(phoneId, auth);
   if (denied) return denied;
+
+  // reminder_sends.phone_id is NOT NULL with no cascade, so a number that has
+  // ever been reminded cannot be removed — the delete used to 500 and the
+  // screen said only "שמירה נכשלה", with no hint that the door was locked
+  // rather than broken. Same shape as the template delete's own guard.
+  const [used] = await db
+    .select({ id: reminderSends.id })
+    .from(reminderSends)
+    .where(eq(reminderSends.phoneId, phoneId))
+    .limit(1);
+  if (used) {
+    return errorResponse('Phone has reminder history — switch its reminders off instead', 409);
+  }
 
   await db.delete(customerPhones).where(eq(customerPhones.id, phoneId));
   return jsonResponse({ deleted: true });

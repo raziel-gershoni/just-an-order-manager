@@ -39,11 +39,15 @@ export const GET = withGroup(async (request, _auth, groupId) => {
 
 const updateCustomerSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  address: z.string().max(500).optional(),
-  city: z.string().max(255).optional(),
-  telegramChatId: z.string().max(50).optional(),
-  notes: z.string().max(1000).optional(),
-  deliveryNotes: z.string().max(1000).optional(),
+  // Nullable, not merely optional: an omitted key means "leave it alone", and
+  // null is the only way to say "clear it". They used to be optional-only, so a
+  // cleared address came back unchanged under a "נשמר" toast — and a stale
+  // delivery note kept sending the driver to a neighbour who had moved.
+  address: z.string().max(500).nullable().optional(),
+  city: z.string().max(255).nullable().optional(),
+  telegramChatId: z.string().max(50).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  deliveryNotes: z.string().max(1000).nullable().optional(),
   isActive: z.boolean().optional(),
   reminderOptOut: z.boolean().optional(),
   // null clears the assignment; a number must belong to this group.

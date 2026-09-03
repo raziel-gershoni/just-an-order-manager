@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { escapeHtml } from '@/lib/telegram-html';
 import { outboundAllowed, logSuppressed } from '@/lib/outbound';
 import { db } from '@/db';
 import {
@@ -64,15 +65,20 @@ async function handler(request: Request) {
           )
         );
 
+      // Grouped by customer id, not by name: two people both saved as "רחל"
+      // collapsed into one line with their balances summed, and one's credit
+      // could cancel the other's debt and drop the row entirely. Nothing
+      // prevents duplicate names, and the dashboard already groups by id.
       const debtors = await db
         .select({
+          customerId: payments.customerId,
           customerName: customers.name,
           balance: sql<string>`SUM(${payments.amount})`,
         })
         .from(payments)
         .innerJoin(customers, eq(payments.customerId, customers.id))
         .where(eq(payments.groupId, group.id))
-        .groupBy(customers.name)
+        .groupBy(payments.customerId, customers.name)
         .having(sql`SUM(${payments.amount}) < 0`);
 
       const members = await db
@@ -98,7 +104,7 @@ async function handler(request: Request) {
           lines.push(`<b>${t('general.outstanding', lang)}:</b>`);
           for (const d of debtors) {
             lines.push(
-              `  • ${d.customerName}: ₪${Math.abs(Number(d.balance)).toFixed(0)}`
+              `  • ${escapeHtml(d.customerName)}: ₪${Math.abs(Number(d.balance)).toFixed(0)}`
             );
           }
         }

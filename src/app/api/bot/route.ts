@@ -1,4 +1,5 @@
 import { webhookCallback, InlineKeyboard, type Context } from 'grammy';
+import { escapeHtml } from '@/lib/telegram-html';
 import { ensureBotSetup } from '@/lib/bot';
 import { db } from '@/db';
 import {
@@ -316,12 +317,14 @@ function setupHandlers(bot: import('grammy').Bot) {
     let total = 0;
     for (const o of todayOrders) {
       const items = itemsMap[o.id] || [];
-      const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
+      // parse_mode is HTML: a name, a bread or a note carrying & or < would
+      // make Telegram reject the whole digest, and the catch only warns.
+      const summary = items.map((i) => `${i.quantity} ${escapeHtml(i.breadTypeName)}`).join(', ');
       const qty = items.reduce((s, i) => s + i.quantity, 0);
       const statusEmoji =
         o.status === 'ready' ? '✅' : o.status === 'baking' ? '🔥' : '⏳';
-      lines.push(`${statusEmoji} ${o.customerName} — ${summary}`);
-      if (o.notes) lines.push(`   💬 ${o.notes}`);
+      lines.push(`${statusEmoji} ${escapeHtml(o.customerName)} — ${summary}`);
+      if (o.notes) lines.push(`   💬 ${escapeHtml(o.notes)}`);
       total += qty;
     }
     lines.push('');
@@ -402,8 +405,8 @@ function setupHandlers(bot: import('grammy').Bot) {
       );
       for (const o of dateOrders) {
         const items = itemsMap[o.id] || [];
-        const summary = items.map((i) => `${i.quantity} ${i.breadTypeName}`).join(', ');
-        lines.push(`  • ${o.customerName} — ${summary}`);
+        const summary = items.map((i) => `${i.quantity} ${escapeHtml(i.breadTypeName)}`).join(', ');
+        lines.push(`  • ${escapeHtml(o.customerName)} — ${summary}`);
       }
       lines.push('');
     }
@@ -500,7 +503,7 @@ function setupHandlers(bot: import('grammy').Bot) {
           .text(`✅ ${t('bot.paid_in_full', lang)}`, `order_pay:${orderId}:paid`)
           .text(`📝 ${t('bot.to_be_paid', lang)}`, `order_pay:${orderId}:unpaid`);
         const lines = [
-          `<b>${customer?.name ?? ''}</b>`,
+          `<b>${escapeHtml(customer?.name ?? '')}</b>`,
           `${t('bot.payment_question', lang)}`,
           `${t('bot.amount', lang)}: ₪${total.toFixed(0)}`,
         ];
@@ -536,7 +539,7 @@ function setupHandlers(bot: import('grammy').Bot) {
         .where(eq(customers.id, order.customerId))
         .limit(1);
       // Shared post-delivery payment sequence (charge + payment + paid + notify).
-      const { alreadyRecorded } = await recordOrderPayment(
+      const { outcome } = await recordOrderPayment(
         { id: order.id, groupId: order.groupId, customerId: order.customerId, customerName: customer?.name ?? '' },
         'paid',
         amount
@@ -551,7 +554,8 @@ function setupHandlers(bot: import('grammy').Bot) {
       // — pixel-identical to a payment that was recorded. This is the one path
       // where money changed hands and nothing was written, so it takes a dialog
       // the owner has to dismiss.
-      if (alreadyRecorded) {
+      const notRecorded = outcome === 'already';
+      if (notRecorded) {
         await ctx.answerCallbackQuery({
           text: `⚠️ ${t('bot.payment_already', lang)}`,
           show_alert: true,
@@ -567,15 +571,33 @@ function setupHandlers(bot: import('grammy').Bot) {
         await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });
       } else {
         await ctx.editMessageText(
-          alreadyRecorded
+          notRecorded
             ? `⚠️ ${t('bot.payment_already', lang)}`
             : `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
         );
       }
     } else {
-      // 'unpaid' — charge is already recorded by the deliver handler,
-      // paid flag stays false. Just acknowledge and clear the keyboard.
-      await ctx.answerCallbackQuery(`📝 ${t('bot.marked_to_be_paid', lang)}`);
+      // 'unpaid' — the charge is already recorded by the deliver handler, and
+      // this is also the only way back from a ✅ tapped by mistake: both buttons
+      // sit in one row, so ✅ leaves 📝 standing, and it used to answer without
+      // writing anything at all — the bogus payment stood, the order stayed
+      // flagged paid, and the customer kept a credit he never earned.
+      const { outcome } = await recordOrderPayment(
+        {
+          id: order.id,
+          groupId: order.groupId,
+          customerId: order.customerId,
+          customerName: '',
+        },
+        'unpaid'
+      );
+      await ctx.answerCallbackQuery(
+        outcome === 'undone'
+          ? { text: `↩️ ${t('bot.payment_undone', lang)}`, show_alert: true }
+          : outcome === 'kept'
+            ? { text: `⚠️ ${t('bot.payment_kept', lang)}`, show_alert: true }
+            : `📝 ${t('bot.marked_to_be_paid', lang)}`
+      );
       const remaining = keyboardWithoutPressed(ctx);
       if (remaining.length) {
         await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });

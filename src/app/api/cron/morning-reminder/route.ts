@@ -93,9 +93,9 @@ async function handler(request: Request) {
     // only stay silent when it works, so nothing but this would ever say it
     // had stopped — it went three weeks unscheduled before anyone noticed.
     try {
-      const missed = await findMissedRecurringReminders(group.id);
+      const { missed, cause } = await findMissedRecurringReminders(group.id);
       if (missed.length > 0) {
-        const result = await notifyRemindersStalled(group.id, missed);
+        const result = await notifyRemindersStalled(group.id, missed, cause);
         stats.stalledWarnings++;
         stats.notified += result.sent;
         stats.notifyFailed += result.failed;

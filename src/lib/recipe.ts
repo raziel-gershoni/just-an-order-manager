@@ -1,4 +1,5 @@
 import { t } from './i18n';
+import { escapeHtml } from './telegram-html';
 
 export type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'other';
 
@@ -256,9 +257,9 @@ export function formatRecipeBlockHebrew(
   const g = (grams: number) => `${Math.round(grams)}ג`;
   const lines = ['📝 מתכון להיום:'];
   for (const e of withRecipe) {
-    lines.push(`<b>${e.name}</b> (${e.loaves} כיכרות · ${g(e.finishedGrams)} סופי):`);
+    lines.push(`<b>${escapeHtml(e.name)}</b> (${e.loaves} כיכרות · ${g(e.finishedGrams)} סופי):`);
     for (const group of groupByKind(e.recipe!.ingredients)) {
-      const items = group.items.map((i) => `${i.name} ${g(i.grams)}`).join(' · ');
+      const items = group.items.map((i) => `${escapeHtml(i.name)} ${g(i.grams)}`).join(' · ');
       if (!kindLabelIsUseful(group.kind, group.items)) {
         lines.push(`  ${items}`);
         continue;
