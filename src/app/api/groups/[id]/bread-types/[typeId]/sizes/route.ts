@@ -59,8 +59,25 @@ export const PUT = withAuth(async (request, auth) => {
     }
   }
 
-  // Clean slate: delete all junction rows for this type, then re-insert
-  await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, typeId));
+  // Clean slate — but only over the sizes this editor could actually see. The
+  // detail GET lists active sizes only, so a PAUSED size is never in the
+  // payload, and a delete scoped to the bread alone threw its link away every
+  // time any bread was saved: the per-bread price and badges on a paused size
+  // vanished, and pausing is exactly what this app tells owners to do instead
+  // of deleting. Requested ids are in scope too, so a size paused between load
+  // and save is still replaced rather than colliding with its own primary key.
+  const activeSizes = await db
+    .select({ id: breadSizes.id })
+    .from(breadSizes)
+    .where(and(eq(breadSizes.groupId, groupId), eq(breadSizes.isActive, true)));
+  const scope = [...new Set([...activeSizes.map((s) => s.id), ...requestedIds])];
+  if (scope.length > 0) {
+    await db
+      .delete(breadTypeSizes)
+      .where(
+        and(eq(breadTypeSizes.breadTypeId, typeId), inArray(breadTypeSizes.breadSizeId, scope))
+      );
+  }
 
   if (parsed.data.enabled.length > 0) {
     await db.insert(breadTypeSizes).values(

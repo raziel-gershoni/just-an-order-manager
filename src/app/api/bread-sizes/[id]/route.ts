@@ -1,6 +1,6 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadSizes, breadTypeSizes } from '@/db/schema';
+import { breadSizes, breadSizeTiers, breadTypeSizes, orderItems } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { revalidatePublicSite } from '@/lib/public-site';
@@ -62,23 +62,40 @@ export const DELETE = withAuth(async (request, auth) => {
   const hard = url.searchParams.get('hard') === 'true';
 
   if (hard) {
-    // Junction rows reference this size; clear them first so the FK from
-    // bread_type_sizes doesn't block the delete. order_items.bread_size_id
-    // still has its own FK and will block (correctly) if any order uses it.
-    await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadSizeId, sizeId));
-    // The unlink above already removed the size from every type publicly, and
-    // there are no transactions here — so purge now, before the row delete that
-    // may still 409 on an order FK (the size is gone from the pricelist either way).
-    revalidatePublicSite(authz.groupId);
-    try {
-      await db.delete(breadSizes).where(eq(breadSizes.id, sizeId));
-      return jsonResponse({ deleted: true });
-    } catch {
+    // Ask before destroying anything. This used to clear the junction rows
+    // first, "so the FK doesn't block the delete" — but order_items has its own
+    // FK, and with no transactions here a size used by a past order was refused
+    // with a 409 only AFTER every bread had lost its link to it, along with the
+    // per-bread price and badges those rows carried. Nothing recreated them.
+    const [used] = await db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .where(eq(orderItems.breadSizeId, sizeId))
+      .limit(1);
+    if (used) {
       return errorResponse(
         'Cannot delete: size is used in existing orders. Disable it instead.',
         409
       );
     }
+
+    // Past this point the size is genuinely deletable. Its tiers and links are
+    // worthless without it and both hold a blocking FK, so they go first; an
+    // order created in the gap between the check and the delete leaves the size
+    // unlinked, which is the same 409 the owner asked for, one round trip late.
+    await db.delete(breadSizeTiers).where(eq(breadSizeTiers.breadSizeId, sizeId));
+    await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadSizeId, sizeId));
+    try {
+      await db.delete(breadSizes).where(eq(breadSizes.id, sizeId));
+    } catch {
+      revalidatePublicSite(authz.groupId);
+      return errorResponse(
+        'Cannot delete: size is used in existing orders. Disable it instead.',
+        409
+      );
+    }
+    revalidatePublicSite(authz.groupId);
+    return jsonResponse({ deleted: true });
   }
 
   const [updated] = await db
