@@ -46,6 +46,15 @@ export function MediaLibrary({
 
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState<number[]>([]);
+
+  // Which photo is the hero right now, not which one was when the button was
+  // tapped: remove() reads this after its DELETE comes back, and the owner may
+  // have picked a different hero while it was in the air.
+  const heroRef = useRef(heroImageId);
+  useEffect(() => {
+    heroRef.current = heroImageId;
+  }, [heroImageId]);
 
   useEffect(() => {
     apiFetch<{ assets: MediaAsset[] }>('/media')
@@ -87,14 +96,25 @@ export function MediaLibrary({
     }
   }
 
+  /**
+   * Deletion waits for the server. The DELETE really can fail — it returns 502
+   * rather than orphan a row when the blob store refuses — and this used to
+   * empty the tile and clear the hero first, leaving a photo the editor said was
+   * gone still on the public gallery, minus the hero the failed delete took
+   * with it.
+   */
   async function remove(a: MediaAsset) {
-    setAssets((p) => p.filter((x) => x.id !== a.id));
-    if (heroImageId === a.id) onSetHero(null);
+    setDeleting((p) => [...p, a.id]);
     try {
       await apiFetch(`/media/${a.id}`, { method: 'DELETE' });
     } catch {
       toast.error(t('site.save_failed'));
+      return;
+    } finally {
+      setDeleting((p) => p.filter((x) => x !== a.id));
     }
+    setAssets((p) => p.filter((x) => x.id !== a.id));
+    if (heroRef.current === a.id) onSetHero(null);
   }
 
   return (
@@ -153,7 +173,8 @@ export function MediaLibrary({
                     type="button"
                     aria-label="delete"
                     onClick={() => remove(a)}
-                    className="text-destructive/70 hover:text-destructive"
+                    disabled={deleting.includes(a.id)}
+                    className="text-destructive/70 hover:text-destructive disabled:opacity-40"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

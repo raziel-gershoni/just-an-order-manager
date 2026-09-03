@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
@@ -121,7 +121,32 @@ export default function SiteEditorPage() {
     if (Array.isArray(p.sections)) setSections(p.sections);
   }
 
+  // Both of these paint first and ask later, and until now neither put anything
+  // back when the PATCH refused: the editor went on showing a hero and an order
+  // the public site was not serving, and the next successful write shipped the
+  // failed one along with it.
+  //
+  // Restoring a value captured at tap time is not good enough either. Moving a
+  // section two places is two taps, so two PATCHes are in the air at once, and
+  // an older failure would drag back an order the server has since accepted.
+  // Only the newest write for a field may correct the screen, and it re-reads
+  // the profile rather than guessing — these PATCH whole values, so the server's
+  // truth is whatever the last accepted write left. Only the failed field is
+  // taken from the response: hydrate() would also overwrite unsaved form text.
+  const heroWrite = useRef(0);
+  const sectionsWrite = useRef(0);
+
+  async function reread(): Promise<SiteProfile | null> {
+    try {
+      const { profile } = await apiFetch<{ profile: SiteProfile }>('/site-profile');
+      return profile;
+    } catch {
+      return null; // offline; the toast has already said the change did not land
+    }
+  }
+
   async function setHero(id: number | null) {
+    const write = ++heroWrite.current;
     setHeroImageId(id); // optimistic
     try {
       await apiFetch('/site-profile', {
@@ -130,10 +155,14 @@ export default function SiteEditorPage() {
       });
     } catch {
       toast.error(t('site.save_failed'));
+      if (heroWrite.current !== write) return;
+      const profile = await reread();
+      if (profile && heroWrite.current === write) setHeroImageId(profile.heroImageId ?? null);
     }
   }
 
   async function persistSections(next: SectionConfig[]) {
+    const write = ++sectionsWrite.current;
     setSections(next); // optimistic
     try {
       await apiFetch('/site-profile', {
@@ -142,6 +171,11 @@ export default function SiteEditorPage() {
       });
     } catch {
       toast.error(t('site.save_failed'));
+      if (sectionsWrite.current !== write) return;
+      const profile = await reread();
+      if (profile && sectionsWrite.current === write && Array.isArray(profile.sections)) {
+        setSections(profile.sections);
+      }
     }
   }
 
