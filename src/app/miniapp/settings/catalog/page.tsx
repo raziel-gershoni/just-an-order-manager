@@ -19,6 +19,7 @@ import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { BreadSheet } from '@/components/catalog/BreadSheet';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 import { effectivePrice } from '@/lib/pricing';
+import { friendlyError } from '@/lib/utils';
 import type { Tier } from '@/components/catalog/types';
 
 interface BreadSize {
@@ -276,24 +277,28 @@ export default function CatalogPage() {
 
   async function addSize() {
     if (!newSizeName.trim() || !newSizePrice || !activeGroupId) return;
-    const { size } = await apiFetch<{ size: BreadSize }>(
-      `/groups/${activeGroupId}/bread-sizes`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          name: newSizeName.trim(),
-          weightGrams: newSizeWeight ? Number(newSizeWeight) : null,
-          price: newSizePrice,
-          isDefault: newSizeDefault,
-        }),
-      }
-    );
-    setSizes((prev) => [...prev, size]);
-    setNewSizeName('');
-    setNewSizeWeight('');
-    setNewSizePrice('');
-    setNewSizeDefault(false);
-    setShowAddSize(false);
+    try {
+      const { size } = await apiFetch<{ size: BreadSize }>(
+        `/groups/${activeGroupId}/bread-sizes`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: newSizeName.trim(),
+            weightGrams: newSizeWeight ? Number(newSizeWeight) : null,
+            price: newSizePrice,
+            isDefault: newSizeDefault,
+          }),
+        }
+      );
+      setSizes((prev) => [...prev, size]);
+      setNewSizeName('');
+      setNewSizeWeight('');
+      setNewSizePrice('');
+      setNewSizeDefault(false);
+      setShowAddSize(false);
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   /**
@@ -315,33 +320,49 @@ export default function CatalogPage() {
 
   async function saveSize(id: number) {
     if (!editSizeName.trim() || !editSizePrice) return;
-    const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        name: editSizeName.trim(),
-        weightGrams: editSizeWeight ? Number(editSizeWeight) : null,
-        price: editSizePrice,
-      }),
-    });
-    setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
-    syncEnabledSize(id, { name: size.name, weightGrams: size.weightGrams, price: size.price });
-    setEditingSizeId(null);
+    try {
+      const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editSizeName.trim(),
+          weightGrams: editSizeWeight ? Number(editSizeWeight) : null,
+          price: editSizePrice,
+        }),
+      });
+      setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
+      syncEnabledSize(id, { name: size.name, weightGrams: size.weightGrams, price: size.price });
+      setEditingSizeId(null);
+    } catch (e) {
+      // The form stays open holding what was NOT stored, which is the point.
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function toggleDefault(id: number, current: boolean) {
-    const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isDefault: !current }),
-    });
-    setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
+    try {
+      const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isDefault: !current }),
+      });
+      setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function toggleActive(id: number, isActive: boolean) {
-    const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
-      method: isActive ? 'DELETE' : 'PATCH',
-      ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
-    });
-    setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
+    try {
+      const { size } = await apiFetch<{ size: BreadSize }>(`/bread-sizes/${id}`, {
+        method: isActive ? 'DELETE' : 'PATCH',
+        ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
+      });
+      setSizes((prev) => prev.map((s) => (s.id === id ? { ...s, ...size } : s)));
+      // A paused size is off the order screen and the public site; the bread
+      // rows have to stop quoting it too.
+      syncEnabledSize(id, { isActive: size.isActive });
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function deleteSize(id: number) {
@@ -380,46 +401,62 @@ export default function CatalogPage() {
 
   async function addAddition() {
     if (!newAdditionName.trim() || !activeGroupId) return;
-    const { addition } = await apiFetch<{ addition: BreadAddition }>(
-      `/groups/${activeGroupId}/bread-additions`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          name: newAdditionName.trim(),
-          isDefault: newAdditionDefault,
-        }),
-      }
-    );
-    setAdditions((prev) => [...prev, addition]);
-    setNewAdditionName('');
-    setNewAdditionDefault(false);
-    setShowAddAddition(false);
+    try {
+      const { addition } = await apiFetch<{ addition: BreadAddition }>(
+        `/groups/${activeGroupId}/bread-additions`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: newAdditionName.trim(),
+            isDefault: newAdditionDefault,
+          }),
+        }
+      );
+      setAdditions((prev) => [...prev, addition]);
+      setNewAdditionName('');
+      setNewAdditionDefault(false);
+      setShowAddAddition(false);
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function saveAddition(id: number) {
     if (!editAdditionName.trim()) return;
-    const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name: editAdditionName.trim() }),
-    });
-    setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
-    setEditingAdditionId(null);
+    try {
+      const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editAdditionName.trim() }),
+      });
+      setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+      setEditingAdditionId(null);
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function toggleAdditionDefault(id: number, current: boolean) {
-    const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isDefault: !current }),
-    });
-    setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+    try {
+      const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isDefault: !current }),
+      });
+      setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function toggleAdditionActive(id: number, isActive: boolean) {
-    const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
-      method: isActive ? 'DELETE' : 'PATCH',
-      ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
-    });
-    setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+    try {
+      const { addition } = await apiFetch<{ addition: BreadAddition }>(`/bread-additions/${id}`, {
+        method: isActive ? 'DELETE' : 'PATCH',
+        ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
+      });
+      setAdditions((prev) => prev.map((a) => (a.id === id ? { ...a, ...addition } : a)));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
+    }
   }
 
   async function deleteAddition(id: number) {
@@ -986,7 +1023,10 @@ export default function CatalogPage() {
           {breadTypesSectionOpen && (<>
           <Card className="p-0 overflow-hidden">
             {breadTypes.map((bt, idx) => {
-              const priced = bt.enabledSizes
+              // A paused size is refused by the order screen and hidden from
+              // the public site, so it must not price a bread here either.
+              const offered = bt.enabledSizes.filter((s) => s.isActive);
+              const priced = offered
                 .map((s) => Number(effectivePrice(s)))
                 .filter((n) => !Number.isNaN(n));
               const low = priced.length ? Math.min(...priced) : null;
@@ -1034,7 +1074,7 @@ export default function CatalogPage() {
                         {bt.name}
                       </div>
                       <div className="text-xs text-muted-foreground tabular-nums">
-                        {bt.enabledSizes.length} גדלים
+                        {offered.length} גדלים
                         {low != null && high != null && (
                           low === high ? ` · ₪${low}` : ` · ₪${low}–${high}`
                         )}
@@ -1110,16 +1150,22 @@ export default function CatalogPage() {
                 bt.id === editingType.id
                   ? {
                       ...bt,
-                      enabledSizes: sizes
-                        .filter((s) => s.enabled)
-                        .map((s) => ({
-                          id: s.id,
-                          name: s.name,
-                          weightGrams: s.weightGrams,
-                          price: s.price,
-                          priceOverride: s.priceOverride,
-                          isActive: true,
-                        })),
+                      enabledSizes: [
+                        // The sheet lists active sizes only, and its PUT no
+                        // longer touches the rest — so a paused size's link
+                        // survives the save here too.
+                        ...bt.enabledSizes.filter((s) => !s.isActive),
+                        ...sizes
+                          .filter((s) => s.enabled)
+                          .map((s) => ({
+                            id: s.id,
+                            name: s.name,
+                            weightGrams: s.weightGrams,
+                            price: s.price,
+                            priceOverride: s.priceOverride,
+                            isActive: true,
+                          })),
+                      ],
                     }
                   : bt
               )
