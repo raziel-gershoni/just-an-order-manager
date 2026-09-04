@@ -596,13 +596,23 @@ function setupHandlers(bot: import('grammy').Bot) {
           ? { text: `↩️ ${t('bot.payment_undone', lang)}`, show_alert: true }
           : outcome === 'kept'
             ? { text: `⚠️ ${t('bot.payment_kept', lang)}`, show_alert: true }
-            : `📝 ${t('bot.marked_to_be_paid', lang)}`
+            : outcome === 'covered'
+              ? { text: `⚠️ ${t('bot.payment_covered', lang)}`, show_alert: true }
+              : `📝 ${t('bot.marked_to_be_paid', lang)}`
       );
       const remaining = keyboardWithoutPressed(ctx);
       if (remaining.length) {
         await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });
       } else {
-        await ctx.editMessageText(`📝 ${t('bot.marked_to_be_paid', lang)}`);
+        // The message must say what happened, not what was asked for: an order
+        // the tab already covers was left exactly as it was.
+        await ctx.editMessageText(
+          outcome === 'covered'
+            ? `⚠️ ${t('bot.payment_covered', lang)}`
+            : outcome === 'undone'
+              ? `↩️ ${t('bot.payment_undone', lang)}`
+              : `📝 ${t('bot.marked_to_be_paid', lang)}`
+        );
       }
     }
   });

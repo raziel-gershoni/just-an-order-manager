@@ -359,7 +359,10 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      {/* Invite */}
+      {/* Invite — owners and managers only. The endpoint refuses a baker or a
+          driver, so leaving the form on their screen offered a button that
+          could only ever fail, beside a list the API no longer sends them. */}
+      {canManage && (
       <section>
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
           {t('settings.invite')}
@@ -405,6 +408,7 @@ export default function SettingsPage() {
           )}
         </Card>
       </section>
+      )}
       </div>
     </>
   );

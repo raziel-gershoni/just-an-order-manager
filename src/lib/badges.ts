@@ -26,6 +26,10 @@ export type ResolvedBadge = {
   text: string;
   colorVar: string;
   iconKey: string | null;
+  /** Which preset this is, so a reader can act on the meaning and not the text
+   *  — the structured data has to say OutOfStock for 'sold_out'. Null for a
+   *  custom badge or an icon with no preset behind it. */
+  preset: BadgePreset | null;
 };
 
 /** Resolve stored (badgeType, badgeLabel, badgeIcon) into display text + color
@@ -40,6 +44,7 @@ export function resolveBadge(
   const iconKey = badgeIcon ?? null;
   let text = '';
   let colorVar = 'var(--primary)';
+  let presetKey: BadgePreset | null = null;
 
   if (badgeType === 'custom') {
     text = (badgeLabel ?? '').trim();
@@ -48,9 +53,10 @@ export function resolveBadge(
     if (preset) {
       text = t(preset.labelKey, lang);
       colorVar = preset.colorVar;
+      presetKey = badgeType as BadgePreset;
     }
   }
 
   if (!text && !iconKey) return null;
-  return { text, colorVar, iconKey };
+  return { text, colorVar, iconKey, preset: presetKey };
 }

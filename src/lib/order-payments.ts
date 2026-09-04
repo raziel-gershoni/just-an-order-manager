@@ -126,6 +126,9 @@ export async function ensureOrderPayment(
  *  - `undone`    the row that ✅ wrote was removed — the undo of a mistaken tap.
  *  - `kept`      the order was called unpaid, but its payment row is for some
  *                other amount, so it was left alone rather than erased.
+ *  - `covered`   the order was called unpaid, but the tab already covers it —
+ *                credit settled it, and re-opening it would chase a customer
+ *                who is square. Nothing changed.
  *  - `none`      there was nothing to write or take back.
  */
 export type PaymentOutcome =
@@ -134,6 +137,7 @@ export type PaymentOutcome =
   | 'already'
   | 'undone'
   | 'kept'
+  | 'covered'
   | 'none';
 
 /**
@@ -197,6 +201,26 @@ export async function recordOrderPayment(
         // counted; deleting it would move the balance by an amount nothing
         // records, and re-tapping ✅ would then re-file the full ₪300.
         outcome = 'kept';
+      }
+    } else {
+      // Nothing to take back. If the order is settled AND the tab covers it,
+      // it was settled by credit and re-opening it would chase a customer who
+      // is square — the 📝 button in Telegram outlives its order, so that tap
+      // arrives long after the decision. But refusing on the flag alone would
+      // make `paid` a one-way door: this is the only write in the codebase that
+      // clears it, so an order settled from credit that later stops being
+      // covered — a bounced transfer, a corrective charge — could never be
+      // chased again. The ledger decides, and the caller is told which happened.
+      const [row] = await db
+        .select({ paid: orders.paid })
+        .from(orders)
+        .where(eq(orders.id, order.id))
+        .limit(1);
+      if (row?.paid) {
+        const settledBalance = await getCustomerBalance(order.customerId, order.groupId);
+        if (Number(settledBalance) >= 0) {
+          return { balance: settledBalance, paid: true, outcome: 'covered' };
+        }
       }
     }
   }

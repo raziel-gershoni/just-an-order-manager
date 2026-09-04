@@ -366,6 +366,8 @@ export default function CatalogPage() {
   }
 
   async function deleteSize(id: number) {
+    // Irreversible, and it takes every bread's link to this size with it.
+    if (!window.confirm(t('catalog.delete_size_confirm'))) return;
     try {
       await apiFetch(`/bread-sizes/${id}?hard=true`, { method: 'DELETE' });
       setSizes((prev) => prev.filter((s) => s.id !== id));
@@ -460,6 +462,9 @@ export default function CatalogPage() {
   }
 
   async function deleteAddition(id: number) {
+    // The sizes and bread types both ask first; this one deleted on a single
+    // tap, and it is the same irreversible delete.
+    if (!window.confirm(t('catalog.delete_addition_confirm'))) return;
     try {
       await apiFetch(`/bread-additions/${id}?hard=true`, { method: 'DELETE' });
       setAdditions((prev) => prev.filter((a) => a.id !== id));

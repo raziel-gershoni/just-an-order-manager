@@ -42,11 +42,27 @@ export const POST = withAuth(async (request, auth) => {
   // the owner saw nothing but a "save failed" toast.
   const { url, pathname } = await uploadImage(file, groupId);
 
-  const [updated] = await db
-    .update(groups)
-    .set({ logoUrl: url, logoPathname: pathname })
-    .where(eq(groups.id, groupId))
-    .returning({ logoUrl: groups.logoUrl });
+  let updated;
+  try {
+    [updated] = await db
+      .update(groups)
+      .set({ logoUrl: url, logoPathname: pathname })
+      .where(eq(groups.id, groupId))
+      .returning({ logoUrl: groups.logoUrl });
+  } catch (err) {
+    // The statement may well have committed — neon-http is one round trip, so a
+    // lost response throws here even when Postgres accepted it. Read the row
+    // back before undoing anything: deleting the blob the row now points at
+    // would break the live site an hour later, when the cached page expires,
+    // which is exactly what the upload-then-update ordering above prevents.
+    const [row] = await db
+      .select({ logoPathname: groups.logoPathname })
+      .from(groups)
+      .where(eq(groups.id, groupId))
+      .limit(1);
+    if (row?.logoPathname !== pathname) await deleteImage(pathname);
+    throw err;
+  }
 
   if (existing?.logoPathname && existing.logoPathname !== pathname) {
     await deleteImage(existing.logoPathname);

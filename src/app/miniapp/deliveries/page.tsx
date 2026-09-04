@@ -8,8 +8,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
+import { waHref } from '@/lib/phone-links';
 import { buildWazeLink } from '@/lib/delivery';
-import { Navigation, Phone, Check, Banknote, Truck } from 'lucide-react';
+import { Banknote, Check, MessageCircle, Navigation, Truck } from 'lucide-react';
 
 interface Delivery {
   id: number;
@@ -151,15 +152,32 @@ export default function DeliveriesPage() {
                             {t('deliv.waze')}
                           </a>
                         )}
-                        {d.phone && (
-                          <a
-                            href={`tel:${d.phone}`}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium"
-                          >
-                            <Phone className="h-4 w-4" />
-                            {d.phone}
-                          </a>
-                        )}
+                        {/* WhatsApp, not tel: — Telegram's WebView drops the tel
+                            scheme on both platforms and exposes no call API, so
+                            the call button did nothing where this app is used.
+                            dir on the digits alone: a number carrying a leading
+                            + rendered with the plus at the far end. */}
+                        {d.phone &&
+                          (waHref(d.phone) ? (
+                            <a
+                              href={waHref(d.phone)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-success"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                              <span dir="ltr" className="tabular-nums">{d.phone}</span>
+                            </a>
+                          ) : (
+                            // A landline or a foreign number has no wa.me form.
+                            // The digits still have to be on screen: this tab is
+                            // the driver's only one, and he cannot open the
+                            // customer card to look them up.
+                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground">
+                              <MessageCircle className="h-4 w-4 opacity-40" />
+                              <span dir="ltr" className="tabular-nums">{d.phone}</span>
+                            </span>
+                          ))}
                       </div>
 
                       <div className="flex gap-2 border-t border-dashed border-border pt-3">

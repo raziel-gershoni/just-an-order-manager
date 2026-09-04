@@ -1,6 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, customerPhones, breadTypes, breadSizes, breadAdditions, orderItemAdditions, breadRecipes, breadRecipeIngredients } from '@/db/schema';
+import { breadAdditions, breadRecipeIngredients, breadRecipes, breadSizes, breadTypes, customerPhones, customers, orderItemAdditions, orderItems, orders, payments } from '@/db/schema';
 import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
@@ -142,6 +142,23 @@ export const GET = withGroup(async (request, auth, groupId) => {
     .from(customerPhones)
     .where(eq(customerPhones.customerId, order.customerId));
 
+  // Whether this order's charge is already on the customer's ledger. The screen
+  // needs it to ask the right credit question: once the charge is there the
+  // balance already accounts for this order, and asking for balance >= total
+  // asks the customer to cover it twice. The charge is written best-effort on
+  // delivery, so "delivered" is not a safe proxy for it.
+  const [charge] = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.orderId, id),
+        eq(payments.type, 'charge'),
+        eq(payments.groupId, groupId)
+      )
+    )
+    .limit(1);
+
   // Bakers don't see delivery details (navigable address / private notes).
   const customerAddress = isBaker ? null : order.customerAddress;
   const customerCity = isBaker ? null : order.customerCity;
@@ -159,6 +176,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
       totalPrice,
       calculatedTotal,
       customerPhoneCount: phoneCount,
+      charged: Boolean(charge),
     },
   });
 });

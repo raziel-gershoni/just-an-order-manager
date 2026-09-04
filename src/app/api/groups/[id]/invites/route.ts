@@ -21,6 +21,15 @@ export const GET = withAuth(async (request, auth) => {
   const membership = auth.memberships.find((m) => m.groupId === groupId);
   if (!membership) return errorResponse('Not a member', 403);
 
+  // Bakers and drivers cannot create invites, and they have no business reading
+  // the pending codes either — each one is a live link into the bakery at a role
+  // its holder chooses. An empty list rather than a 403: the settings screen
+  // loads this alongside the group and the members in one Promise.all, and a
+  // rejection there would blank the whole screen for them.
+  if (membership.role === 'baker' || membership.role === 'driver') {
+    return jsonResponse({ invites: [] });
+  }
+
   const invites = await db
     .select()
     .from(groupInvites)

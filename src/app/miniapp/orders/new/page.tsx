@@ -26,6 +26,28 @@ interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAddit
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
+/**
+ * The pricing inputs of a basket, order-independent — the same fingerprint
+ * src/app/api/orders/[id]/route.ts builds before deciding whether to re-price.
+ *
+ * It has to be the same shape, not merely a comparison: JSON.stringify is
+ * sensitive to line order, to the order of the addition ids (tapping a chip off
+ * and back on appends it to the end) and to which keys happen to be present, so
+ * it called an untouched basket "changed" and priced the delivery fee against
+ * today's catalog while the server kept the order's frozen one.
+ */
+function itemsFingerprint(rows: LineItem[]): string {
+  return rows
+    .map(
+      (i) =>
+        `${i.breadTypeId}:${i.breadSizeId}:${i.quantity}:${[...i.breadAdditionIds]
+          .sort((a, b) => a - b)
+          .join(',')}:${i.additionsCharged == null ? 'n' : i.additionsCharged ? '1' : '0'}`
+    )
+    .sort()
+    .join('|');
+}
+
 export default function NewOrderPage() {
   return (
     <Suspense fallback={
@@ -70,6 +92,12 @@ function OrderFormContent() {
   );
   const [customerName, setCustomerName] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
+  // What this order was loaded with, for telling a real item edit from a
+  // notes/date/fee one — the server draws the same line before it re-prices,
+  // and the two have to agree or the fee is judged on the wrong basket.
+  const [frozenGoods, setFrozenGoods] = useState<number | null>(null);
+  const [loadedItemsKey, setLoadedItemsKey] = useState<string | null>(null);
+  const [loadedFlags, setLoadedFlags] = useState<{ deals: boolean; additions: boolean } | null>(null);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -127,23 +155,36 @@ function OrderFormContent() {
           }
           setCustomerId(order.customerId);
           setCustomerName(order.customerName);
-          setItems(order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[]; additionsCharged?: boolean | null }) => ({
+          const loadedItems = order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[]; additionsCharged?: boolean | null }) => ({
             breadTypeId: i.breadTypeId,
             breadSizeId: i.breadSizeId ?? null,
             breadAdditionIds: (i.additions ?? []).map((a) => a.id),
             quantity: i.quantity,
             additionsCharged: i.additionsCharged ?? null,
-          })));
+          }));
+          setItems(loadedItems);
+          setLoadedItemsKey(itemsFingerprint(loadedItems));
           setDeliveryType(order.deliveryType as DeliveryType);
           setDeliveryDate(order.deliveryDate || '');
           setNotes(order.notes || '');
           setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
           setIsRecurring(order.deliveryType !== 'asap' && Boolean((order as { isRecurring?: boolean }).isRecurring));
-          setDealsEnabled((order as { dealsEnabled?: boolean }).dealsEnabled ?? true);
-          setAdditionsCharged((order as { additionsCharged?: boolean }).additionsCharged ?? true);
+          const loadedDeals = (order as { dealsEnabled?: boolean }).dealsEnabled ?? true;
+          const loadedAdditions = (order as { additionsCharged?: boolean }).additionsCharged ?? true;
+          setDealsEnabled(loadedDeals);
+          setAdditionsCharged(loadedAdditions);
+          setLoadedFlags({ deals: loadedDeals, additions: loadedAdditions });
           setIsDelivery(Boolean(order.isDelivery));
           setDeliveryManualFee(
             order.deliveryFee && Number(order.deliveryFee) > 0 ? String(Number(order.deliveryFee)) : ''
+          );
+          // The goods this order is actually charged for, frozen when it was
+          // placed. The free-delivery threshold has to be judged against that,
+          // not against what the same basket would cost at today's prices.
+          setFrozenGoods(
+            typeof (order as { calculatedTotal?: number }).calculatedTotal === 'number'
+              ? (order as { calculatedTotal: number }).calculatedTotal
+              : null
           );
         } else if (!isEdit && b.breadTypes.length > 0) {
           const firstType = b.breadTypes[0];
@@ -379,10 +420,24 @@ function OrderFormContent() {
   const deliveryAvailable = delivSettings
     ? classifyCity(custCity, delivSettings).available
     : false;
+  // A non-item edit keeps the frozen snapshot server-side, so the fee must be
+  // judged on the same figure: a catalog price rise crossing the free-delivery
+  // threshold in the meantime would otherwise zero a fee this order's own goods
+  // never earned. Touch the items and the order re-prices, so live is right.
+  // The flags count too: the route re-prices when dealsEnabled or
+  // additionsCharged move, even if no line was touched, so pricing the fee on
+  // the pre-toggle figure would bill a fee the re-priced order does not carry.
+  const repriced =
+    frozenGoods == null ||
+    loadedFlags == null ||
+    itemsFingerprint(items) !== loadedItemsKey ||
+    dealsEnabled !== loadedFlags.deals ||
+    additionsCharged !== loadedFlags.additions;
+  const goodsForThisOrder = repriced ? liveTotal : frozenGoods;
   const computedFee = delivSettings
     ? resolveDeliveryFee({
         city: custCity,
-        subtotal: liveTotal,
+        subtotal: goodsForThisOrder,
         settings: delivSettings,
         manualFee: Number(deliveryManualFee || 0),
       })
@@ -852,7 +907,11 @@ function OrderFormContent() {
         <div className="sticky bottom-14 -mx-5 -mb-4 mt-4 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
           {hasPricedItem && (
             <div className="mb-2.5 space-y-1">
-              {hasDeal && !totalOverride &&
+              {/* Only when the order will actually be re-priced: on a
+                  notes-or-date edit the server keeps the frozen snapshot, so
+                  these rows would describe a re-bundle that never happens —
+                  under a total that is not this order's total. */}
+              {hasDeal && !totalOverride && repriced &&
                 livePricing.rows.map((row, idx) => {
                   const f = formatAllocation(row, t);
                   return (
@@ -874,7 +933,7 @@ function OrderFormContent() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">{t('orders.total')}</span>
                 <span className="font-mono text-lg font-bold tabular-nums text-primary">
-                  ₪{(totalOverride ? Number(totalOverride) : liveTotal) + effectiveFee}
+                  ₪{(totalOverride ? Number(totalOverride) : goodsForThisOrder) + effectiveFee}
                 </span>
               </div>
             </div>

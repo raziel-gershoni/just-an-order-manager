@@ -81,17 +81,25 @@ export function buildBakeryJsonLd(
           };
           if (b.description?.trim()) item.description = b.description.trim();
           if (b.image?.url) item.image = b.image.url;
+          // אזל on the bread or on the size is a real availability statement;
+          // saying InStock under it put a contradiction in front of anything
+          // that reads the page rather than looks at it.
+          const breadSoldOut = b.badge?.preset === 'sold_out';
           const offers = b.sizes.flatMap((s) => {
             const single = Number(s.price);
             if (!Number.isFinite(single) || single <= 0) return [];
             const sizeName = s.name?.trim();
+            const availability =
+              breadSoldOut || s.badge?.preset === 'sold_out'
+                ? 'https://schema.org/OutOfStock'
+                : 'https://schema.org/InStock';
             const rows: Record<string, unknown>[] = [
               {
                 '@type': 'Offer',
                 ...(sizeName ? { name: sizeName } : {}),
                 price: single,
                 priceCurrency: 'ILS',
-                availability: 'https://schema.org/InStock',
+                availability,
               },
             ];
             // Bulk tiers as per-unit offers gated on a minimum quantity — the
@@ -105,7 +113,7 @@ export function buildBakeryJsonLd(
                 price: each,
                 priceCurrency: 'ILS',
                 eligibleQuantity: { '@type': 'QuantitativeValue', minValue: d.minQty },
-                availability: 'https://schema.org/InStock',
+                availability,
               });
             }
             return rows;

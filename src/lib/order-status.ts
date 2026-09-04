@@ -14,7 +14,7 @@ import { todayStr } from './date-utils';
 import { formatItemLineForStaff } from './order-display';
 import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
 import { getNotifiablePhones } from './customer-phones';
-import { ensureOrderCharge } from './order-payments';
+import { ensureOrderCharge, settleCoveredOrders } from './order-payments';
 import { createNextRecurringOrder } from './order-recurring';
 
 type OrderRow = typeof orders.$inferSelect;
@@ -82,6 +82,11 @@ export async function transitionOrderStatus(
     // block the recurring clone and 500 a completed delivery.
     try {
       await ensureOrderCharge(order.id, order.groupId, order.customerId);
+      // A customer who paid in advance had the payment land before the charge,
+      // and only a payment used to trigger the sweep — so his delivery sat
+      // flagged unpaid with his own credit sitting right beside it, and the
+      // weekly nudge chased someone already square.
+      await settleCoveredOrders(order.customerId, order.groupId);
     } catch (err) {
       console.error(`Failed to ensure charge after delivering order ${order.id}:`, err);
     }

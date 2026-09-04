@@ -71,6 +71,8 @@ interface OrderDetail {
   customerAddress: string | null;
   customerCity: string | null;
   customerDeliveryNotes: string | null;
+  /** Whether this order's charge is already on the ledger the balance sums. */
+  charged?: boolean;
 }
 
 /**
@@ -201,7 +203,7 @@ export default function OrderDetailPage() {
       const { balance: newBalance, paid, outcome } = await apiFetch<{
         balance: string;
         paid: boolean;
-        outcome?: 'written' | 'duplicate' | 'already' | 'undone' | 'kept' | 'none';
+        outcome?: 'written' | 'duplicate' | 'already' | 'undone' | 'kept' | 'covered' | 'none';
       }>(`/orders/${id}/pay`, { method: 'POST', body: JSON.stringify({ action, amount }) });
       setBalance(Number(newBalance));
       setOrder((prev) => prev ? { ...prev, status: 'delivered', paid } : prev);
@@ -212,6 +214,7 @@ export default function OrderDetailPage() {
       // Say it plainly — the ledger is short until it goes on the customer.
       if (outcome === 'already') toast.error(t('orders.payment_already'));
       else if (outcome === 'kept') toast.error(t('orders.payment_kept'));
+      else if (outcome === 'covered') toast.error(t('orders.payment_covered'));
       else if (outcome === 'undone') toast.success(t('orders.payment_undone'));
       else toast.success(action === 'unpaid' ? t('orders.charge_recorded') : t('orders.payment_recorded'));
     } catch {
@@ -302,7 +305,14 @@ export default function OrderDetailPage() {
     cancelled: translate('status.cancelled', lang),
   };
 
-  const hasEnoughCredit = balance !== null && balance >= order.totalPrice;
+  // Once this order's charge is on the ledger the balance already accounts for
+  // it, so asking for balance >= total asks the customer to cover it twice —
+  // which hid the button from exactly the person who had prepaid. Keyed on the
+  // charge itself rather than on the status: the charge is written best-effort
+  // when the order is delivered, and if that write failed the balance in hand
+  // is still the pre-charge one.
+  const hasEnoughCredit =
+    balance !== null && (order.charged ? balance >= 0 : balance >= order.totalPrice);
   const actions = statusActions[order.status] || [];
   const reversals = ORDER_STATUS_REVERSALS[order.status] ?? [];
   const nonDeliverActions = actions.filter((s) => s !== 'delivered');
