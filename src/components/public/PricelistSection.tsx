@@ -65,32 +65,35 @@ export function PricelistSection({
                 i > 0 && 'border-t-[1.5px] border-dashed border-border'
               )}
             >
-              {/* thin color stub + vertical dashed line between the color and the name */}
+              {/* The band at the start edge — one element on every row, so every
+                  name begins in the same place. It is the bread's photo when it
+                  has one, and otherwise a quiet tint of its accent with the
+                  saturated stripe this list has always used for identity. A
+                  thumbnail inside the text flow pushed the name inward on the
+                  rows that had one and left the column ragged. */}
               <span
                 aria-hidden
-                className="w-[13px] shrink-0 self-stretch border-e-2 border-dashed border-card/60"
-                style={{ background: accent }}
-              />
+                className="relative w-12 shrink-0 self-stretch overflow-hidden border-e-2 border-dashed border-card/60"
+                style={
+                  bread.image
+                    ? undefined
+                    : {
+                        background: `color-mix(in srgb, ${accent} 16%, var(--card))`,
+                        // Logical, not a box-shadow offset: the outer edge of
+                        // this band is the RIGHT one here, and a physical inset
+                        // would have put the stripe against the dashed seam.
+                        borderInlineStartWidth: 4,
+                        borderInlineStartStyle: 'solid',
+                        borderInlineStartColor: accent,
+                      }
+                }
+              >
+                {bread.image && (
+                  <Image src={bread.image.url} alt="" fill sizes="48px" className="object-cover" />
+                )}
+              </span>
               <span className="min-w-0 flex-1">
-                <span
-                  className={cn(
-                    'flex items-center gap-2.5 px-3.5',
-                    // A photo carries its own height; without one the row keeps
-                    // the airier rhythm the docket was drawn with.
-                    bread.image ? 'py-3' : 'py-[22px]'
-                  )}
-                >
-                  {bread.image && (
-                    <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[7px] border border-border bg-background">
-                      <Image
-                        src={bread.image.url}
-                        alt={bread.image.alt?.trim() || bread.name}
-                        fill
-                        sizes="44px"
-                        className="object-cover"
-                      />
-                    </span>
-                  )}
+                <span className="flex items-center gap-2.5 px-3.5 py-4">
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-display text-[16px] font-semibold">
                     <span className="truncate">{bread.name}</span>
                     {bread.badge && <PublicBadge badge={bread.badge} small />}
