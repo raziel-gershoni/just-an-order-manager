@@ -120,6 +120,62 @@
   --status-cancelled: #E0685A;
 }
 
+/* ============================================================
+   מהתנור — the public storefront, and only it.
+   The staff app keeps DOCKET above: a kraft ticket is right for
+   people working a shift, and wrong for a customer who came to
+   be made hungry. Redefining the tokens on the wrapper is enough
+   — every public component already reads bg-card, the muted ink
+   and the badge colours through these variables.
+   ============================================================ */
+.site {
+  --radius: 0.875rem;
+
+  --background: #FAF6EF;        /* flour */
+  --foreground: #2B1C11;        /* crust */
+
+  --card: #F2EADC;              /* crumb */
+  --card-foreground: #2B1C11;
+
+  --primary: #57663A;           /* olive — the za'atar and the board it's cut on */
+  --primary-foreground: #FAF6EF;
+
+  --secondary: #EFE6D6;
+  --secondary-foreground: #2B1C11;
+
+  --muted: #EDE3D2;
+  --muted-foreground: #8A7E69;  /* stone */
+
+  --accent: #57663A;
+  --accent-foreground: #FAF6EF;
+
+  --destructive: #A33A22;       /* ember */
+  --destructive-foreground: #FAF6EF;
+
+  --success: #1FA855;           /* the green people recognise WhatsApp by */
+  --success-foreground: #FAF6EF;
+  --warning: #B5761B;           /* honey */
+
+  --border: #E6DBC8;
+  --input: #E6DBC8;
+  --ring: #57663A;
+}
+
+/* Frank Ruhl Libre — a Hebrew serif with a century behind it, and the point
+   of the whole revamp: the old display face was Latin-only, so every Hebrew
+   heading fell back to the body sans and the page spoke in one voice at one
+   weight. Set the family only; weight stays with the utilities. */
+.site-display {
+  font-family: var(--font-frank), var(--font-assistant), Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.005em;
+}
+
+/* The oven mouth. One shape, and it earns its place twice: the photo you
+   meet first, and the page that stands in for it before there is one. */
+.site-arch {
+  border-radius: 999px 999px 18px 18px;
+}
+
 /* Reserve the scrollbar gutter always so page width doesn't jump
    between scrolling and non-scrolling views. */
 html {

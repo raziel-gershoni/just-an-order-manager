@@ -3,12 +3,18 @@ import { WhatsAppIcon } from './icons';
 type Variant = 'solid' | 'outline' | 'light';
 
 const VARIANTS: Record<Variant, string> = {
-  solid: 'bg-success text-[#F1F4EA] shadow-[0_2px_0_rgba(0,0,0,0.18)]',
-  outline: 'border-[1.5px] border-border text-foreground',
-  light: 'bg-[#F1F4EA] text-success',
+  solid: 'bg-success text-success-foreground shadow-[0_8px_20px_-10px_rgba(31,168,85,0.9)]',
+  outline: 'border border-border text-foreground',
+  light: 'bg-background text-success',
 };
 
-/** Primary order action. Renders nothing if there's no link (no WhatsApp set). */
+/**
+ * The only way to order, so it is the only button on the page.
+ *
+ * Green, round and unmissable: the colour is doing recognition work here, not
+ * decoration — it is the one thing a customer is looking for. Renders nothing
+ * when no WhatsApp number is set, rather than a button that goes nowhere.
+ */
 export function WhatsAppButton({
   href,
   label,
@@ -28,9 +34,9 @@ export function WhatsAppButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-[15px] font-bold ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-[16px] font-bold transition-transform active:scale-[0.99] ${VARIANTS[variant]} ${className}`}
     >
-      {whatsapp && <WhatsAppIcon className="h-4 w-4" />}
+      {whatsapp && <WhatsAppIcon className="h-[18px] w-[18px]" />}
       {label}
     </a>
   );

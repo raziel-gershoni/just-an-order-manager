@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Frank_Ruhl_Libre } from 'next/font/google';
 import { getPublicSiteRequest, publicGroupId } from '@/lib/public-site';
 import { siteBaseUrl } from '@/lib/site-url';
 
@@ -7,8 +8,16 @@ import { siteBaseUrl } from '@/lib/site-url';
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#E7DCC4', // kraft — mobile browser chrome matches the page
+  themeColor: '#FAF6EF', // flour — mobile browser chrome matches the page
 };
+
+// Loaded here, not in the root layout: the staff app has no use for a serif
+// and should not pay to download one.
+const frank = Frank_Ruhl_Libre({
+  variable: '--font-frank',
+  subsets: ['hebrew', 'latin'],
+  display: 'swap',
+});
 
 const BASE_URL = siteBaseUrl();
 
@@ -67,5 +76,9 @@ export default function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="min-h-screen bg-background text-foreground">{children}</div>;
+  return (
+    <div className={`${frank.variable} site min-h-screen bg-background text-foreground`}>
+      {children}
+    </div>
+  );
 }

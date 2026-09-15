@@ -51,19 +51,19 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
 
   return (
     <>
-      {/* Sticky top bar */}
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-dashed border-border bg-background/85 px-[18px] py-2.5 backdrop-blur">
-        <div className="flex items-center gap-2 font-display text-[15px] font-bold tracking-tight">
+      {/* Sticky bar — the brand, and the one action, always within thumb reach. */}
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/90 px-5 py-3 backdrop-blur">
+        <div className="site-display flex items-center gap-2.5 text-[17px] font-bold">
           {profile.logoUrl ? (
             <Image
               src={profile.logoUrl}
               alt={profile.displayName}
-              width={26}
-              height={26}
-              className="h-[26px] w-[26px] rounded-full object-cover"
+              width={30}
+              height={30}
+              className="h-[30px] w-[30px] rounded-full object-cover"
             />
           ) : (
-            <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-primary text-[14px] text-primary-foreground shadow-[inset_0_0_0_2px_rgba(255,255,255,0.25)]">
+            <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-card text-[15px]">
               🌾
             </span>
           )}
@@ -74,7 +74,7 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
             href={waHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full bg-success px-3 py-[7px] text-[12.5px] font-bold text-[#F1F4EA] shadow-[0_1px_0_rgba(0,0,0,0.15)]"
+            className="inline-flex items-center gap-1.5 rounded-full bg-success px-3.5 py-2 text-[13px] font-bold text-success-foreground"
           >
             <WhatsAppIcon className="h-3.5 w-3.5" />
             {t('site.order_short')}
@@ -82,14 +82,14 @@ export function SectionRenderer({ site }: { site: PublicSite }) {
         )}
       </header>
 
-      <main className="mx-auto max-w-[480px] px-[18px] pb-12">
+      <main className="mx-auto max-w-[520px] px-5 pb-16">
         {sections.filter((s) => s.visible).map((s) => render(s.key))}
 
-        <footer className="mt-8 text-center text-[11.5px] leading-relaxed text-muted-foreground">
-          <div className="font-mono text-[10.5px] tracking-wide">
-            № 0042 · {profile.displayName}
-          </div>
-          {profile.pickupArea && <div className="mt-1.5 opacity-70">{profile.pickupArea}</div>}
+        <footer className="mt-12 border-t border-border pt-6 text-center">
+          <div className="site-display text-[15px] font-bold">{profile.displayName}</div>
+          {profile.pickupArea && (
+            <div className="mt-1 text-[12.5px] text-muted-foreground">{profile.pickupArea}</div>
+          )}
         </footer>
       </main>
     </>

@@ -3,8 +3,15 @@ import type { PublicProfile } from '@/lib/public-site';
 import { PublicSectionHead } from './PublicSectionHead';
 import { ClockIcon, PinIcon, PhoneIcon, InstagramIcon, WhatsAppIcon, TruckIcon } from './icons';
 
-type Row = { key: string; label: string; value: string; href?: string; mono?: boolean; icon: React.ReactNode };
+type Row = { key: string; label: string; value: string; href?: string; ltr?: boolean; icon: React.ReactNode };
 
+/**
+ * When to order, where to collect, how to reach them.
+ *
+ * Rows on hairlines rather than a bordered card cut into dashed cells. Numbers
+ * carry their own direction — a phone number in a right-to-left line renders
+ * with its leading digit at the wrong end otherwise.
+ */
 export function DetailsSection({
   profile,
   waHref,
@@ -14,6 +21,7 @@ export function DetailsSection({
 }) {
   const ig = profile.instagram?.replace(/^@/, '').trim();
   const rows: Row[] = [];
+  const icon = 'h-[18px] w-[18px] text-primary';
 
   const d = profile.delivery;
   const deliveryText = d
@@ -27,57 +35,59 @@ export function DetailsSection({
     : null;
 
   if (profile.orderDays)
-    rows.push({ key: 'days', label: t('site.order_days'), value: profile.orderDays, icon: <ClockIcon className="h-[18px] w-[18px] text-primary" /> });
+    rows.push({ key: 'days', label: t('site.order_days'), value: profile.orderDays, icon: <ClockIcon className={icon} /> });
   if (profile.pickupArea)
-    rows.push({ key: 'pickup', label: t('site.pickup'), value: profile.pickupArea, href: profile.mapUrl ?? undefined, icon: <PinIcon className="h-[18px] w-[18px] text-primary" /> });
+    rows.push({ key: 'pickup', label: t('site.pickup'), value: profile.pickupArea, href: profile.mapUrl ?? undefined, icon: <PinIcon className={icon} /> });
   if (profile.whatsappPhone)
-    rows.push({ key: 'wa', label: t('site.whatsapp'), value: profile.whatsappPhone, href: waHref ?? undefined, mono: true, icon: <WhatsAppIcon className="h-[18px] w-[18px] text-primary" /> });
+    rows.push({ key: 'wa', label: t('site.whatsapp'), value: profile.whatsappPhone, href: waHref ?? undefined, ltr: true, icon: <WhatsAppIcon className={icon} /> });
   if (profile.contactPhone)
-    rows.push({ key: 'phone', label: t('site.phone'), value: profile.contactPhone, href: `tel:${profile.contactPhone}`, mono: true, icon: <PhoneIcon className="h-[18px] w-[18px] text-primary" /> });
+    rows.push({ key: 'phone', label: t('site.phone'), value: profile.contactPhone, href: `tel:${profile.contactPhone}`, ltr: true, icon: <PhoneIcon className={icon} /> });
   if (ig)
-    rows.push({ key: 'ig', label: t('site.instagram'), value: `${ig}@`, href: `https://instagram.com/${ig}`, icon: <InstagramIcon className="h-[18px] w-[18px] text-primary" /> });
+    rows.push({ key: 'ig', label: t('site.instagram'), value: `@${ig}`, href: `https://instagram.com/${ig}`, ltr: true, icon: <InstagramIcon className={icon} /> });
   if (profile.address)
-    rows.push({ key: 'addr', label: t('site.address'), value: profile.address, href: profile.mapUrl ?? undefined, icon: <PinIcon className="h-[18px] w-[18px] text-primary" /> });
+    rows.push({ key: 'addr', label: t('site.address'), value: profile.address, href: profile.mapUrl ?? undefined, icon: <PinIcon className={icon} /> });
 
   return (
-    <section className="mt-10">
+    <section className="mt-12">
       <PublicSectionHead label={t('site.details_title')} />
+
       {deliveryText && (
-        <div className="mb-3 flex items-center gap-2.5 rounded-[10px] border border-border bg-card px-4 py-3 text-[13.5px] font-semibold">
+        <div className="mb-4 flex items-center gap-2.5 rounded-[14px] bg-card px-4 py-3 text-[13.5px] font-semibold">
           <TruckIcon className="h-[18px] w-[18px] shrink-0 text-primary" />
-          <span>{deliveryText}</span>
+          <span className="min-w-0">{deliveryText}</span>
         </div>
       )}
+
       {rows.length > 0 && (
-      <address className="block overflow-hidden rounded-[10px] border border-border bg-card not-italic">
-        {rows.map((row, i) => {
-          const value = (
-            <span className={`ms-auto font-bold ${row.mono ? 'font-mono tracking-tight' : ''}`}>
-              {row.value}
-            </span>
-          );
-          return (
-            <div
-              key={row.key}
-              className={`flex items-center gap-3 px-4 py-3 text-[14px] font-semibold ${
-                i > 0 ? 'border-t-[1.5px] border-dashed border-border' : ''
-              }`}
-            >
-              <span className="flex min-w-[104px] items-center gap-2.5 font-semibold text-muted-foreground">
-                {row.icon}
-                {row.label}
+        <address className="block not-italic">
+          {rows.map((row, i) => {
+            const value = (
+              <span className={`ms-auto font-semibold ${row.ltr ? 'tabular-nums' : ''}`}>
+                {row.ltr ? <span dir="ltr">{row.value}</span> : row.value}
               </span>
-              {row.href ? (
-                <a href={row.href} target="_blank" rel="noopener noreferrer" className="ms-auto">
-                  {value}
-                </a>
-              ) : (
-                value
-              )}
-            </div>
-          );
-        })}
-      </address>
+            );
+            return (
+              <div
+                key={row.key}
+                className={`flex items-center gap-3 py-3 text-[14.5px] ${
+                  i > 0 ? 'border-t border-border' : ''
+                }`}
+              >
+                <span className="flex min-w-[104px] items-center gap-2.5 text-muted-foreground">
+                  {row.icon}
+                  {row.label}
+                </span>
+                {row.href ? (
+                  <a href={row.href} target="_blank" rel="noopener noreferrer" className="ms-auto">
+                    {value}
+                  </a>
+                ) : (
+                  value
+                )}
+              </div>
+            );
+          })}
+        </address>
       )}
     </section>
   );

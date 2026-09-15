@@ -1,20 +1,22 @@
 import { t } from '@/lib/i18n';
 import { WhatsAppButton } from './WhatsAppButton';
 
+/**
+ * The last thing on the page: the crust, and one way in.
+ *
+ * Dark warm brown rather than the app's stamp violet — this band is the only
+ * place the page goes dark, which is what makes it the end of the scroll. The
+ * giant № watermark that used to sit behind it belonged to a filing system.
+ */
 export function CtaSection({ waHref }: { waHref: string | null }) {
   return (
-    <section className="relative mt-10 overflow-hidden rounded-xl bg-primary px-5 py-7 text-center text-primary-foreground">
-      <span className="pointer-events-none absolute -bottom-8 left-[-6px] font-mono text-[120px] font-bold leading-none text-white/[0.06]">
-        №
-      </span>
-      <h2 className="relative font-display text-[23px] font-bold tracking-tight">
-        {t('site.cta_title')}
-      </h2>
-      <p className="relative mt-2 text-[14px] font-medium text-primary-foreground/80">
+    <section className="mt-12 rounded-[20px] bg-foreground px-6 py-9 text-center text-background">
+      <h2 className="site-display text-[26px] font-bold leading-tight">{t('site.cta_title')}</h2>
+      <p className="mx-auto mt-2 max-w-[300px] text-[14.5px] leading-relaxed text-background/75">
         {t('site.cta_sub')}
       </p>
-      <div className="relative mt-4">
-        <WhatsAppButton href={waHref} label={t('site.open_whatsapp')} variant="light" />
+      <div className="mt-5 flex">
+        <WhatsAppButton href={waHref} label={t('site.open_whatsapp')} className="flex-1" />
       </div>
     </section>
   );

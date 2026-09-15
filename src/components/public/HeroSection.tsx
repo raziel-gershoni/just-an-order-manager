@@ -3,6 +3,15 @@ import { t } from '@/lib/i18n';
 import type { PublicProfile } from '@/lib/public-site';
 import { WhatsAppButton } from './WhatsAppButton';
 
+/**
+ * The first screen, and the page's whole argument: a loaf, shaped like the
+ * mouth of the oven it came out of.
+ *
+ * The photo leads. It used to come fourth — after a medallion, an eyebrow
+ * between two hairlines, and a headline — which is a lot of paperwork to get
+ * through before anyone saw bread. When there is no photo yet the arch stays
+ * and holds the brand mark, so the page has the same shape either way.
+ */
 export function HeroSection({
   profile,
   waHref,
@@ -16,78 +25,74 @@ export function HeroSection({
   const hero = profile.heroImage;
 
   return (
-    <section className="pt-8 pb-4 text-center">
-      {!hero &&
-        (profile.logoUrl ? (
-          <div className="mx-auto mb-5 h-[88px] w-[88px] overflow-hidden rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
-            <Image
-              src={profile.logoUrl}
-              alt={profile.displayName}
-              width={88}
-              height={88}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        ) : (
-          <div className="relative mx-auto mb-5 grid h-[88px] w-[88px] -rotate-[4deg] place-items-center rounded-full border-2 border-primary bg-card shadow-[0_4px_16px_-10px_rgba(36,31,26,0.6)]">
-            <span className="absolute inset-1.5 rounded-full border border-dashed border-primary/50" />
-            <span className="text-[34px] leading-none">🌾</span>
-          </div>
-        ))}
-
-      {eyebrow && (
-        <div className="flex items-center justify-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-          <span className="h-px w-6 bg-border" />
-          {eyebrow}
-          <span className="h-px w-6 bg-border" />
-        </div>
-      )}
-
-      {headline ? (
-        <h1 className="mt-4 font-display text-[34px] font-bold leading-[1.04] tracking-tight sm:text-[40px]">
-          {headline}
-        </h1>
-      ) : (
-        // Guarantee exactly one H1 for SEO/a11y even when the owner leaves the
-        // hero headline blank — fall back to the brand name, visually hidden.
-        <h1 className="sr-only">{profile.displayName}</h1>
-      )}
-
-      {lede && (
-        <p className="mx-auto mt-3 max-w-[330px] text-[15.5px] font-medium leading-relaxed text-muted-foreground">
-          {lede}
-        </p>
-      )}
-
-      {hero && (
-        <div className="relative mx-auto mt-6 h-[210px] w-full overflow-hidden rounded-[10px] border border-border shadow-[0_10px_26px_-16px_rgba(36,31,26,0.5)]">
+    <section className="pb-2 pt-5">
+      <div className="site-arch relative h-[320px] w-full overflow-hidden bg-card shadow-[0_18px_40px_-28px_rgba(43,28,17,0.55)]">
+        {hero ? (
           <Image
             src={hero.url}
             alt={hero.alt || headline || profile.displayName}
             fill
-            sizes="(max-width: 480px) 100vw, 480px"
+            sizes="(max-width: 520px) 100vw, 520px"
             className="object-cover"
             priority
           />
-        </div>
-      )}
-
-      {/* WhatsApp is the only way in. The bot behind the old Telegram button is
-          staff-side — it answered customers with the back-office onboarding. */}
-      <div className="mt-5 flex">
-        <WhatsAppButton href={waHref} label={t('site.order_whatsapp')} className="flex-1" />
+        ) : (
+          <div className="grid h-full w-full place-items-center">
+            {profile.logoUrl ? (
+              <Image
+                src={profile.logoUrl}
+                alt={profile.displayName}
+                width={96}
+                height={96}
+                className="h-24 w-24 rounded-full object-cover"
+              />
+            ) : (
+              <span className="text-[56px] leading-none opacity-70">🌾</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {profile.trustItems.length > 0 && (
-        <div className="mt-[18px] flex flex-wrap justify-center gap-x-3.5 gap-y-2 text-[12px] font-semibold text-muted-foreground">
-          {profile.trustItems.map((item, i) => (
-            <span key={i} className="inline-flex items-center gap-2">
-              {i > 0 && <span className="-ms-2 inline-block h-[3px] w-[3px] rounded-full bg-warning" />}
-              {item}
-            </span>
-          ))}
+      <div className="pt-6 text-center">
+        {eyebrow && (
+          <div className="text-[12px] font-semibold tracking-[0.14em] text-primary">
+            {eyebrow}
+          </div>
+        )}
+
+        {headline ? (
+          <h1 className="site-display mt-2 text-[38px] font-bold leading-[1.1] sm:text-[44px]">
+            {headline}
+          </h1>
+        ) : (
+          // One H1 either way: the brand name carries it when the owner leaves
+          // the headline empty.
+          <h1 className="sr-only">{profile.displayName}</h1>
+        )}
+
+        {lede && (
+          <p className="mx-auto mt-3 max-w-[340px] text-[16px] leading-[1.6] text-muted-foreground">
+            {lede}
+          </p>
+        )}
+
+        <div className="mt-6 flex">
+          {/* WhatsApp is the only way in — the Telegram bot behind the old
+              button is staff-side and answered customers with onboarding. */}
+          <WhatsAppButton href={waHref} label={t('site.order_whatsapp')} className="flex-1" />
         </div>
-      )}
+
+        {profile.trustItems.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 text-[13px] text-muted-foreground">
+            {profile.trustItems.map((item, i) => (
+              <span key={i} className="inline-flex items-center gap-2.5">
+                {i > 0 && <span className="h-1 w-1 rounded-full bg-primary/50" />}
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

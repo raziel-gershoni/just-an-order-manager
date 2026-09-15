@@ -8,17 +8,39 @@ import type { PublicBread, PublicDeal } from '@/lib/public-site';
 import { PublicSectionHead } from './PublicSectionHead';
 import { PublicBadge } from './PublicBadge';
 
-// Accent hue for a bread: its badge color, else a quiet neutral (revisit later).
-const NEUTRAL = '#A2937D';
-function accentOf(bread: PublicBread): string {
-  return bread.badge?.colorVar ?? NEUTRAL;
-}
 function rangeOf(bread: PublicBread): string | null {
   const sizes = bread.sizes; // sorted low → high
   if (sizes.length === 0) return null;
   const min = sizes[0].price;
   const max = sizes[sizes.length - 1].price;
-  return min === max ? `₪${min}` : `₪${min} ${t('site.price_to')} ₪${max}`;
+  return min === max ? `₪${min}` : `₪${min}–${max}`;
+}
+
+/**
+ * The bread, its picture and what it costs — a menu, not a docket.
+ *
+ * Every row had a coloured stub, a dashed perforation under it and monospace
+ * prices; ten of them read as a ration book. What is left is the photo, the
+ * name in the serif, and the price, on a hairline. A bread with no photo gets
+ * its initial in the same serif rather than a hole in the column, so the names
+ * still start on one line down the page.
+ */
+function Tile({ bread }: { bread: PublicBread }) {
+  if (bread.image) {
+    return (
+      <span className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[13px] bg-card">
+        <Image src={bread.image.url} alt="" fill sizes="62px" className="object-cover" />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className="site-display grid h-[62px] w-[62px] shrink-0 place-items-center rounded-[13px] bg-card text-[26px] font-bold text-muted-foreground/55"
+    >
+      {bread.name.trim().charAt(0)}
+    </span>
+  );
 }
 
 export function PricelistSection({
@@ -31,7 +53,7 @@ export function PricelistSection({
   const [openId, setOpenId] = useState<number | null>(null);
   const openBread = openId == null ? null : catalog.find((b) => b.id === openId) ?? null;
 
-  // Close on Escape + lock background scroll while the note is open.
+  // Close on Escape + lock background scroll while the card is open.
   useEffect(() => {
     if (!openBread) return;
     const onKey = (e: KeyboardEvent) => {
@@ -47,95 +69,66 @@ export function PricelistSection({
   }, [openBread]);
 
   return (
-    <section className="mt-10">
+    <section className="mt-12">
       <PublicSectionHead label={t('site.pricelist')} meta={t('site.prices_note')} />
-      {/* Flat connected docket — perforated row separators, no rounded corners. */}
-      <div className="overflow-hidden border border-border bg-card shadow-[0_8px_22px_-18px_rgba(36,31,26,0.55)]">
+
+      <div>
         {catalog.map((bread, i) => {
-          const accent = accentOf(bread);
           const range = rangeOf(bread);
           const hasDeals = bread.sizes.some((s) => s.deals.length > 0);
+          const soldOut = bread.badge?.preset === 'sold_out';
           return (
             <button
               key={bread.id}
               type="button"
               onClick={() => setOpenId(bread.id)}
               className={cn(
-                'flex w-full items-stretch text-start',
-                i > 0 && 'border-t-[1.5px] border-dashed border-border'
+                'flex w-full items-center gap-3.5 py-3.5 text-start transition-opacity',
+                i > 0 && 'border-t border-border',
+                // Sold out is information, so the row says it twice: the badge
+                // names it and the row steps back from the ones you can buy.
+                soldOut && 'opacity-55'
               )}
             >
-              {/* The band at the start edge — one element on every row, so every
-                  name begins in the same place. It is the bread's photo when it
-                  has one, and otherwise a quiet tint of its accent with the
-                  saturated stripe this list has always used for identity. A
-                  thumbnail inside the text flow pushed the name inward on the
-                  rows that had one and left the column ragged. */}
-              <span
-                aria-hidden
-                className="relative w-12 shrink-0 self-stretch overflow-hidden border-e-2 border-dashed border-card/60"
-                style={
-                  bread.image
-                    ? undefined
-                    : {
-                        background: `color-mix(in srgb, ${accent} 16%, var(--card))`,
-                        // Logical, not a box-shadow offset: the outer edge of
-                        // this band is the RIGHT one here, and a physical inset
-                        // would have put the stripe against the dashed seam.
-                        borderInlineStartWidth: 4,
-                        borderInlineStartStyle: 'solid',
-                        borderInlineStartColor: accent,
-                      }
-                }
-              >
-                {bread.image && (
-                  <Image src={bread.image.url} alt="" fill sizes="48px" className="object-cover" />
-                )}
-              </span>
+              <Tile bread={bread} />
+
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2.5 px-3.5 py-4">
-                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-display text-[16px] font-semibold">
-                    <span className="truncate">{bread.name}</span>
-                    {bread.badge && <PublicBadge badge={bread.badge} small />}
-                    {hasDeals && (
-                      <span
-                        className="whitespace-nowrap rounded-[3px] border px-1.5 py-0.5 text-[10px] font-bold"
-                        style={{
-                          color: accent,
-                          borderColor: `color-mix(in srgb, ${accent} 45%, var(--border))`,
-                          background: `color-mix(in srgb, ${accent} 10%, transparent)`,
-                        }}
-                      >
-                        {t('site.deals_tag')}
-                      </span>
-                    )}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="site-display truncate text-[19px] font-bold leading-snug">
+                    {bread.name}
                   </span>
-                  {range && (
-                    <span className="whitespace-nowrap font-mono text-[13px] font-bold" style={{ color: accent }}>
-                      {range}
+                  {bread.badge && <PublicBadge badge={bread.badge} small />}
+                  {hasDeals && (
+                    <span className="rounded-full bg-primary/10 px-2 py-[3px] text-[11px] font-semibold leading-none text-primary">
+                      {t('site.deals_tag')}
                     </span>
                   )}
-                  <ChevronStart />
                 </span>
                 {bread.description && (
-                  <span className="block -mt-1 px-3.5 pb-3 text-[12.5px] leading-snug text-muted-foreground">
+                  <span className="mt-1 block truncate text-[13px] leading-snug text-muted-foreground">
                     {bread.description}
                   </span>
                 )}
               </span>
+
+              {range && (
+                <span dir="ltr" className="site-display shrink-0 text-[17px] font-bold tabular-nums">
+                  {range}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
       {openBread && (
-        <PricelistModal bread={openBread} surcharge={additionsSurcharge} onClose={() => setOpenId(null)} />
+        <PricelistCard bread={openBread} surcharge={additionsSurcharge} onClose={() => setOpenId(null)} />
       )}
     </section>
   );
 }
 
-function PricelistModal({
+function PricelistCard({
   bread,
   surcharge,
   onClose,
@@ -144,149 +137,112 @@ function PricelistModal({
   surcharge: number;
   onClose: () => void;
 }) {
-  const accent = accentOf(bread);
   return (
     <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center p-7"
+      className="fixed inset-0 z-50 flex animate-fade-in items-end justify-center sm:items-center"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-label={bread.name}
     >
-      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-[1px]" />
-      {/* Tilted sticky note */}
+      <div className="absolute inset-0 bg-foreground/45" />
+
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[330px] -rotate-[2.4deg] border p-4 shadow-[0_18px_40px_-14px_rgba(36,31,26,0.6)]"
-        style={{
-          background: `color-mix(in srgb, ${accent} 13%, var(--card))`,
-          borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))`,
-        }}
+        className="relative max-h-[88vh] w-full max-w-[420px] overflow-y-auto rounded-t-[22px] bg-background pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-8px_40px_-12px_rgba(43,28,17,0.5)] sm:rounded-[22px] sm:pb-5"
       >
-        {/* washi tape */}
-        <span
-          aria-hidden
-          className="absolute -top-3 left-1/2 h-6 w-24 -translate-x-1/2 -rotate-3 border border-white/30 shadow-sm"
-          style={{ background: `color-mix(in srgb, ${accent} 22%, rgba(244,238,220,0.72))` }}
-        />
-
         {bread.image && (
-          <div
-            className="relative mb-3 aspect-[4/3] w-full overflow-hidden rounded-[8px] border"
-            style={{ borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))` }}
-          >
+          <div className="relative aspect-[5/3] w-full overflow-hidden rounded-t-[22px]">
             <Image
               src={bread.image.url}
               alt={bread.image.alt?.trim() || bread.name}
               fill
-              sizes="(max-width: 480px) 90vw, 330px"
+              sizes="(max-width: 520px) 100vw, 420px"
               className="object-cover"
             />
           </div>
         )}
 
-        <div className="mb-3 flex items-center gap-2">
-          <h3 className="font-display text-[18px] font-bold tracking-tight">{bread.name}</h3>
-          {bread.badge && <PublicBadge badge={bread.badge} small />}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="close"
-            className="ms-auto grid h-7 w-7 place-items-center text-muted-foreground"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* sizes: one connected, flat group divided by dashed perforations */}
-        <div
-          className="overflow-hidden border bg-card"
-          style={{ borderColor: `color-mix(in srgb, ${accent} 28%, var(--border))` }}
-        >
-          {bread.sizes.map((s, i) => (
-            <div
-              key={s.id}
-              className={cn('flex items-stretch', i > 0 && 'border-t border-dashed')}
-              style={i > 0 ? { borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))` } : undefined}
+        <div className="px-5 pt-4">
+          <div className="flex items-center gap-2">
+            <h3 className="site-display text-[24px] font-bold leading-tight">{bread.name}</h3>
+            {bread.badge && <PublicBadge badge={bread.badge} />}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('payments.cancel')}
+              className="ms-auto grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-card"
             >
-              <span
-                aria-hidden
-                className="w-4 shrink-0 self-stretch border-e-[1.5px] border-dashed border-card/60"
-                style={{ background: accent }}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[14px]">
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    {s.name}
-                    {s.badge && <PublicBadge badge={s.badge} small />}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+
+          {bread.description && (
+            <p className="mt-2 text-[14.5px] leading-[1.6] text-muted-foreground">{bread.description}</p>
+          )}
+
+          <div className="mt-4">
+            {bread.sizes.map((s, i) => (
+              <div key={s.id} className={cn('py-3', i > 0 && 'border-t border-border')}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[15px] font-semibold">{s.name}</span>
+                  {s.badge && <PublicBadge badge={s.badge} small />}
+                  {s.weightGrams != null && (
+                    <span dir="ltr" className="text-[12.5px] tabular-nums text-muted-foreground">
+                      {s.weightGrams}g
+                    </span>
+                  )}
+                  <span dir="ltr" className="site-display ms-auto text-[18px] font-bold tabular-nums">
+                    ₪{s.price}
                   </span>
-                  <span className="font-mono font-bold tabular-nums">₪{s.price}</span>
                 </div>
                 {s.deals.map((d) => (
-                  <DealRow key={d.minQty} deal={d} accent={accent} />
+                  <DealRow key={d.minQty} deal={d} />
                 ))}
               </div>
-            </div>
-          ))}
-        </div>
-
-        {bread.additions.length > 0 && (
-          <div
-            className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t-[1.5px] border-dashed pt-2.5 text-[12px]"
-            style={{ borderColor: `color-mix(in srgb, ${accent} 35%, var(--border))` }}
-          >
-            <span className="font-semibold text-muted-foreground">{t('site.additions_label')}</span>
-            {bread.additions.map((a) => (
-              <span key={a} className="border border-border bg-card px-1.5 py-0.5 font-semibold">
-                {a}
-              </span>
             ))}
-            {surcharge > 0 && (
-              <span className="ms-auto whitespace-nowrap font-mono text-[11px] font-bold" style={{ color: accent }}>
-                <span dir="ltr">+₪{surcharge}</span> {t('site.per_addition')}
-              </span>
-            )}
           </div>
-        )}
+
+          {bread.additions.length > 0 && (
+            <div className="mt-4 border-t border-border pt-3.5">
+              <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
+                <span className="font-semibold text-muted-foreground">{t('site.additions_label')}</span>
+                {bread.additions.map((a) => (
+                  <span key={a} className="rounded-full bg-card px-2.5 py-1 font-semibold leading-none">
+                    {a}
+                  </span>
+                ))}
+              </div>
+              {surcharge > 0 && (
+                <div className="mt-2 text-[12.5px] text-muted-foreground">
+                  <span dir="ltr">+₪{surcharge}</span> {t('site.per_addition')}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function DealRow({ deal, accent }: { deal: PublicDeal; accent: string }) {
-  // A torn-coupon strip under the size: accent-tinted, dashed top edge — the
-  // "N ב-₪P" offer and a bold "saved ₪X" chip. One line, discount at a glance.
+function DealRow({ deal }: { deal: PublicDeal }) {
+  // The offer in one line: how many, for how much, and what it saves. Olive
+  // rather than the row's own colour — a deal is the same thing on every bread.
   return (
-    <div
-      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-dashed px-3 py-2"
-      style={{
-        borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))`,
-        background: `color-mix(in srgb, ${accent} 9%, transparent)`,
-      }}
-    >
-      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: accent }}>
-        {t('site.deal_label')}
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[11px] bg-primary/[0.09] px-3 py-2 text-[13.5px]">
+      <span className="font-semibold text-primary">{t('site.deal_label')}</span>
+      <span className="font-semibold">
+        <span className="tabular-nums">{deal.minQty}</span> {t('site.deal_for')}
+        <span dir="ltr" className="tabular-nums"> ₪{deal.packPrice}</span>
       </span>
-      <span className="font-semibold text-[13px]">
-        <span className="font-mono">{deal.minQty}</span> {t('site.deal_for')}
-        <span className="font-mono font-bold" dir="ltr"> ₪{deal.packPrice}</span>
-      </span>
-      <span
-        className="ms-auto whitespace-nowrap rounded-[3px] px-1.5 py-0.5 text-[11px] font-bold text-white"
-        style={{ background: accent }}
-      >
+      <span className="ms-auto text-[12.5px] font-semibold text-primary">
+        {/* The isolate goes on the digits — dir on the whole line would send
+            the Hebrew word to the wrong end of it. */}
         {t('site.deal_save')} <span dir="ltr">₪{deal.saveAmount}</span>
       </span>
     </div>
-  );
-}
-
-function ChevronStart() {
-  // Points toward the inline-start (right in RTL) — a "tap to open" hint.
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0 text-muted-foreground/50">
-      <path d="M15 6l-6 6 6 6" />
-    </svg>
   );
 }

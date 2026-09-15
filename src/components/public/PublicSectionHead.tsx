@@ -1,4 +1,11 @@
-/** DOCKET section separator: label + dashed rule + optional mono meta note. */
+/**
+ * A section's name, and nothing else.
+ *
+ * It used to be a label, a dashed rule running to the edge and a monospace
+ * note — three devices to say one word. The rules were the loudest thing on a
+ * page selling bread, so they are gone; the serif and the space around it do
+ * the separating now.
+ */
 export function PublicSectionHead({
   label,
   meta,
@@ -7,16 +14,9 @@ export function PublicSectionHead({
   meta?: string;
 }) {
   return (
-    <div className="mb-4 flex items-center gap-3">
-      <h2 className="whitespace-nowrap font-display text-[20px] font-bold tracking-tight">
-        {label}
-      </h2>
-      <span className="flex-1 border-t-[1.5px] border-dashed border-border" />
-      {meta && (
-        <span className="whitespace-nowrap font-mono text-[11px] font-semibold text-muted-foreground">
-          {meta}
-        </span>
-      )}
+    <div className="mb-4">
+      <h2 className="site-display text-[23px] font-bold leading-tight">{label}</h2>
+      {meta && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{meta}</p>}
     </div>
   );
 }
