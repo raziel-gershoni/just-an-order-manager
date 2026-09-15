@@ -315,7 +315,13 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
       })
       .sort((a, b) => Number(a.price) - Number(b.price)),
     additions: additionsByType.get(t.id) ?? [],
-  }));
+  }))
+    // A bread with no active size has no price, so the pricelist showed a row
+    // with nothing on the right of it that still opened a card containing only
+    // its name. It happens to a type whose sizes were never linked, and to
+    // every type at once when a size is deactivated in the catalog. Nothing to
+    // sell, nothing to list — and it stays out of the structured data too.
+    .filter((b) => b.sizes.length > 0);
 
   const publicProfile: PublicProfile = {
     // The bakery name has a single home: group settings.

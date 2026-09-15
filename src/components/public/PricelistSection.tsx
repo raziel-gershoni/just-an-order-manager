@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { PublicBread, PublicDeal } from '@/lib/public-site';
@@ -81,17 +81,25 @@ export function PricelistSection({
               onClick={() => setOpenId(bread.id)}
               className={cn(
                 'flex w-full items-center gap-3.5 py-3 text-start transition-opacity',
-                i > 0 && 'border-t border-border',
-                // Sold out is information, so the row says it twice: the badge
-                // names it and the row steps back from the ones you can buy.
-                soldOut && 'opacity-55'
+                i > 0 && 'border-t border-border'
               )}
             >
-              <Tile bread={bread} />
+              {/* Sold out dims the picture and greys the name. Fading the whole
+                  row — which is what this did — took the price to 2:1 against
+                  the counter: unreadable, when the point is to say what it will
+                  cost when it is back. The badge already names the state. */}
+              <span className={cn('contents', soldOut && 'opacity-45')}>
+                <Tile bread={bread} />
+              </span>
 
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="site-display truncate text-[20px] leading-tight">
+                  <span
+                    className={cn(
+                      'site-display truncate text-[20px] leading-tight',
+                      soldOut && 'text-muted-foreground'
+                    )}
+                  >
                     {bread.name}
                   </span>
                   {bread.badge && <PublicBadge badge={bread.badge} small />}
@@ -132,6 +140,14 @@ function PricelistCard({
   surcharge: number;
   onClose: () => void;
 }) {
+  // aria-modal tells a screen reader to ignore everything behind this card, so
+  // focus has to come inside it or a keyboard user is left tabbing through rows
+  // that are no longer announced — and cannot scroll the card at all.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-50 flex animate-fade-in items-end justify-center sm:items-center"
@@ -146,37 +162,55 @@ function PricelistCard({
         onClick={(e) => e.stopPropagation()}
         className="relative max-h-[88vh] w-full max-w-[420px] overflow-y-auto rounded-t-[14px] bg-background pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-8px_40px_-12px_rgba(43,28,17,0.5)] sm:rounded-[14px] sm:pb-5"
       >
-        {bread.image && (
-          <div className="relative aspect-[5/3] w-full overflow-hidden rounded-t-[14px]">
-            <Image
-              src={bread.image.url}
-              alt={bread.image.alt?.trim() || bread.name}
-              fill
-              sizes="(max-width: 520px) 100vw, 420px"
-              className="object-cover"
-            />
-          </div>
-        )}
+        {/* Close sits in the corner rather than in the title row: with the photo
+            beside the name there is no room left on that line, and top-inline-end
+            is where a hand reaches for it. Sticky inside a zero-height box, so
+            it stays in that corner on a bread long enough to scroll — absolute
+            would pin it to the top of the CONTENT and scroll it away. */}
+        <div className="sticky top-0 z-10 h-0">
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label={t('site.close')}
+          className="absolute end-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-background/85 text-muted-foreground transition-colors hover:bg-card"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+        </div>
 
-        <div className="px-5 pt-4">
-          <div className="flex items-center gap-2">
-            <h3 className="site-display text-[26px] leading-tight">{bread.name}</h3>
-            {bread.badge && <PublicBadge badge={bread.badge} />}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={t('payments.cancel')}
-              className="ms-auto grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-card"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+        <div className="px-5 pt-5">
+          {/* Portrait here too, and inset rather than bleeding across the top:
+              a 3:4 photo at full card width would be taller than the phone and
+              push every price below the fold — and the prices are what the tap
+              was for. Beside the name it stays the same shape as the row that
+              opened it, just bigger. */}
+          <div className="flex items-start gap-4">
+            {bread.image && (
+              <div className="relative aspect-[4/5] w-[34%] max-w-[132px] shrink-0 overflow-hidden rounded-[5px] bg-card">
+                <Image
+                  src={bread.image.url}
+                  alt={bread.image.alt?.trim() || bread.name}
+                  fill
+                  sizes="132px"
+                  className="object-cover"
+                />
+              </div>
+            )}
+            <div className="min-w-0 flex-1 pe-8">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="site-display text-[26px] leading-tight">{bread.name}</h3>
+                {bread.badge && <PublicBadge badge={bread.badge} />}
+              </div>
+              {bread.description && (
+                <p className="mt-2 text-[14.5px] leading-[1.6] text-muted-foreground">
+                  {bread.description}
+                </p>
+              )}
+            </div>
           </div>
-
-          {bread.description && (
-            <p className="mt-2 text-[14.5px] leading-[1.6] text-muted-foreground">{bread.description}</p>
-          )}
 
           <div className="mt-4">
             {bread.sizes.map((s, i) => (
@@ -189,8 +223,12 @@ function PricelistCard({
                       {s.weightGrams}g
                     </span>
                   )}
-                  <span dir="ltr" className="site-display ms-auto text-[19px] tabular-nums text-primary">
-                    ₪{s.price}
+                  {/* The isolate goes on an inner span: margin-inline-start
+                      resolves against the element's OWN direction, so dir="ltr"
+                      here would turn ms-auto into margin-left and the price
+                      would sit against the weight instead of the far edge. */}
+                  <span className="site-display ms-auto text-[19px] tabular-nums text-primary">
+                    <span dir="ltr">₪{s.price}</span>
                   </span>
                 </div>
                 {s.deals.map((d) => (

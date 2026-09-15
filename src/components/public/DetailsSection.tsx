@@ -47,6 +47,12 @@ export function DetailsSection({
   if (profile.address)
     rows.push({ key: 'addr', label: t('site.address'), value: profile.address, href: profile.mapUrl ?? undefined, icon: <PinIcon className={icon} /> });
 
+  // Delivery can be switched on with every field blank, which makes
+  // profile.delivery a truthy object carrying nothing — the section guard
+  // upstream reads that as content and the heading was left standing alone.
+  // Decide it here, where both halves are already known.
+  if (!deliveryText && rows.length === 0) return null;
+
   return (
     <section className="mt-12">
       <PublicSectionHead label={t('site.details_title')} />

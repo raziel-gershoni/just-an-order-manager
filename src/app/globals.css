@@ -142,14 +142,17 @@
   --card: #E7D4B2;              /* crumb */
   --card-foreground: #1C1009;
 
-  --primary: #C4471C;           /* ember — the one hot colour on the page */
+  /* Every ratio below was measured against the ground it actually sits on,
+     not guessed: the ember carries every price on the page, and at #C4471C it
+     came to 3.96:1 on the counter and 3.55:1 on the deal chip's tint. */
+  --primary: #A93A14;           /* ember — the one hot colour on the page */
   --primary-foreground: #F6ECDA;
 
   --secondary: #E7D4B2;
   --secondary-foreground: #1C1009;
 
   --muted: #E7D4B2;
-  --muted-foreground: #7B6547;  /* ash */
+  --muted-foreground: #735D40;  /* ash */
 
   --accent: #C4471C;
   --accent-foreground: #F6ECDA;
@@ -157,9 +160,9 @@
   --destructive: #7E2D12;       /* deeper than the ember, so שבת reads apart */
   --destructive-foreground: #F6ECDA;
 
-  --success: #1FA855;           /* the green people recognise WhatsApp by */
+  --success: #14803F;           /* still the green people recognise, dark enough to read white on */
   --success-foreground: #FFFFFF;
-  --warning: #A9731A;           /* honey */
+  --warning: #8F6116;           /* honey */
 
   --border: rgba(28, 16, 9, 0.11);
   --input: rgba(28, 16, 9, 0.11);

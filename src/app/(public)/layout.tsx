@@ -8,6 +8,12 @@ import { siteBaseUrl } from '@/lib/site-url';
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Stated, not inherited. Next merges viewport shallowly — only the keys this
+  // object declares override the parent — so leaving these out kept the mini
+  // app's zoom lock on a public page whose secondary ink is 12.5px, and the
+  // comment above was half true. The app keeps its lock; it is the parent.
+  maximumScale: 5,
+  userScalable: true,
   themeColor: '#1C1009', // oven — the page opens dark, and so does the chrome
 };
 

@@ -539,6 +539,7 @@ const translations: Record<string, string> = {
   'site.cta_sub': 'שולחים הודעה, בוחרים כיכרות, ואוספים טרי מהתנור',
   'site.wa_prefill': 'היי! אשמח להזמין לחם 🍞',
   'site.coming_soon': 'בקרוב',
+  'site.close': 'סגור',
   'site.coming_soon_sub': 'האתר בהקמה',
   'site.not_found': 'הדף לא נמצא',
   'site.not_found_sub': 'הקישור שגוי או שהדף הוסר.',
