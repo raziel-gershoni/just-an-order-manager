@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -71,7 +72,25 @@ export function PricelistSection({
                 style={{ background: accent }}
               />
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2.5 px-3.5 py-[22px]">
+                <span
+                  className={cn(
+                    'flex items-center gap-2.5 px-3.5',
+                    // A photo carries its own height; without one the row keeps
+                    // the airier rhythm the docket was drawn with.
+                    bread.image ? 'py-3' : 'py-[22px]'
+                  )}
+                >
+                  {bread.image && (
+                    <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[7px] border border-border bg-background">
+                      <Image
+                        src={bread.image.url}
+                        alt={bread.image.alt?.trim() || bread.name}
+                        fill
+                        sizes="44px"
+                        className="object-cover"
+                      />
+                    </span>
+                  )}
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-display text-[16px] font-semibold">
                     <span className="truncate">{bread.name}</span>
                     {bread.badge && <PublicBadge badge={bread.badge} small />}
@@ -146,6 +165,21 @@ function PricelistModal({
           className="absolute -top-3 left-1/2 h-6 w-24 -translate-x-1/2 -rotate-3 border border-white/30 shadow-sm"
           style={{ background: `color-mix(in srgb, ${accent} 22%, rgba(244,238,220,0.72))` }}
         />
+
+        {bread.image && (
+          <div
+            className="relative mb-3 aspect-[4/3] w-full overflow-hidden rounded-[8px] border"
+            style={{ borderColor: `color-mix(in srgb, ${accent} 30%, var(--border))` }}
+          >
+            <Image
+              src={bread.image.url}
+              alt={bread.image.alt?.trim() || bread.name}
+              fill
+              sizes="(max-width: 480px) 90vw, 330px"
+              className="object-cover"
+            />
+          </div>
+        )}
 
         <div className="mb-3 flex items-center gap-2">
           <h3 className="font-display text-[18px] font-bold tracking-tight">{bread.name}</h3>
