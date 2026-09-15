@@ -580,6 +580,7 @@ const translations: Record<string, string> = {
   'site.media_upload': 'העלאת תמונה',
   'site.media_uploading': '…מעלה',
   'site.media_empty': 'עדיין אין תמונות',
+  'site.media_hint': 'הכוכב בוחר את תמונת הכותרת · הריבוע מוסיף לגלריה באתר',
   'site.media_alt': '(תיאור (נגישות',
   'site.media_in_gallery': 'בגלריה',
   'site.media_is_hero': 'תמונת כותרת',

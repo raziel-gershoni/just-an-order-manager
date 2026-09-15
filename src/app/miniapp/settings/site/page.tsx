@@ -13,6 +13,8 @@ import { SectionManager } from '@/components/site-editor/SectionManager';
 import { MediaLibrary } from '@/components/site-editor/MediaLibrary';
 import type { SectionConfig } from '@/db/schema';
 import { Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { siteBaseUrl } from '@/lib/site-url';
+import { openExternal } from '@/lib/phone-links';
 
 interface SiteProfile {
   isPublished: boolean;
@@ -74,6 +76,7 @@ export default function SiteEditorPage() {
   const [published, setPublished] = useState(false);
   const [heroImageId, setHeroImageId] = useState<number | null>(null);
   const [sections, setSections] = useState<SectionConfig[]>([]);
+  const [galleryCount, setGalleryCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -87,7 +90,13 @@ export default function SiteEditorPage() {
   };
 
   // Sections the editor can tell are empty (and thus auto-hidden on the site).
+  // A section the public page will hide because it has nothing in it. The
+  // gallery was missing from this list, and it is the one the owner cannot
+  // reason about from this screen: photos are uploaded with show_in_gallery
+  // FALSE and only the small picture button on each tile turns it on, so a
+  // library full of photos still renders no gallery and nothing said why.
   const emptyKeys = new Set<string>();
+  if (galleryCount === 0) emptyKeys.add('gallery');
   if (!form.story.trim()) emptyKeys.add('story');
   if (!form.whatsappPhone.trim()) emptyKeys.add('cta');
   if (
@@ -265,10 +274,20 @@ export default function SiteEditorPage() {
                 )}
                 {published ? t('site.published_on') : t('site.published_off')}
               </div>
+              {/* Absolute, and opened through Telegram's own opener. href="/"
+                  is relative to whatever host the mini app was loaded from —
+                  the Vercel deployment URL, not the bakery's domain — and on a
+                  deployment URL that is Vercel's own page, not the storefront.
+                  openExternal also keeps it out of the mini-app webview, where
+                  TelegramRedirect would bounce it straight back to /miniapp. */}
               <a
-                href="/"
+                href={siteBaseUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openExternal(siteBaseUrl());
+                }}
                 className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary"
               >
                 <ExternalLink className="h-3 w-3" />
@@ -305,7 +324,11 @@ export default function SiteEditorPage() {
 
           {/* Media library + hero image */}
           <Card className="p-4">
-            <MediaLibrary heroImageId={heroImageId} onSetHero={setHero} />
+            <MediaLibrary
+              heroImageId={heroImageId}
+              onSetHero={setHero}
+              onGalleryCount={setGalleryCount}
+            />
           </Card>
 
           {/* Sections — reorder + hide */}

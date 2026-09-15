@@ -35,9 +35,14 @@ function measure(file: File): Promise<{ width: number; height: number }> {
 export function MediaLibrary({
   heroImageId,
   onSetHero,
+  onGalleryCount,
 }: {
   heroImageId: number | null;
   onSetHero: (id: number | null) => void;
+  /** How many photos are flagged for the public gallery — the section manager
+   *  marks the gallery empty when it is zero, which is the only place the owner
+   *  can see that a full library still shows nothing on the site. */
+  onGalleryCount?: (n: number) => void;
 }) {
   const { apiFetch, apiUpload } = useApi();
   const t = useT();
@@ -55,6 +60,10 @@ export function MediaLibrary({
   useEffect(() => {
     heroRef.current = heroImageId;
   }, [heroImageId]);
+
+  useEffect(() => {
+    onGalleryCount?.(assets.filter((a) => a.showInGallery).length);
+  }, [assets, onGalleryCount]);
 
   useEffect(() => {
     apiFetch<{ assets: MediaAsset[] }>('/media')
@@ -135,7 +144,11 @@ export function MediaLibrary({
 
       {assets.length === 0 ? (
         <p className="py-6 text-center text-xs italic text-muted-foreground">{t('site.media_empty')}</p>
-      ) : (
+      ) : (<>
+        {/* The two buttons under each tile carry only a title attribute, which a
+            phone never shows — so a library full of photos and an empty gallery
+            looked the same as a broken one. */}
+        <p className="mb-2 text-[11px] text-muted-foreground/80">{t('site.media_hint')}</p>
         <div className="grid grid-cols-3 gap-2">
           {assets.map((a) => {
             const isHero = heroImageId === a.id;
@@ -183,7 +196,7 @@ export function MediaLibrary({
             );
           })}
         </div>
-      )}
+      </>)}
     </div>
   );
 }
