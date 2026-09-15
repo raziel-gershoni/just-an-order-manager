@@ -4,13 +4,16 @@ import type { PublicProfile } from '@/lib/public-site';
 import { WhatsAppButton } from './WhatsAppButton';
 
 /**
- * The first screen, and the page's whole argument: a loaf, shaped like the
- * mouth of the oven it came out of.
+ * The page opens inside the oven.
  *
- * The photo leads. It used to come fourth — after a medallion, an eyebrow
- * between two hairlines, and a headline — which is a lot of paperwork to get
- * through before anyone saw bread. When there is no photo yet the arch stays
- * and holds the brand mark, so the page has the same shape either way.
+ * Dark crust ground, and the loaf lit in the mouth of it — the arch is the
+ * one shape this site is remembered by, so it carries the photo rather than
+ * decorating something else. Everything under it comes out onto the counter.
+ *
+ * The ground is painted by the band this section sits in (SectionRenderer),
+ * not here: the sticky bar has to be the same darkness with no seam between
+ * them. When there is no photo yet the arch stays and holds the brand mark,
+ * so the page has the same shape either way.
  */
 export function HeroSection({
   profile,
@@ -25,8 +28,8 @@ export function HeroSection({
   const hero = profile.heroImage;
 
   return (
-    <section className="pb-2 pt-5">
-      <div className="site-arch relative h-[320px] w-full overflow-hidden bg-card shadow-[0_18px_40px_-28px_rgba(43,28,17,0.55)]">
+    <section className="pb-9">
+      <div className="site-arch relative h-[330px] w-full overflow-hidden bg-card shadow-[0_40px_60px_-30px_rgba(0,0,0,0.9)] ring-1 ring-background/15">
         {hero ? (
           <Image
             src={hero.url}
@@ -53,15 +56,15 @@ export function HeroSection({
         )}
       </div>
 
-      <div className="pt-6 text-center">
+      <div className="text-center">
         {eyebrow && (
-          <div className="text-[12px] font-semibold tracking-[0.14em] text-primary">
+          <div className="mt-6 text-[12.5px] font-semibold tracking-[0.12em] text-background/55">
             {eyebrow}
           </div>
         )}
 
         {headline ? (
-          <h1 className="site-display mt-2 text-[38px] font-bold leading-[1.1] sm:text-[44px]">
+          <h1 className="site-display mt-4 text-[40px] leading-[1.08] sm:text-[46px]">
             {headline}
           </h1>
         ) : (
@@ -71,7 +74,7 @@ export function HeroSection({
         )}
 
         {lede && (
-          <p className="mx-auto mt-3 max-w-[340px] text-[16px] leading-[1.6] text-muted-foreground">
+          <p className="mx-auto mt-3 max-w-[340px] text-[16px] leading-[1.6] text-background/70">
             {lede}
           </p>
         )}
@@ -83,10 +86,10 @@ export function HeroSection({
         </div>
 
         {profile.trustItems.length > 0 && (
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 text-[13px] text-muted-foreground">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[13px] text-background/55">
             {profile.trustItems.map((item, i) => (
-              <span key={i} className="inline-flex items-center gap-2.5">
-                {i > 0 && <span className="h-1 w-1 rounded-full bg-primary/50" />}
+              <span key={i} className="inline-flex items-center gap-3">
+                {i > 0 && <span className="text-primary">·</span>}
                 {item}
               </span>
             ))}

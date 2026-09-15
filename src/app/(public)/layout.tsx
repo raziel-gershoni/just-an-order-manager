@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Frank_Ruhl_Libre } from 'next/font/google';
+import { Suez_One } from 'next/font/google';
 import { getPublicSiteRequest, publicGroupId } from '@/lib/public-site';
 import { siteBaseUrl } from '@/lib/site-url';
 
@@ -8,14 +8,15 @@ import { siteBaseUrl } from '@/lib/site-url';
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#FAF6EF', // flour — mobile browser chrome matches the page
+  themeColor: '#1C1009', // oven — the page opens dark, and so does the chrome
 };
 
 // Loaded here, not in the root layout: the staff app has no use for a serif
 // and should not pay to download one.
-const frank = Frank_Ruhl_Libre({
-  variable: '--font-frank',
+const suez = Suez_One({
+  variable: '--font-suez',
   subsets: ['hebrew', 'latin'],
+  weight: '400',
   display: 'swap',
 });
 
@@ -77,7 +78,7 @@ export default function PublicLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${frank.variable} site min-h-screen bg-background text-foreground`}>
+    <div className={`${suez.variable} site min-h-screen bg-background text-foreground`}>
       {children}
     </div>
   );

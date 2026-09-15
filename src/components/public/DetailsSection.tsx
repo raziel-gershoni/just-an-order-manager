@@ -52,7 +52,7 @@ export function DetailsSection({
       <PublicSectionHead label={t('site.details_title')} />
 
       {deliveryText && (
-        <div className="mb-4 flex items-center gap-2.5 rounded-[14px] bg-card px-4 py-3 text-[13.5px] font-semibold">
+        <div className="mb-4 flex items-center gap-2.5 rounded-[6px] bg-card px-4 py-3 text-[13.5px] font-semibold">
           <TruckIcon className="h-[18px] w-[18px] shrink-0 text-primary" />
           <span className="min-w-0">{deliveryText}</span>
         </div>

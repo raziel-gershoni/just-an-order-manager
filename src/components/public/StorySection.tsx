@@ -20,7 +20,9 @@ export function StorySection({
   return (
     <section className="mt-12">
       <PublicSectionHead label={t('site.story_title')} />
-      <div className="site-display space-y-3 text-[17px] leading-[1.75]">
+      {/* Body in the sans on purpose: Suez One is a display face, and a
+          paragraph set in it is a wall rather than a story. */}
+      <div className="space-y-3 text-[16.5px] leading-[1.75]">
         {story.split(/\n+/).map((para, i) => (
           <p key={i}>{para}</p>
         ))}

@@ -26,21 +26,18 @@ function rangeOf(bread: PublicBread): string | null {
  * still start on one line down the page.
  */
 function Tile({ bread }: { bread: PublicBread }) {
+  // Portrait, not square: a standing challah or a long כפרי keeps its shape
+  // instead of having both ends cropped away.
   if (bread.image) {
     return (
-      <span className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[13px] bg-card">
-        <Image src={bread.image.url} alt="" fill sizes="62px" className="object-cover" />
+      <span className="relative h-[78px] w-[58px] shrink-0 overflow-hidden rounded-[3px] bg-card">
+        <Image src={bread.image.url} alt="" fill sizes="58px" className="object-cover" />
       </span>
     );
   }
-  return (
-    <span
-      aria-hidden
-      className="site-display grid h-[62px] w-[62px] shrink-0 place-items-center rounded-[13px] bg-card text-[26px] font-bold text-muted-foreground/55"
-    >
-      {bread.name.trim().charAt(0)}
-    </span>
-  );
+  // No photo yet: flour dust on a board. It holds the column so the names
+  // still line up, and does not pretend to be a picture.
+  return <span aria-hidden className="site-notile h-[78px] w-[58px] shrink-0 rounded-[3px]" />;
 }
 
 export function PricelistSection({
@@ -83,7 +80,7 @@ export function PricelistSection({
               type="button"
               onClick={() => setOpenId(bread.id)}
               className={cn(
-                'flex w-full items-center gap-3.5 py-3.5 text-start transition-opacity',
+                'flex w-full items-center gap-3.5 py-3 text-start transition-opacity',
                 i > 0 && 'border-t border-border',
                 // Sold out is information, so the row says it twice: the badge
                 // names it and the row steps back from the ones you can buy.
@@ -94,14 +91,12 @@ export function PricelistSection({
 
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="site-display truncate text-[19px] font-bold leading-snug">
+                  <span className="site-display truncate text-[20px] leading-tight">
                     {bread.name}
                   </span>
                   {bread.badge && <PublicBadge badge={bread.badge} small />}
                   {hasDeals && (
-                    <span className="rounded-full bg-primary/10 px-2 py-[3px] text-[11px] font-semibold leading-none text-primary">
-                      {t('site.deals_tag')}
-                    </span>
+                    <span className="text-[11.5px] font-bold text-primary">{t('site.deals_tag')}</span>
                   )}
                 </span>
                 {bread.description && (
@@ -112,7 +107,7 @@ export function PricelistSection({
               </span>
 
               {range && (
-                <span dir="ltr" className="site-display shrink-0 text-[17px] font-bold tabular-nums">
+                <span dir="ltr" className="site-display shrink-0 text-[19px] tabular-nums text-primary">
                   {range}
                 </span>
               )}
@@ -149,10 +144,10 @@ function PricelistCard({
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative max-h-[88vh] w-full max-w-[420px] overflow-y-auto rounded-t-[22px] bg-background pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-8px_40px_-12px_rgba(43,28,17,0.5)] sm:rounded-[22px] sm:pb-5"
+        className="relative max-h-[88vh] w-full max-w-[420px] overflow-y-auto rounded-t-[14px] bg-background pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-8px_40px_-12px_rgba(43,28,17,0.5)] sm:rounded-[14px] sm:pb-5"
       >
         {bread.image && (
-          <div className="relative aspect-[5/3] w-full overflow-hidden rounded-t-[22px]">
+          <div className="relative aspect-[5/3] w-full overflow-hidden rounded-t-[14px]">
             <Image
               src={bread.image.url}
               alt={bread.image.alt?.trim() || bread.name}
@@ -165,7 +160,7 @@ function PricelistCard({
 
         <div className="px-5 pt-4">
           <div className="flex items-center gap-2">
-            <h3 className="site-display text-[24px] font-bold leading-tight">{bread.name}</h3>
+            <h3 className="site-display text-[26px] leading-tight">{bread.name}</h3>
             {bread.badge && <PublicBadge badge={bread.badge} />}
             <button
               type="button"
@@ -194,7 +189,7 @@ function PricelistCard({
                       {s.weightGrams}g
                     </span>
                   )}
-                  <span dir="ltr" className="site-display ms-auto text-[18px] font-bold tabular-nums">
+                  <span dir="ltr" className="site-display ms-auto text-[19px] tabular-nums text-primary">
                     ₪{s.price}
                   </span>
                 </div>
@@ -210,7 +205,7 @@ function PricelistCard({
               <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
                 <span className="font-semibold text-muted-foreground">{t('site.additions_label')}</span>
                 {bread.additions.map((a) => (
-                  <span key={a} className="rounded-full bg-card px-2.5 py-1 font-semibold leading-none">
+                  <span key={a} className="rounded-[4px] bg-card px-2.5 py-1 font-semibold leading-none">
                     {a}
                   </span>
                 ))}
@@ -232,7 +227,7 @@ function DealRow({ deal }: { deal: PublicDeal }) {
   // The offer in one line: how many, for how much, and what it saves. Olive
   // rather than the row's own colour — a deal is the same thing on every bread.
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[11px] bg-primary/[0.09] px-3 py-2 text-[13.5px]">
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[5px] bg-primary/[0.09] px-3 py-2 text-[13.5px]">
       <span className="font-semibold text-primary">{t('site.deal_label')}</span>
       <span className="font-semibold">
         <span className="tabular-nums">{deal.minQty}</span> {t('site.deal_for')}

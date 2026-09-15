@@ -21,13 +21,13 @@ export function GallerySection({
   return (
     <section className="mt-12">
       <PublicSectionHead label={t('site.gallery_title')} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {images.map((img, i) => {
           const wide = i === 0 && images.length % 2 === 1;
           return (
             <div
               key={i}
-              className={`relative overflow-hidden rounded-[16px] bg-card ${
+              className={`relative overflow-hidden rounded-[5px] bg-card ${
                 wide ? 'col-span-2 aspect-[16/10]' : 'aspect-square'
               }`}
             >

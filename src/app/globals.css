@@ -121,59 +121,75 @@
 }
 
 /* ============================================================
-   מהתנור — the public storefront, and only it.
+   התנור — the public storefront, and only it.
    The staff app keeps DOCKET above: a kraft ticket is right for
-   people working a shift, and wrong for a customer who came to
-   be made hungry. Redefining the tokens on the wrapper is enough
-   — every public component already reads bg-card, the muted ink
-   and the badge colours through these variables.
+   two people working a shift and wrong for a customer who came
+   to be made hungry. Redefining the tokens on the wrapper is
+   enough — every public component already reads bg-card, the
+   muted ink and the badge colours through these variables.
+
+   The page starts inside the oven and comes out onto the
+   counter: --foreground is the crust dark that the hero and the
+   closing band are painted with, --background the lit counter
+   everything else sits on.
    ============================================================ */
 .site {
-  --radius: 0.875rem;
+  --radius: 0.375rem;
 
-  --background: #FAF6EF;        /* flour */
-  --foreground: #2B1C11;        /* crust */
+  --background: #F3E5CD;        /* counter — toasted wheat, not cream */
+  --foreground: #1C1009;        /* oven — the dark inside a crust */
 
-  --card: #F2EADC;              /* crumb */
-  --card-foreground: #2B1C11;
+  --card: #E7D4B2;              /* crumb */
+  --card-foreground: #1C1009;
 
-  --primary: #57663A;           /* olive — the za'atar and the board it's cut on */
-  --primary-foreground: #FAF6EF;
+  --primary: #C4471C;           /* ember — the one hot colour on the page */
+  --primary-foreground: #F6ECDA;
 
-  --secondary: #EFE6D6;
-  --secondary-foreground: #2B1C11;
+  --secondary: #E7D4B2;
+  --secondary-foreground: #1C1009;
 
-  --muted: #EDE3D2;
-  --muted-foreground: #8A7E69;  /* stone */
+  --muted: #E7D4B2;
+  --muted-foreground: #7B6547;  /* ash */
 
-  --accent: #57663A;
-  --accent-foreground: #FAF6EF;
+  --accent: #C4471C;
+  --accent-foreground: #F6ECDA;
 
-  --destructive: #A33A22;       /* ember */
-  --destructive-foreground: #FAF6EF;
+  --destructive: #7E2D12;       /* deeper than the ember, so שבת reads apart */
+  --destructive-foreground: #F6ECDA;
 
   --success: #1FA855;           /* the green people recognise WhatsApp by */
-  --success-foreground: #FAF6EF;
-  --warning: #B5761B;           /* honey */
+  --success-foreground: #FFFFFF;
+  --warning: #A9731A;           /* honey */
 
-  --border: #E6DBC8;
-  --input: #E6DBC8;
-  --ring: #57663A;
+  --border: rgba(28, 16, 9, 0.11);
+  --input: rgba(28, 16, 9, 0.11);
+  --ring: #C4471C;
 }
 
-/* Frank Ruhl Libre — a Hebrew serif with a century behind it, and the point
-   of the whole revamp: the old display face was Latin-only, so every Hebrew
-   heading fell back to the body sans and the page spoke in one voice at one
-   weight. Set the family only; weight stays with the utilities. */
+/* Suez One — heavy Hebrew drawn from old signage, and the point of the
+   revamp: the app's display face is Latin-only, so every Hebrew heading was
+   silently falling back to the body sans and the page spoke in one voice at
+   one weight. One weight only, so never pair this with a bold utility — the
+   browser would synthesise the weight and smear it. */
 .site-display {
-  font-family: var(--font-frank), var(--font-assistant), Georgia, 'Times New Roman', serif;
-  letter-spacing: -0.005em;
+  font-family: var(--font-suez), var(--font-assistant), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
-/* The oven mouth. One shape, and it earns its place twice: the photo you
-   meet first, and the page that stands in for it before there is one. */
+/* The oven mouth. One shape: the photo you meet first, and the page that
+   stands in for it before there is one. */
 .site-arch {
-  border-radius: 999px 999px 18px 18px;
+  border-radius: 999px 999px 14px 14px;
+}
+
+/* A bread with no photo yet. It holds the column so the names still line up,
+   without a letter or an icon pretending to be a picture — flour dust on a
+   board, and nothing more. */
+.site-notile {
+  background:
+    repeating-linear-gradient(-52deg, rgba(28, 16, 9, 0.055) 0 1.5px, transparent 1.5px 11px),
+    var(--card);
 }
 
 /* Reserve the scrollbar gutter always so page width doesn't jump

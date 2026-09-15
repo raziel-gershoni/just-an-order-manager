@@ -18,10 +18,10 @@ export default async function PublicHome() {
       <main className="flex min-h-screen items-center justify-center px-8 text-center">
         {/* The same arch the real page opens with, so the site that is coming
             and the site that arrives are recognisably one place. */}
-        <div className="site-arch flex w-full max-w-[280px] flex-col items-center justify-end gap-3 bg-card px-6 pb-8 pt-16">
+        <div className="site-arch flex w-full max-w-[280px] flex-col items-center justify-end gap-3 bg-foreground px-6 pb-9 pt-20 text-background">
           <span className="text-[42px] leading-none">🌾</span>
-          <div className="site-display text-[24px] font-bold">{t('site.coming_soon')}</div>
-          <div className="text-[14px] text-muted-foreground">{t('site.coming_soon_sub')}</div>
+          <div className="site-display text-[26px]">{t('site.coming_soon')}</div>
+          <div className="text-[14px] text-background/60">{t('site.coming_soon_sub')}</div>
         </div>
       </main>
     );

@@ -15,7 +15,7 @@ export function PublicSectionHead({
 }) {
   return (
     <div className="mb-4">
-      <h2 className="site-display text-[23px] font-bold leading-tight">{label}</h2>
+      <h2 className="site-display text-[26px] leading-tight">{label}</h2>
       {meta && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{meta}</p>}
     </div>
   );
