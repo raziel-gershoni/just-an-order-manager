@@ -104,6 +104,7 @@ const translations: Record<string, string> = {
   'customers.phones': 'טלפונים',
   'customers.add_phone': 'הוסף טלפון',
   'customers.no_phones': 'אין טלפונים',
+  'customers.more_phones': 'עוד',
   'customers.notify_on': 'מקבל הודעות',
   'customers.notify_off': 'מושתק — לא מקבל הודעות',
   'customers.order_history': 'הזמנות',

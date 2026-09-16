@@ -428,10 +428,18 @@ export default function CustomersPage() {
                         <span dir="ltr" className="tabular-nums">
                           {firstPhone}
                         </span>
+                        {/* "+1" for "one more number" read as part of the
+                            number — a phone line is the one place a leading +
+                            means something else, and the space that was meant
+                            to separate them sat INSIDE the ltr isolate, so it
+                            landed on the far side of the "+1" instead of
+                            between the two: "+10526367600". Said in words now,
+                            after a separator, with every space out in the RTL
+                            flow where it separates what it looks like it does. */}
                         {extraCount > 0 && (
-                          <span dir="ltr" className="text-muted-foreground/60">
-                            {' '}
-                            +{extraCount}
+                          <span>
+                            {' · '}
+                            {t('customers.more_phones')} {extraCount}
                           </span>
                         )}
                       </span>

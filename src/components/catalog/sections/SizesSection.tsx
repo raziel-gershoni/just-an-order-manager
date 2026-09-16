@@ -258,10 +258,17 @@ export function SizesSection({
                   <div key={s.id} className="space-y-1.5">
                     <div className="text-xs font-semibold">
                       {s.name}
+                      {/* Separator and space outside the isolate, digits
+                          inside it: with the whole phrase isolated, the space
+                          and the "·" were carried to the isolate's far edge —
+                          "גדול700g ·", the weight welded to the name and the
+                          dot stranded past it. */}
                       {s.weightGrams != null && (
-                        <span dir="ltr" className="tabular-nums text-muted-foreground">
-                          {' '}
-                          · {s.weightGrams}g
+                        <span className="text-muted-foreground">
+                          {' · '}
+                          <span dir="ltr" className="tabular-nums">
+                            {s.weightGrams}g
+                          </span>
                         </span>
                       )}
                     </div>
