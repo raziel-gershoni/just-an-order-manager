@@ -286,11 +286,6 @@ function SizeBlock({
       <div className="flex items-center gap-2">
         <span className="text-[15px] font-semibold">{size.name}</span>
         {size.badge && <PublicBadge badge={size.badge} small />}
-        {size.weightGrams != null && (
-          <span dir="ltr" className="text-[12.5px] tabular-nums text-muted-foreground">
-            {size.weightGrams}g
-          </span>
-        )}
         {packs.length === 0 && (
           // The isolate goes on an inner span: margin-inline-start resolves
           // against the element's OWN direction, so dir="ltr" here would turn

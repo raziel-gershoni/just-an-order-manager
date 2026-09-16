@@ -40,7 +40,13 @@ export type PublicDeal = {
 export type PublicSize = {
   id: number;
   name: string;
-  weightGrams: number | null;
+  // No weight. It was on the page once and taken off deliberately (c741ee6,
+  // 2026-06-21): the size names rank the loaves, the price is what the choice
+  // turns on, and a gram figure in print is a promise a sourdough bake does
+  // not keep to the gram. It is kept OUT of this view-model rather than merely
+  // unread, because leaving it here is how it got rendered again by accident
+  // in the 2026-09-16 revamp. The staff side — bake sheets, recipes, costs —
+  // reads the weight from breadSizes directly, where it is load-bearing.
   price: string; // formatted, no currency symbol
   badge: ResolvedBadge | null;
   deals: PublicDeal[]; // bulk tiers cheaper than singles, ascending by minQty
@@ -214,7 +220,6 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
           breadTypeId: breadTypeSizes.breadTypeId,
           breadSizeId: breadSizes.id,
           name: breadSizes.name,
-          weightGrams: breadSizes.weightGrams,
           price: breadSizes.price,
           priceOverride: breadTypeSizes.priceOverride,
           badgeType: breadTypeSizes.badgeType,
@@ -307,7 +312,6 @@ async function assembleSite(groupId: number): Promise<PublicSite | null> {
         return {
           id: l.breadSizeId,
           name: l.name,
-          weightGrams: l.weightGrams,
           price: formatPrice(l.priceOverride ?? l.price),
           badge: resolveBadge(l.badgeType, l.badgeLabel, l.badgeIcon),
           deals: buildDeals(single, groupTiers.tierPricesFor(t.id, l.breadSizeId)),
