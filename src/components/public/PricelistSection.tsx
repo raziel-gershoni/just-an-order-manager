@@ -16,6 +16,42 @@ function rangeOf(bread: PublicBread): string | null {
   return min === max ? `₪${min}` : `₪${min}–${max}`;
 }
 
+type Lead = { deal: PublicDeal; size: PublicBread['sizes'][number] };
+
+/**
+ * The offer a row leads with: the deepest per-unit price anywhere on the bread.
+ *
+ * A bread can carry a pack on each of its sizes, and only one fits at the end
+ * of a row, so the row advertises the best value on offer and the card lists
+ * the rest. Ties go to the smaller pack — same price per loaf, less to carry
+ * home. Null means this bread is sold by the loaf only, and the row falls back
+ * to the single price.
+ *
+ * The size comes back with the pack because the row cannot honestly show one
+ * without the other: a pack lives on ONE size, while the single price under it
+ * is the range across all of them. Tiers are configured per size, so a 6-pack
+ * on the large loaf sitting above "יחידה בודדת ₪25–45" invites the reader to
+ * multiply the pack against the ₪25 — a different bread — and conclude the
+ * pack is a swindle. Naming the size closes that gap.
+ */
+function leadDeal(bread: PublicBread): Lead | null {
+  let best: Lead | null = null;
+  for (const size of bread.sizes) {
+    for (const deal of size.deals) {
+      if (!best) {
+        best = { deal, size };
+        continue;
+      }
+      const each = Number(deal.eachPrice);
+      const bestEach = Number(best.deal.eachPrice);
+      if (each < bestEach || (each === bestEach && deal.minQty < best.deal.minQty)) {
+        best = { deal, size };
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * The bread, its picture and what it costs — a menu, not a docket.
  *
@@ -25,19 +61,24 @@ function rangeOf(bread: PublicBread): string | null {
  * its initial in the same serif rather than a hole in the column, so the names
  * still start on one line down the page.
  */
-function Tile({ bread }: { bread: PublicBread }) {
+function Tile({ bread, dim }: { bread: PublicBread; dim?: boolean }) {
+  // The fade belongs on the tile itself. It used to sit on a `display: contents`
+  // wrapper around it, where it did nothing at all: an element with
+  // `display: contents` generates no box, and with no box there is nothing for
+  // opacity to apply to — the photo rendered pixel-identical to an in-stock one.
+  const box = cn('h-[78px] w-[58px] shrink-0 rounded-[3px]', dim && 'opacity-45');
   // Portrait, not square: a standing challah or a long כפרי keeps its shape
   // instead of having both ends cropped away.
   if (bread.image) {
     return (
-      <span className="relative h-[78px] w-[58px] shrink-0 overflow-hidden rounded-[3px] bg-card">
+      <span className={cn('relative overflow-hidden bg-card', box)}>
         <Image src={bread.image.url} alt="" fill sizes="58px" className="object-cover" />
       </span>
     );
   }
   // No photo yet: flour dust on a board. It holds the column so the names
   // still line up, and does not pretend to be a picture.
-  return <span aria-hidden className="site-notile h-[78px] w-[58px] shrink-0 rounded-[3px]" />;
+  return <span aria-hidden className={cn('site-notile', box)} />;
 }
 
 export function PricelistSection({
@@ -72,7 +113,7 @@ export function PricelistSection({
       <div>
         {catalog.map((bread, i) => {
           const range = rangeOf(bread);
-          const hasDeals = bread.sizes.some((s) => s.deals.length > 0);
+          const lead = leadDeal(bread);
           const soldOut = bread.badge?.preset === 'sold_out';
           return (
             <button
@@ -88,9 +129,7 @@ export function PricelistSection({
                   row — which is what this did — took the price to 2:1 against
                   the counter: unreadable, when the point is to say what it will
                   cost when it is back. The badge already names the state. */}
-              <span className={cn('contents', soldOut && 'opacity-45')}>
-                <Tile bread={bread} />
-              </span>
+              <Tile bread={bread} dim={soldOut} />
 
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -103,9 +142,8 @@ export function PricelistSection({
                     {bread.name}
                   </span>
                   {bread.badge && <PublicBadge badge={bread.badge} small />}
-                  {hasDeals && (
-                    <span className="text-[11.5px] font-bold text-primary">{t('site.deals_tag')}</span>
-                  )}
+                  {/* The "מבצעים" tag used to sit here. The price itself now
+                      says "6 יחידות ₪220", so the tag was the same news twice. */}
                 </span>
                 {bread.description && (
                   <span className="mt-1 block truncate text-[13px] leading-snug text-muted-foreground">
@@ -114,10 +152,40 @@ export function PricelistSection({
                 )}
               </span>
 
-              {range && (
-                <span dir="ltr" className="site-display shrink-0 text-[19px] tabular-nums text-primary">
-                  {range}
+              {/* The pack leads and the loaf follows it, quietly: the bakery
+                  sells by the pack, so the pack is the price of the bread and
+                  the single is the alternative. Both lines align on the same
+                  edge, so the column of prices still reads down the page. */}
+              {lead ? (
+                // Capped rather than free-running: a long size name wraps
+                // inside this column instead of eating the bread's name.
+                <span className="max-w-[55%] shrink-0 text-end">
+                  <span className="block text-[19px] leading-tight">
+                    <span className="text-[13px] font-semibold text-foreground">
+                      {/* One size, no ambiguity — the name is only worth the
+                          room when the bread is sold in more than one. */}
+                      {bread.sizes.length > 1 && <>{lead.size.name} · </>}
+                      <span className="tabular-nums">{lead.deal.minQty}</span> {t('site.units')}
+                    </span>{' '}
+                    <span className="site-display tabular-nums text-primary">
+                      <span dir="ltr">₪{lead.deal.packPrice}</span>
+                    </span>
+                  </span>
+                  {range && (
+                    <span className="mt-1 block text-[12px] leading-tight text-muted-foreground">
+                      {t('site.single_label')}{' '}
+                      <span dir="ltr" className="tabular-nums">
+                        {range}
+                      </span>
+                    </span>
+                  )}
                 </span>
+              ) : (
+                range && (
+                  <span className="site-display shrink-0 text-[19px] tabular-nums text-primary">
+                    <span dir="ltr">{range}</span>
+                  </span>
+                )
               )}
             </button>
           );
@@ -214,27 +282,7 @@ function PricelistCard({
 
           <div className="mt-4">
             {bread.sizes.map((s, i) => (
-              <div key={s.id} className={cn('py-3', i > 0 && 'border-t border-border')}>
-                <div className="flex items-center gap-2">
-                  <span className="text-[15px] font-semibold">{s.name}</span>
-                  {s.badge && <PublicBadge badge={s.badge} small />}
-                  {s.weightGrams != null && (
-                    <span dir="ltr" className="text-[12.5px] tabular-nums text-muted-foreground">
-                      {s.weightGrams}g
-                    </span>
-                  )}
-                  {/* The isolate goes on an inner span: margin-inline-start
-                      resolves against the element's OWN direction, so dir="ltr"
-                      here would turn ms-auto into margin-left and the price
-                      would sit against the weight instead of the far edge. */}
-                  <span className="site-display ms-auto text-[19px] tabular-nums text-primary">
-                    <span dir="ltr">₪{s.price}</span>
-                  </span>
-                </div>
-                {s.deals.map((d) => (
-                  <DealRow key={d.minQty} deal={d} />
-                ))}
-              </div>
+              <SizeBlock key={s.id} size={s} first={i === 0} />
             ))}
           </div>
 
@@ -261,21 +309,95 @@ function PricelistCard({
   );
 }
 
-function DealRow({ deal }: { deal: PublicDeal }) {
-  // The offer in one line: how many, for how much, and what it saves. Olive
-  // rather than the row's own colour — a deal is the same thing on every bread.
+/**
+ * One size, priced by the pack.
+ *
+ * The packs come first, biggest first — that is the price of this bread as the
+ * bakery sells it — and each one carries what a loaf works out to inside it, so
+ * the packs can be compared to each other and to the single line under them.
+ * The single price is last and quiet: still there for anyone who wants one
+ * loaf, no longer the headline. A size with no pack keeps the single price on
+ * the name's own line, where it has always been, since there is nothing to
+ * rank it against.
+ */
+function SizeBlock({
+  size,
+  first,
+}: {
+  size: PublicBread['sizes'][number];
+  first: boolean;
+}) {
+  const packs = [...size.deals].reverse(); // deriveDeals ascends by quantity
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[5px] bg-primary/[0.09] px-3 py-2 text-[13.5px]">
-      <span className="font-semibold text-primary">{t('site.deal_label')}</span>
-      <span className="font-semibold">
-        <span className="tabular-nums">{deal.minQty}</span> {t('site.deal_for')}
-        <span dir="ltr" className="tabular-nums"> ₪{deal.packPrice}</span>
-      </span>
-      <span className="ms-auto text-[12.5px] font-semibold text-primary">
-        {/* The isolate goes on the digits — dir on the whole line would send
-            the Hebrew word to the wrong end of it. */}
-        {t('site.deal_save')} <span dir="ltr">₪{deal.saveAmount}</span>
-      </span>
+    <div className={cn('py-3', !first && 'border-t border-border')}>
+      <div className="flex items-center gap-2">
+        <span className="text-[15px] font-semibold">{size.name}</span>
+        {size.badge && <PublicBadge badge={size.badge} small />}
+        {size.weightGrams != null && (
+          <span dir="ltr" className="text-[12.5px] tabular-nums text-muted-foreground">
+            {size.weightGrams}g
+          </span>
+        )}
+        {packs.length === 0 && (
+          // The isolate goes on an inner span: margin-inline-start resolves
+          // against the element's OWN direction, so dir="ltr" here would turn
+          // ms-auto into margin-left and the price would sit against the weight
+          // instead of the far edge.
+          <span className="site-display ms-auto text-[19px] tabular-nums text-primary">
+            <span dir="ltr">₪{size.price}</span>
+          </span>
+        )}
+      </div>
+
+      {packs.map((d, j) => (
+        <div key={d.minQty} className="mt-2.5">
+          <div className="flex items-baseline gap-2">
+            <span className={cn('font-semibold', j === 0 ? 'text-[15px]' : 'text-[14px]')}>
+              <span className="tabular-nums">{d.minQty}</span> {t('site.units')}
+            </span>
+            {/* Every price in the block hangs off the same edge, so the packs
+                and the loaf under them can be read as one column of numbers.
+                The isolate goes on an inner span: margin-inline-start resolves
+                against the element's OWN direction, so dir="ltr" out here would
+                turn ms-auto into margin-left and drop the price mid-line. */}
+            <span
+              className={cn(
+                'site-display ms-auto tabular-nums text-primary',
+                j === 0 ? 'text-[22px]' : 'text-[18px]'
+              )}
+            >
+              <span dir="ltr">₪{d.packPrice}</span>
+            </span>
+          </div>
+          {/* What it works out to, and what it saves — the reason to take the
+              pack, kept small and on one line rather than spread across the
+              card. The isolates go on the digits: dir on the line would send
+              the Hebrew words to the wrong end of it. */}
+          <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+            <span dir="ltr" className="tabular-nums">
+              ₪{d.eachPrice}
+            </span>{' '}
+            {t('site.deal_each')} ·{' '}
+            <span className="font-semibold text-primary">
+              {t('site.deal_save')}{' '}
+              <span dir="ltr" className="tabular-nums">
+                ₪{d.saveAmount}
+              </span>
+            </span>
+          </div>
+        </div>
+      ))}
+
+      {packs.length > 0 && (
+        <div className="mt-2.5 flex items-baseline gap-2 text-muted-foreground">
+          <span className="text-[13.5px]">{t('site.single_label')}</span>
+          <span className="ms-auto text-[15px]">
+            <span dir="ltr" className="tabular-nums">
+              ₪{size.price}
+            </span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
