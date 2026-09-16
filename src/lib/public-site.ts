@@ -28,9 +28,8 @@ export type PublicImage = {
 
 /** A public-facing bulk deal for a size: "buy `minQty` for `packPrice`", with
  *  the savings pre-computed against the single price (all money formatted). Only
- *  tiers that actually beat `minQty × single` are surfaced. `eachPrice` is on the
- *  page under every pack, it decides which pack a pricelist row leads with, and
- *  it is the price on the JSON-LD per-unit offer. */
+ *  tiers that actually beat `minQty × single` are surfaced. `eachPrice` is kept
+ *  for the JSON-LD per-unit offer, not the on-page display. */
 export type PublicDeal = {
   minQty: number;
   packPrice: string; // total for the pack, formatted

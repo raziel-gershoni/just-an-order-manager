@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { PublicBread, PublicDeal } from '@/lib/public-site';
+import type { PublicBread } from '@/lib/public-site';
 import { PublicSectionHead } from './PublicSectionHead';
 import { PublicBadge } from './PublicBadge';
 
@@ -16,40 +16,18 @@ function rangeOf(bread: PublicBread): string | null {
   return min === max ? `₪${min}` : `₪${min}–${max}`;
 }
 
-type Lead = { deal: PublicDeal; size: PublicBread['sizes'][number] };
-
 /**
- * The offer a row leads with: the deepest per-unit price anywhere on the bread.
- *
- * A bread can carry a pack on each of its sizes, and only one fits at the end
- * of a row, so the row advertises the best value on offer and the card lists
- * the rest. Ties go to the smaller pack — same price per loaf, less to carry
- * home. Null means this bread is sold by the loaf only, and the row falls back
- * to the single price.
- *
- * The size comes back with the pack because the row cannot honestly show one
- * without the other: a pack lives on ONE size, while the single price under it
- * is the range across all of them. Tiers are configured per size, so a 6-pack
- * on the large loaf sitting above "יחידה בודדת ₪25–45" invites the reader to
- * multiply the pack against the ₪25 — a different bread — and conclude the
- * pack is a swindle. Naming the size closes that gap.
+ * The price a size leads with: its first pack if it sells in packs, else the
+ * loaf. This is the number the card shows biggest for that size, and it is
+ * what the sizes are ordered by — six buns at ₪40 sit below a loaf at ₪25,
+ * because ₪40 is what the six-bun row asks for. A size whose price will not
+ * parse sinks to the bottom rather than scrambling the order around it.
  */
-function leadDeal(bread: PublicBread): Lead | null {
-  let best: Lead | null = null;
-  for (const size of bread.sizes) {
-    for (const deal of size.deals) {
-      if (!best) {
-        best = { deal, size };
-        continue;
-      }
-      const each = Number(deal.eachPrice);
-      const bestEach = Number(best.deal.eachPrice);
-      if (each < bestEach || (each === bestEach && deal.minQty < best.deal.minQty)) {
-        best = { deal, size };
-      }
-    }
-  }
-  return best;
+function leadPrice(size: PublicBread['sizes'][number]): number {
+  // deals ascend by quantity; the block leads with the last of them.
+  const lead = size.deals.length ? size.deals[size.deals.length - 1].packPrice : size.price;
+  const n = Number(lead);
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -113,7 +91,7 @@ export function PricelistSection({
       <div>
         {catalog.map((bread, i) => {
           const range = rangeOf(bread);
-          const lead = leadDeal(bread);
+          const hasDeals = bread.sizes.some((s) => s.deals.length > 0);
           const soldOut = bread.badge?.preset === 'sold_out';
           return (
             <button
@@ -142,8 +120,9 @@ export function PricelistSection({
                     {bread.name}
                   </span>
                   {bread.badge && <PublicBadge badge={bread.badge} small />}
-                  {/* The "מבצעים" tag used to sit here. The price itself now
-                      says "6 יחידות ₪220", so the tag was the same news twice. */}
+                  {hasDeals && (
+                    <span className="text-[11.5px] font-bold text-primary">{t('site.deals_tag')}</span>
+                  )}
                 </span>
                 {bread.description && (
                   <span className="mt-1 block truncate text-[13px] leading-snug text-muted-foreground">
@@ -152,40 +131,10 @@ export function PricelistSection({
                 )}
               </span>
 
-              {/* The pack leads and the loaf follows it, quietly: the bakery
-                  sells by the pack, so the pack is the price of the bread and
-                  the single is the alternative. Both lines align on the same
-                  edge, so the column of prices still reads down the page. */}
-              {lead ? (
-                // Capped rather than free-running: a long size name wraps
-                // inside this column instead of eating the bread's name.
-                <span className="max-w-[55%] shrink-0 text-end">
-                  <span className="block text-[19px] leading-tight">
-                    <span className="text-[13px] font-semibold text-foreground">
-                      {/* One size, no ambiguity — the name is only worth the
-                          room when the bread is sold in more than one. */}
-                      {bread.sizes.length > 1 && <>{lead.size.name} · </>}
-                      <span className="tabular-nums">{lead.deal.minQty}</span> {t('site.units')}
-                    </span>{' '}
-                    <span className="site-display tabular-nums text-primary">
-                      <span dir="ltr">₪{lead.deal.packPrice}</span>
-                    </span>
-                  </span>
-                  {range && (
-                    <span className="mt-1 block text-[12px] leading-tight text-muted-foreground">
-                      {t('site.single_label')}{' '}
-                      <span dir="ltr" className="tabular-nums">
-                        {range}
-                      </span>
-                    </span>
-                  )}
+              {range && (
+                <span dir="ltr" className="site-display shrink-0 text-[19px] tabular-nums text-primary">
+                  {range}
                 </span>
-              ) : (
-                range && (
-                  <span className="site-display shrink-0 text-[19px] tabular-nums text-primary">
-                    <span dir="ltr">{range}</span>
-                  </span>
-                )
               )}
             </button>
           );
@@ -280,10 +229,16 @@ function PricelistCard({
             </div>
           </div>
 
+          {/* Ordered by the price each size leads with, not by the loaf: a size
+              sold in packs is asking for the pack price, so that is what it
+              takes its place in the list by. (The pricelist row outside still
+              ranges over the loaf prices — the server sorts for that.) */}
           <div className="mt-4">
-            {bread.sizes.map((s, i) => (
-              <SizeBlock key={s.id} size={s} first={i === 0} />
-            ))}
+            {[...bread.sizes]
+              .sort((a, b) => leadPrice(a) - leadPrice(b))
+              .map((s, i) => (
+                <SizeBlock key={s.id} size={s} first={i === 0} />
+              ))}
           </div>
 
           {bread.additions.length > 0 && (
@@ -313,12 +268,10 @@ function PricelistCard({
  * One size, priced by the pack.
  *
  * The packs come first, biggest first — that is the price of this bread as the
- * bakery sells it — and each one carries what a loaf works out to inside it, so
- * the packs can be compared to each other and to the single line under them.
- * The single price is last and quiet: still there for anyone who wants one
- * loaf, no longer the headline. A size with no pack keeps the single price on
- * the name's own line, where it has always been, since there is nothing to
- * rank it against.
+ * bakery sells it — each on one line with what it saves. The single price is
+ * last and quiet: still there for anyone who wants one loaf, no longer the
+ * headline. A size with no pack keeps the single price on the name's own line,
+ * where it has always been, since there is nothing to rank it against.
  */
 function SizeBlock({
   size,
@@ -350,41 +303,33 @@ function SizeBlock({
       </div>
 
       {packs.map((d, j) => (
-        <div key={d.minQty} className="mt-2.5">
-          <div className="flex items-baseline gap-2">
-            <span className={cn('font-semibold', j === 0 ? 'text-[15px]' : 'text-[14px]')}>
-              <span className="tabular-nums">{d.minQty}</span> {t('site.units')}
-            </span>
-            {/* Every price in the block hangs off the same edge, so the packs
-                and the loaf under them can be read as one column of numbers.
-                The isolate goes on an inner span: margin-inline-start resolves
-                against the element's OWN direction, so dir="ltr" out here would
-                turn ms-auto into margin-left and drop the price mid-line. */}
-            <span
-              className={cn(
-                'site-display ms-auto tabular-nums text-primary',
-                j === 0 ? 'text-[22px]' : 'text-[18px]'
-              )}
-            >
-              <span dir="ltr">₪{d.packPrice}</span>
-            </span>
-          </div>
-          {/* What it works out to, and what it saves — the reason to take the
-              pack, kept small and on one line rather than spread across the
-              card. The isolates go on the digits: dir on the line would send
-              the Hebrew words to the wrong end of it. */}
-          <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+        <div key={d.minQty} className="mt-2.5 flex items-baseline gap-2">
+          <span className={cn('font-semibold', j === 0 ? 'text-[15px]' : 'text-[14px]')}>
+            <span className="tabular-nums">{d.minQty}</span> {t('site.units')}
+          </span>
+          {/* The saving belongs to this offer, so it rides on the offer's own
+              line. Under it, it read as a loose remark about the size. The
+              isolate goes on the digits — dir on the phrase would send the
+              Hebrew word to the wrong end of it. */}
+          <span className="text-[12.5px] font-semibold text-primary">
+            · {t('site.deal_save')}{' '}
             <span dir="ltr" className="tabular-nums">
-              ₪{d.eachPrice}
-            </span>{' '}
-            {t('site.deal_each')} ·{' '}
-            <span className="font-semibold text-primary">
-              {t('site.deal_save')}{' '}
-              <span dir="ltr" className="tabular-nums">
-                ₪{d.saveAmount}
-              </span>
+              ₪{d.saveAmount}
             </span>
-          </div>
+          </span>
+          {/* Every price in the block hangs off the same edge, so the packs and
+              the loaf under them read as one column of numbers. The isolate
+              goes on an inner span: margin-inline-start resolves against the
+              element's OWN direction, so dir="ltr" out here would turn ms-auto
+              into margin-left and drop the price mid-line. */}
+          <span
+            className={cn(
+              'site-display ms-auto tabular-nums text-primary',
+              j === 0 ? 'text-[21px]' : 'text-[17px]'
+            )}
+          >
+            <span dir="ltr">₪{d.packPrice}</span>
+          </span>
         </div>
       ))}
 
