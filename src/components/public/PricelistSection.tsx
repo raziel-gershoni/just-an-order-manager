@@ -200,18 +200,24 @@ function PricelistCard({
 
         <div className="px-5 pt-5">
           {/* Portrait here too, and inset rather than bleeding across the top:
-              a 3:4 photo at full card width would be taller than the phone and
+              a 4:5 photo at full card width would be taller than the phone and
               push every price below the fold — and the prices are what the tap
               was for. Beside the name it stays the same shape as the row that
-              opened it, just bigger. */}
-          <div className="flex items-start gap-4">
+              opened it, just bigger. Just under half the card: the name needs
+              little of that line, and at a third the photo was a thumbnail in
+              a card opened to look at it. Past ~50% a three-word bread name
+              starts breaking over three lines. */}
+          {/* Centred against the photo, not hung from its top: with no
+              description — most breads — a top-aligned name left a column of
+              empty card under it half the height of the photo. */}
+          <div className="flex items-center gap-4">
             {bread.image && (
-              <div className="relative aspect-[4/5] w-[34%] max-w-[132px] shrink-0 overflow-hidden rounded-[5px] bg-card">
+              <div className="relative aspect-[4/5] w-[48%] max-w-[186px] shrink-0 overflow-hidden rounded-[5px] bg-card">
                 <Image
                   src={bread.image.url}
                   alt={bread.image.alt?.trim() || bread.name}
                   fill
-                  sizes="132px"
+                  sizes="(max-width: 420px) 48vw, 186px"
                   className="object-cover"
                 />
               </div>
