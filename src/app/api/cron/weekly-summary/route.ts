@@ -96,7 +96,11 @@ async function handler(request: Request) {
           `<b>📊 ${t('notify.weekly_summary', lang)}</b>`,
           '',
           `<b>${t('general.orders_fulfilled', lang)}:</b> ${deliveredResult.count}`,
-          `<b>${t('general.revenue', lang)}:</b> ₪${Number(revenueResult.total).toFixed(0)}`,
+          // מחזור, not הכנסות: this sums the CHARGES written this week —
+          // what was billed, whether or not the money came in. Money received
+          // is a separate row (type 'payment') that this never reads, and the
+          // unpaid part of it shows up again in the יתרות חוב list below.
+          `<b>${t('general.turnover', lang)}:</b> ₪${Number(revenueResult.total).toFixed(0)}`,
         ];
 
         if (debtors.length > 0) {

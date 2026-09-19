@@ -407,7 +407,7 @@ const translations: Record<string, string> = {
   'general.back': 'חזרה',
   'general.not_found': 'לא נמצא',
   'general.orders_fulfilled': 'הזמנות שסופקו',
-  'general.revenue': 'הכנסות',
+  'general.turnover': 'מחזור',
   'general.outstanding': 'יתרות חוב',
 
   // Date
