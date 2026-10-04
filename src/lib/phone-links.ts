@@ -7,7 +7,7 @@ export function normalizePhoneNumber(phone: string): string | null {
   // invisible bidi-control marks (U+202A–202E, U+200E/200F). Those get baked
   // into a number when it's typed or pasted into an RTL/Hebrew field; the old
   // character-class strip left them in place, so a valid number like
-  // "‭051-2774420‬" normalized to null and the send failed silently.
+  // "‭050-1234567‬" normalized to null and the send failed silently.
   let digits = phone.replace(/\D/g, '');
 
   // Tolerate an international 00 prefix: 00972… → 972…

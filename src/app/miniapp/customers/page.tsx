@@ -422,9 +422,9 @@ export default function CustomersPage() {
                     <span className="block font-medium truncate">{c.name}</span>
                     {firstPhone && (
                       <span className="block text-sm text-muted-foreground truncate">
-                        {/* Three of these are stored as "+972 50-201-0650", and
+                        {/* Three of these are stored as "+972 50-123-4567", and
                             an unisolated + in an RTL line lands at the far end:
-                            the owner was reading "972 50-201-0650+". */}
+                            the owner was reading "972 50-123-4567+". */}
                         <span dir="ltr" className="tabular-nums">
                           {firstPhone}
                         </span>
@@ -433,7 +433,7 @@ export default function CustomersPage() {
                             means something else, and the space that was meant
                             to separate them sat INSIDE the ltr isolate, so it
                             landed on the far side of the "+1" instead of
-                            between the two: "+10526367600". Said in words now,
+                            between the two: "+10501234567". Said in words now,
                             after a separator, with every space out in the RTL
                             flow where it separates what it looks like it does. */}
                         {extraCount > 0 && (

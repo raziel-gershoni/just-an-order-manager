@@ -26,8 +26,8 @@ WHERE o."delivery_date" IS NULL AND o."order_status" = 'delivered';--> statement
 -- through the running balance. The ledger is the source of truth for money and
 -- says these are square: each of these customers' payments now cover their
 -- charges in full. Reconciled per customer with the newest order absorbing any
--- remaining debt, which leaves exactly one genuinely unpaid order (#34, ₪30,
--- משפ׳ ציטרין) and #8 untouched — that one was delivered but never charged to
--- the ledger at all, so it needs a person, not a rule.
+-- remaining debt, which leaves exactly one genuinely unpaid order and #8
+-- untouched — that one was delivered but never charged to the ledger at all,
+-- so it needs a person, not a rule.
 UPDATE "orders" SET "paid" = true
 WHERE "id" IN (10, 14, 17, 26, 38, 41, 45, 46) AND "paid" = false;

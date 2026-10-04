@@ -9,7 +9,7 @@
 -- there is no guessing about which of several open orders a partial payment
 -- reached. Orders with no charge row are skipped — the balance has never heard
 -- of them, so nothing in it can have covered them. A customer still in debt is
--- left exactly as it is: today that is #34 (משפ׳ ציטרין, -30), a real debt.
+-- left exactly as it is.
 UPDATE "orders" o
 SET "paid" = true
 WHERE o."order_status" = 'delivered'

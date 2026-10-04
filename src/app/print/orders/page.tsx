@@ -222,8 +222,8 @@ function OrderBlock({ order, showDate }: { order: PrintOrder; showDate: boolean 
       : 'בהקדם'
     : null;
   // Everything except the phone, which has to be bidi-isolated: an LTR number
-  // dropped into an RTL line reorders, and "+972-52-828-0030" prints as
-  // "52-828-0030 972+" — a number nobody can dial.
+  // dropped into an RTL line reorders, and "+972-50-123-4567" prints as
+  // "50-123-4567 972+" — a number nobody can dial.
   const meta = [when, where, order.address].filter(Boolean).join(' · ');
 
   return (

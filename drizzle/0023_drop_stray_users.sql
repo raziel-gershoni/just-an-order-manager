@@ -5,8 +5,7 @@
 -- site existed; the other in July, when the site's "בטלגרם" hero button still
 -- pointed customers at the bot. That button is gone as of this deploy.
 --
--- Matched on telegram_id rather than id, and re-checked against group_members,
--- so this can't take out a real member if it ever runs against another database.
-DELETE FROM "users"
-WHERE "telegram_id" IN ('8792245314', '7139586934')
-  AND "id" NOT IN (SELECT "user_id" FROM "group_members");
+-- The cleanup ran in production on deploy. The two Telegram IDs it matched on
+-- have since been removed from this public repo, so the statement below is a
+-- no-op: on any other database those rows never existed in the first place.
+SELECT 1;
