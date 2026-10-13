@@ -90,7 +90,10 @@ orders   הזמנות   = count of those orders
   `יחידות`, not loaves.
 - **Months before the group's first data** (first ledger row or first delivered
   order) show `—`, not ₪0. **Future months** of the current year are not shown.
-  The current month is labelled `עד היום`.
+  The current month is labelled `עד היום`. An order delivered ahead of a
+  next-month delivery date is counted in the current month — it was handed over
+  now, and a row for a month that hasn't started would invent its month-end
+  balance.
 
 ## Data layer — `src/lib/income-report.ts`
 
@@ -109,6 +112,11 @@ zone):
 3. **Customers.** `id, name, is_active` for the group.
 4. **Data start.** The earlier of the first ledger row (Israel date) and the
    first delivered order date.
+
+neon-http gives every query its own snapshot, so the download reads the report
+and the year's transactions together and compares their sums; if a write landed
+between the reads it reads again (up to three times), so the transactions sheet
+always adds up to the summary.
 
 Everything else is plain JS over those rows: running balances per customer,
 month-end owed and credit, per-customer opening, flows and closing, and the
@@ -195,8 +203,9 @@ then the body. Copies the costs page's states: loading skeleton, denied
   parses JSON, so it cannot fetch the binary itself.
 - The month bar is the one visual: a 3px track under each row, `מחזור` against
   the year's best month, with `התקבל` drawn over it. No chart library.
-- Customer balance shows `חייב ₪X` in the destructive colour, `זכות ₪X` muted,
-  `—` at zero. Sorted by מחזור, then by debt.
+- Customer balance is signed as well as coloured, `-₪X` red for debt and `+₪X`
+  green for credit, `—` at zero; a word would not fit a phone column, and colour
+  alone fails a colour-blind reader. Sorted by מחזור, then by debt.
 - An `התאמות` line appears only when the year has any.
 - `dir="ltr"` wraps only the `₪` + digits; labels, separators and spaces stay in
   the Hebrew flow.
