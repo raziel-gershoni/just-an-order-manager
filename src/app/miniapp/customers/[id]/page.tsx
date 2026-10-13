@@ -12,12 +12,19 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
+import {
+  PhoneMessagingButton,
+  PhoneMessagingSheet,
+  messagingOf,
+  messagingPatch,
+  type PhoneMessaging,
+} from '@/components/customers/PhoneMessagingSheet';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, MessageCircleOff, Copy, UserPlus, Send, Navigation, Bell, BellOff } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, MessageCircleOff, Copy, UserPlus, Send, Navigation } from 'lucide-react';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
@@ -75,7 +82,8 @@ export default function CustomerDetailPage() {
   const [editingPhoneId, setEditingPhoneId] = useState<number | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState('');
   const [editPhoneName, setEditPhoneName] = useState('');
-  const [editPhoneHasWhatsapp, setEditPhoneHasWhatsapp] = useState(true);
+  // Which number's messaging menu is open.
+  const [messagingFor, setMessagingFor] = useState<number | null>(null);
   const [newPhoneValue, setNewPhoneValue] = useState('');
   const [newPhoneName, setNewPhoneName] = useState('');
   const [showAddPhone, setShowAddPhone] = useState(false);
@@ -148,22 +156,26 @@ export default function CustomerDetailPage() {
     }
   }
 
-  // Per-phone "receives automatic messages" toggle. Optimistic — flip locally,
-  // roll back on failure. Governs every automatic message (order updates +
-  // reminders) for this number.
-  async function toggleNotify(phoneId: number, next: boolean) {
-    const flip = (val: boolean) =>
+  // What a number gets — messages, silenced, or no WhatsApp at all — picked
+  // from the bell's menu. Optimistic: applied locally, rolled back on failure.
+  // Governs every automatic message (order updates + reminders) for the number.
+  async function setMessaging(phoneId: number, state: PhoneMessaging) {
+    setMessagingFor(null);
+    const before = customer?.phones.find((p) => p.id === phoneId);
+    if (!before || messagingOf(before) === state) return;
+    const patch = messagingPatch(state);
+    const apply = (fields: Partial<CustomerPhone>) =>
       setCustomer((prev) =>
-        prev ? { ...prev, phones: prev.phones.map((p) => (p.id === phoneId ? { ...p, notify: val } : p)) } : prev
+        prev ? { ...prev, phones: prev.phones.map((p) => (p.id === phoneId ? { ...p, ...fields } : p)) } : prev
       );
-    flip(next);
+    apply(patch);
     try {
       await apiFetch(`/customer-phones/${phoneId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ notify: next }),
+        body: JSON.stringify(patch),
       });
     } catch {
-      flip(!next);
+      apply({ notify: before.notify, hasWhatsapp: before.hasWhatsapp });
       toast.error(t('customers.save_failed'));
     }
   }
@@ -231,12 +243,7 @@ export default function CustomerDetailPage() {
         `/customer-phones/${phoneId}`,
         {
           method: 'PATCH',
-          body: JSON.stringify({
-            phone: editPhoneValue.trim(),
-            name: editPhoneName.trim() || null,
-            // Same audience as the bell: it decides whether the number is messaged.
-            ...(isAdmin ? { hasWhatsapp: editPhoneHasWhatsapp } : {}),
-          }),
+          body: JSON.stringify({ phone: editPhoneValue.trim(), name: editPhoneName.trim() || null }),
         }
       );
       setCustomer((prev) => prev ? {
@@ -301,6 +308,7 @@ export default function CustomerDetailPage() {
     );
   }
 
+  const messagingPhone = messagingFor == null ? null : customer.phones.find((x) => x.id === messagingFor) ?? null;
   const balanceNum = Number(balance);
   const ordW = docketWidth(orders.map((o) => o.id));
 
@@ -398,20 +406,6 @@ export default function CustomerDetailPage() {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                {/* Set here, with the number, rather than as a tap on the row's
-                    WhatsApp icon: that icon opens the chat, and a landline is
-                    marked once, not toggled. */}
-                {isAdmin && (
-                  <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={editPhoneHasWhatsapp}
-                      onChange={(e) => setEditPhoneHasWhatsapp(e.target.checked)}
-                      className="h-4 w-4 cursor-pointer accent-primary"
-                    />
-                    {t('customers.has_whatsapp')}
-                  </label>
-                )}
               </div>
             ) : (
               <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
@@ -430,19 +424,10 @@ export default function CustomerDetailPage() {
                   </button>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  {/* No bell on a number that isn't on WhatsApp: nothing can be
-                      sent to it either way. Its `notify` is kept, so marking it
-                      back brings the bell back as it was. */}
-                  {isAdmin && p.hasWhatsapp && (
-                    <button
-                      type="button"
-                      aria-label={p.notify ? t('customers.notify_on') : t('customers.notify_off')}
-                      title={p.notify ? t('customers.notify_on') : t('customers.notify_off')}
-                      onClick={() => toggleNotify(p.id, !p.notify)}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg transition-all duration-150 hover:bg-muted active:scale-[0.98]"
-                    >
-                      {p.notify ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
-                    </button>
+                  {/* One control for whether the number is messaged: on, silenced,
+                      or not on WhatsApp. */}
+                  {isAdmin && (
+                    <PhoneMessagingButton state={messagingOf(p)} onClick={() => setMessagingFor(p.id)} />
                   )}
                   {MANUAL_REMINDERS_ENABLED && isAdmin && p.hasWhatsapp && (
                     <button
@@ -471,16 +456,20 @@ export default function CustomerDetailPage() {
                       <MessageCircle className="h-4 w-4" />
                     </a>
                   ) : (
-                    <span
-                      role="img"
-                      aria-label={t('customers.no_whatsapp')}
-                      title={t('customers.no_whatsapp')}
-                      className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground/60"
-                    >
-                      <MessageCircleOff className="h-4 w-4" />
-                    </span>
+                    // For owners and managers the state button beside it already
+                    // says so; a second crossed-out icon would only repeat it.
+                    !isAdmin && (
+                      <span
+                        role="img"
+                        aria-label={t('customers.no_whatsapp')}
+                        title={t('customers.no_whatsapp')}
+                        className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground/60"
+                      >
+                        <MessageCircleOff className="h-4 w-4" />
+                      </span>
+                    )
                   )}
-                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); setEditPhoneName(p.name ?? ''); setEditPhoneHasWhatsapp(p.hasWhatsapp); }}>
+                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); setEditPhoneName(p.name ?? ''); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button size="icon" variant="ghost" className="h-11 w-11 text-destructive hover:bg-destructive/10" onClick={() => deletePhone(p.id)}>
@@ -685,6 +674,15 @@ export default function CustomerDetailPage() {
           )}
         </div>
       </div>
+      {messagingPhone && (
+        <PhoneMessagingSheet
+          phone={messagingPhone.phone}
+          name={messagingPhone.name}
+          current={messagingOf(messagingPhone)}
+          onPick={(state) => setMessaging(messagingPhone.id, state)}
+          onClose={() => setMessagingFor(null)}
+        />
+      )}
       {showSend && (
         <SendReminderSheet
           count={showSend.count}
