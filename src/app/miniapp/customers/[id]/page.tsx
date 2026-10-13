@@ -17,7 +17,7 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, Copy, UserPlus, Send, Navigation, Bell, BellOff } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, MessageCircleOff, Copy, UserPlus, Send, Navigation, Bell, BellOff } from 'lucide-react';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
@@ -28,6 +28,7 @@ interface CustomerPhone {
   name: string | null;
   sortOrder: number;
   notify: boolean;
+  hasWhatsapp: boolean;
 }
 
 interface Customer {
@@ -74,6 +75,7 @@ export default function CustomerDetailPage() {
   const [editingPhoneId, setEditingPhoneId] = useState<number | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState('');
   const [editPhoneName, setEditPhoneName] = useState('');
+  const [editPhoneHasWhatsapp, setEditPhoneHasWhatsapp] = useState(true);
   const [newPhoneValue, setNewPhoneValue] = useState('');
   const [newPhoneName, setNewPhoneName] = useState('');
   const [showAddPhone, setShowAddPhone] = useState(false);
@@ -227,7 +229,15 @@ export default function CustomerDetailPage() {
     try {
       const { phone } = await apiFetch<{ phone: CustomerPhone }>(
         `/customer-phones/${phoneId}`,
-        { method: 'PATCH', body: JSON.stringify({ phone: editPhoneValue.trim(), name: editPhoneName.trim() || null }) }
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            phone: editPhoneValue.trim(),
+            name: editPhoneName.trim() || null,
+            // Same audience as the bell: it decides whether the number is messaged.
+            ...(isAdmin ? { hasWhatsapp: editPhoneHasWhatsapp } : {}),
+          }),
+        }
       );
       setCustomer((prev) => prev ? {
         ...prev,
@@ -388,6 +398,20 @@ export default function CustomerDetailPage() {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
+                {/* Set here, with the number, rather than as a tap on the row's
+                    WhatsApp icon: that icon opens the chat, and a landline is
+                    marked once, not toggled. */}
+                {isAdmin && (
+                  <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={editPhoneHasWhatsapp}
+                      onChange={(e) => setEditPhoneHasWhatsapp(e.target.checked)}
+                      className="h-4 w-4 cursor-pointer accent-primary"
+                    />
+                    {t('customers.has_whatsapp')}
+                  </label>
+                )}
               </div>
             ) : (
               <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
@@ -396,7 +420,7 @@ export default function CustomerDetailPage() {
                   <button
                     type="button"
                     onClick={() => copyPhone(p.phone)}
-                    className={'tabular-nums inline-flex min-h-[44px] items-center gap-1.5 hover:underline ' + (p.notify ? 'text-primary' : 'text-muted-foreground')}
+                    className={'tabular-nums inline-flex min-h-[44px] items-center gap-1.5 hover:underline ' + (p.notify && p.hasWhatsapp ? 'text-primary' : 'text-muted-foreground')}
                     dir="ltr"
                     aria-label={`העתק מספר ${p.phone}`}
                     title="העתק מספר"
@@ -406,7 +430,10 @@ export default function CustomerDetailPage() {
                   </button>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  {isAdmin && (
+                  {/* No bell on a number that isn't on WhatsApp: nothing can be
+                      sent to it either way. Its `notify` is kept, so marking it
+                      back brings the bell back as it was. */}
+                  {isAdmin && p.hasWhatsapp && (
                     <button
                       type="button"
                       aria-label={p.notify ? t('customers.notify_on') : t('customers.notify_off')}
@@ -417,7 +444,7 @@ export default function CustomerDetailPage() {
                       {p.notify ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
                     </button>
                   )}
-                  {MANUAL_REMINDERS_ENABLED && isAdmin && (
+                  {MANUAL_REMINDERS_ENABLED && isAdmin && p.hasWhatsapp && (
                     <button
                       type="button"
                       aria-label={t('reminders.send')}
@@ -433,16 +460,27 @@ export default function CustomerDetailPage() {
                       scheme on both iOS and Android and exposes no call API, so
                       a call button can't work where this app is actually used.
                       Tapping the number copies it, which is the same outcome. */}
-                  <a
-                    href={`https://wa.me/${toIntlPhone(p.phone)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="WhatsApp"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-success transition-all duration-150 hover:bg-success/10 active:scale-[0.98]"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                  </a>
-                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); setEditPhoneName(p.name ?? ''); }}>
+                  {p.hasWhatsapp ? (
+                    <a
+                      href={`https://wa.me/${toIntlPhone(p.phone)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="WhatsApp"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-success transition-all duration-150 hover:bg-success/10 active:scale-[0.98]"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </a>
+                  ) : (
+                    <span
+                      role="img"
+                      aria-label={t('customers.no_whatsapp')}
+                      title={t('customers.no_whatsapp')}
+                      className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground/60"
+                    >
+                      <MessageCircleOff className="h-4 w-4" />
+                    </span>
+                  )}
+                  <Button size="icon" variant="ghost" className="h-11 w-11" onClick={() => { setEditingPhoneId(p.id); setEditPhoneValue(p.phone); setEditPhoneName(p.name ?? ''); setEditPhoneHasWhatsapp(p.hasWhatsapp); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button size="icon" variant="ghost" className="h-11 w-11 text-destructive hover:bg-destructive/10" onClick={() => deletePhone(p.id)}>

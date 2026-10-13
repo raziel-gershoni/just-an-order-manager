@@ -135,12 +135,13 @@ export const GET = withGroup(async (request, auth, groupId) => {
   const deliveryFee = Number(order.deliveryFee || 0);
   const totalPrice = orderTotalFromGoods(order, calculatedTotal);
 
-  // Count of customer phones — used by the order UI to decide whether to
-  // show the "notify customer" checkbox on status changes.
+  // Count of the customer's WhatsApp numbers — used by the order UI to decide
+  // whether to show the "notify customer" checkbox on status changes. A number
+  // that isn't on WhatsApp can't be sent one, so a checkbox for it would lie.
   const [{ phoneCount }] = await db
     .select({ phoneCount: sql<number>`COUNT(*)::int` })
     .from(customerPhones)
-    .where(eq(customerPhones.customerId, order.customerId));
+    .where(and(eq(customerPhones.customerId, order.customerId), eq(customerPhones.hasWhatsapp, true)));
 
   // Whether this order's charge is already on the customer's ledger. The screen
   // needs it to ask the right credit question: once the charge is there the

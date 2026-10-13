@@ -125,6 +125,11 @@ const translations: Record<string, string> = {
   'customers.view_list': 'רשימה',
   'customers.view_temperature': 'טמפרטורה',
   'customers.pick_phone': 'לאיזה מספר לשלוח',
+  'customers.has_whatsapp': 'יש וואטסאפ במספר הזה',
+  'customers.no_whatsapp': 'אין וואטסאפ',
+  'customers.no_whatsapp_copy': 'אין וואטסאפ — העתקת המספר',
+  'customers.phone_copied': 'המספר הועתק',
+  'customers.copy_failed': 'ההעתקה נכשלה',
 
   // Render-error boundary (src/app/miniapp/error.tsx)
   'error.title': 'משהו השתבש',

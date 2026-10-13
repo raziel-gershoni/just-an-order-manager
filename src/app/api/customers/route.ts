@@ -37,11 +37,12 @@ export const GET = withGroup(async (request, auth, groupId) => {
     customerIds.length ? loadRhythms(groupId, customerIds, today) : Promise.resolve(new Map()),
   ]);
 
-  // name and notify travel with the number: the list's WhatsApp picker labels
-  // each one and marks the silenced ones, and both live on this row.
+  // name, notify and hasWhatsapp travel with the number: the list's WhatsApp
+  // picker labels each one and marks the silenced ones, and the row's button
+  // only counts numbers that are on WhatsApp.
   const phonesByCustomer: Record<
     number,
-    { id: number; phone: string; sortOrder: number; name: string | null; notify: boolean }[]
+    { id: number; phone: string; sortOrder: number; name: string | null; notify: boolean; hasWhatsapp: boolean }[]
   > = {};
   for (const p of phones) {
     if (!phonesByCustomer[p.customerId]) phonesByCustomer[p.customerId] = [];
@@ -51,6 +52,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
       sortOrder: p.sortOrder,
       name: p.name,
       notify: p.notify,
+      hasWhatsapp: p.hasWhatsapp,
     });
   }
 
@@ -181,7 +183,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
     {
       customer: {
         ...customer,
-        phones: cleanPhone ? [{ phone: cleanPhone }] : [],
+        phones: cleanPhone ? [{ phone: cleanPhone, hasWhatsapp: true }] : [],
         temperature: temperatureOf(NO_ORDERS, todayStr()),
       },
     },

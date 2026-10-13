@@ -77,6 +77,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
         phone: customerPhones.phone,
         customerId: customers.id,
         optOut: customers.reminderOptOut,
+        hasWhatsapp: customerPhones.hasWhatsapp,
       })
       .from(customerPhones)
       .innerJoin(customers, eq(customerPhones.customerId, customers.id))
@@ -84,6 +85,9 @@ export const POST = withGroup(async (request, auth, groupId) => {
       .limit(1);
     if (!row) return errorResponse('Phone not found', 404);
     if (row.optOut) skippedOptOut = 1;
+    // The explicit pick overrides `notify`, but not the number being unable to
+    // receive WhatsApp at all — that send could only fail.
+    else if (!row.hasWhatsapp) skippedNoPhone = 1;
     else targets = [{ customerId: row.customerId, phoneId: row.phoneId, phone: row.phone }];
   } else {
     const ids = parsed.data.customerIds!;
@@ -104,7 +108,13 @@ export const POST = withGroup(async (request, auth, groupId) => {
           customerId: customerPhones.customerId,
         })
         .from(customerPhones)
-        .where(and(inArray(customerPhones.customerId, allowedIds), eq(customerPhones.notify, true)))
+        .where(
+          and(
+            inArray(customerPhones.customerId, allowedIds),
+            eq(customerPhones.notify, true),
+            eq(customerPhones.hasWhatsapp, true)
+          )
+        )
         .orderBy(asc(customerPhones.sortOrder));
       targets = phones.map((p) => ({
         customerId: p.customerId,
@@ -112,7 +122,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
         phone: p.phone,
       }));
     }
-    // Allowed customers that produced no target had no phone on file.
+    // Allowed customers that produced no target had no reachable phone on file.
     const withTarget = new Set(targets.map((tg) => tg.customerId));
     skippedNoPhone = allowedIds.filter((id) => !withTarget.has(id)).length;
   }

@@ -355,6 +355,12 @@ export const customerPhones = pgTable('customer_phones', {
   // Whether this number receives automatic messages (order updates + reminders).
   // Default on, so a new number behaves like today until the owner unchecks it.
   notify: boolean('notify').notNull().default(true),
+  // Whether the number is on WhatsApp at all. Not the same as `notify`: that is
+  // the owner choosing not to message a number, this is the number being unable
+  // to receive one (a landline, a phone without the app). A number without it
+  // gets no automatic sends and no WhatsApp button; flipping it back restores
+  // whatever `notify` said.
+  hasWhatsapp: boolean('has_whatsapp').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

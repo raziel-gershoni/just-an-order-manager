@@ -18,7 +18,7 @@ import { computeOrderPricing } from '@/lib/pricing';
 import { formatAllocation } from '@/lib/pricing-format';
 import { Tag } from 'lucide-react';
 
-interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string }[] }
+interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string; hasWhatsapp?: boolean }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
 interface BreadAddition { id: number; name: string }
 interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enabledAdditions?: BreadAddition[] }
@@ -890,8 +890,8 @@ function OrderFormContent() {
           )}
         </Card>
 
-        {/* Notify customer (only on create, only if customer has at least one phone) */}
-        {!isEdit && selectedCustomer && (selectedCustomer as Customer).phones && ((selectedCustomer as Customer).phones?.length ?? 0) > 0 && (
+        {/* Notify customer (only on create, only if customer has a number on WhatsApp) */}
+        {!isEdit && selectedCustomer && ((selectedCustomer as Customer).phones ?? []).some((p) => p.hasWhatsapp !== false) && (
           <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
             <input
               type="checkbox"

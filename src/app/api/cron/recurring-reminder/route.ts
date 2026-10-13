@@ -4,13 +4,13 @@ import {
   groups,
   orders,
   customers,
-  customerPhones,
   reminderTemplates,
   reminderSends,
 } from '@/db/schema';
 import { and, eq, ne, gte, lte, asc, desc } from 'drizzle-orm';
 import { format, addDays } from 'date-fns';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
+import { getNotifiablePhoneRows } from '@/lib/customer-phones';
 import { pickNextTemplate } from '@/lib/reminders';
 import { buildOrderItemsSummary } from '@/lib/order-summary';
 
@@ -147,12 +147,9 @@ async function handler(request: Request) {
             continue;
           }
 
-          // Notifiable phones (id + number) — respects the per-phone notify flag.
-          const phones = await db
-            .select({ id: customerPhones.id, phone: customerPhones.phone })
-            .from(customerPhones)
-            .where(and(eq(customerPhones.customerId, c.customerId), eq(customerPhones.notify, true)))
-            .orderBy(asc(customerPhones.sortOrder));
+          // Notifiable phones (id + number) — the per-phone notify flag, and
+          // only numbers that are on WhatsApp.
+          const phones = await getNotifiablePhoneRows(c.customerId);
           if (phones.length === 0) {
             stats.skippedNoPhone++;
             continue;

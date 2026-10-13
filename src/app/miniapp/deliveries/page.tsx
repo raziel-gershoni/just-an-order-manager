@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { groupByDeliveryDate } from '@/lib/order-grouping';
 import { waHref } from '@/lib/phone-links';
 import { buildWazeLink } from '@/lib/delivery';
-import { Banknote, Check, MessageCircle, Navigation, Truck } from 'lucide-react';
+import { Banknote, Check, MessageCircle, MessageCircleOff, Navigation, Truck } from 'lucide-react';
 
 interface Delivery {
   id: number;
@@ -23,6 +23,8 @@ interface Delivery {
   city: string | null;
   deliveryNotes: string | null;
   phone: string | null;
+  /** False when the owner marked every one of the customer's numbers as off WhatsApp. */
+  phoneHasWhatsapp: boolean;
 }
 
 export default function DeliveriesPage() {
@@ -158,7 +160,7 @@ export default function DeliveriesPage() {
                             dir on the digits alone: a number carrying a leading
                             + rendered with the plus at the far end. */}
                         {d.phone &&
-                          (waHref(d.phone) ? (
+                          (d.phoneHasWhatsapp && waHref(d.phone) ? (
                             <a
                               href={waHref(d.phone)!}
                               target="_blank"
@@ -169,12 +171,17 @@ export default function DeliveriesPage() {
                               <span dir="ltr" className="tabular-nums">{d.phone}</span>
                             </a>
                           ) : (
-                            // A landline or a foreign number has no wa.me form.
-                            // The digits still have to be on screen: this tab is
-                            // the driver's only one, and he cannot open the
+                            // A landline, a foreign number, or one the owner
+                            // marked as off WhatsApp has no chat to open. The
+                            // digits still have to be on screen: this tab is the
+                            // driver's only one, and they cannot open the
                             // customer card to look them up.
                             <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground">
-                              <MessageCircle className="h-4 w-4 opacity-40" />
+                              {d.phoneHasWhatsapp ? (
+                                <MessageCircle className="h-4 w-4 opacity-40" />
+                              ) : (
+                                <MessageCircleOff className="h-4 w-4 opacity-60" />
+                              )}
                               <span dir="ltr" className="tabular-nums">{d.phone}</span>
                             </span>
                           ))}

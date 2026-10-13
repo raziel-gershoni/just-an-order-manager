@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { customerPhones } from '@/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, sql, type SQL, type AnyColumn } from 'drizzle-orm';
 
 /**
  * Clean a phone number as it comes in from a form/paste, before storing it.
@@ -32,11 +32,12 @@ export async function getCustomerPhones(customerId: number): Promise<string[]> {
 
 /**
  * The phone rows (id + number) that should receive AUTOMATIC messages for a
- * customer — i.e. `notify = true` — ordered by sortOrder. The single source of
- * truth for "which of a customer's numbers do we auto-message"; every automatic
- * sender (order confirmations, ready, cancelled, reminders, recurring) routes
- * through this. The id is kept for callers that log per-phone (reminderSends).
- * An empty result means the owner silenced all of this customer's numbers.
+ * customer — `notify = true` and on WhatsApp — ordered by sortOrder. The single
+ * source of truth for "which of a customer's numbers do we auto-message"; every
+ * automatic sender (order confirmations, ready, cancelled, reminders,
+ * recurring) routes through this. The id is kept for callers that log
+ * per-phone (reminderSends). An empty result means the owner silenced every
+ * number, or none of them is on WhatsApp.
  */
 export async function getNotifiablePhoneRows(
   customerId: number
@@ -44,8 +45,30 @@ export async function getNotifiablePhoneRows(
   return db
     .select({ id: customerPhones.id, phone: customerPhones.phone })
     .from(customerPhones)
-    .where(and(eq(customerPhones.customerId, customerId), eq(customerPhones.notify, true)))
+    .where(
+      and(
+        eq(customerPhones.customerId, customerId),
+        eq(customerPhones.notify, true),
+        eq(customerPhones.hasWhatsapp, true)
+      )
+    )
     .orderBy(asc(customerPhones.sortOrder));
+}
+
+/**
+ * SQL for "this customer has at least one number an automatic message can go
+ * to" — the same rule as getNotifiablePhoneRows, for queries that ask it of many
+ * customers at once. Anything judging whether a send SHOULD have happened (the
+ * reminder health probe) must use this, or it reports a customer the senders
+ * skip on purpose as a failure.
+ */
+export function hasNotifiablePhone(customerId: AnyColumn): SQL {
+  return sql`exists (
+    select 1 from ${customerPhones}
+    where ${customerPhones.customerId} = ${customerId}
+      and ${customerPhones.notify} = true
+      and ${customerPhones.hasWhatsapp} = true
+  )`;
 }
 
 /** Notifiable phone numbers for a customer — the string-only convenience form. */

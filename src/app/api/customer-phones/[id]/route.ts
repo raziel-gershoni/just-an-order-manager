@@ -34,6 +34,8 @@ const updateSchema = z.object({
   sortOrder: z.number().int().optional(),
   // Whether this number receives automatic messages.
   notify: z.boolean().optional(),
+  // Whether the number is on WhatsApp at all.
+  hasWhatsapp: z.boolean().optional(),
 });
 
 export const PATCH = withAuth(async (request, auth) => {
@@ -50,6 +52,7 @@ export const PATCH = withAuth(async (request, auth) => {
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name?.trim() || null;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
   if (parsed.data.notify !== undefined) updateData.notify = parsed.data.notify;
+  if (parsed.data.hasWhatsapp !== undefined) updateData.hasWhatsapp = parsed.data.hasWhatsapp;
 
   const [updated] = await db
     .update(customerPhones)

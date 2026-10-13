@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send, MessageCircle } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send, MessageCircle, MessageCircleOff } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { HandlerPicker, type GroupMember } from '@/components/customers/HandlerPicker';
 import { PhonePicker } from '@/components/customers/PhonePicker';
@@ -28,6 +28,8 @@ interface CustomerPhone {
   sortOrder: number;
   name: string | null;
   notify: boolean;
+  /** Optional: a row inserted from the add form carries no mark, which means "on". */
+  hasWhatsapp?: boolean;
 }
 interface Customer {
   id: number;
@@ -163,7 +165,30 @@ export default function CustomersPage() {
 
   /** Numbers we can actually open a chat with — the icon hides when there are none. */
   function dialable(c: Customer): CustomerPhone[] {
-    return c.phones.filter((p) => waHref(p.phone) !== null);
+    return c.phones.filter((p) => p.hasWhatsapp !== false && waHref(p.phone) !== null);
+  }
+
+  /**
+   * Someone the owner has marked as off WhatsApp, on every number: the row shows
+   * that instead of a chat button. Only a mark counts — a number that merely
+   * fails to normalize (a foreign one) says nothing about WhatsApp, and keeps
+   * the old behaviour of no icon at all.
+   */
+  function offWhatsApp(c: Customer): boolean {
+    return c.phones.length > 0 && c.phones.every((p) => p.hasWhatsapp === false);
+  }
+
+  // Telegram's WebView can't dial (tel: is dropped), so the number on the
+  // clipboard is the nearest thing to a call button.
+  async function copyNumber(c: Customer) {
+    const phone = c.phones[0]?.phone;
+    if (!phone) return;
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast.success(t('customers.phone_copied'));
+    } catch {
+      toast.error(t('customers.copy_failed'));
+    }
   }
 
   function openWhatsApp(c: Customer) {
@@ -457,6 +482,21 @@ export default function CustomersPage() {
                         <span className="text-[11px] tabular-nums text-muted-foreground">
                           {daysAgoFromCount(tempOf(c).daysSince!)}
                         </span>
+                      )}
+                      {offWhatsApp(c) && (
+                        <button
+                          type="button"
+                          aria-label={`${t('customers.no_whatsapp_copy')} · ${c.name}`}
+                          title={t('customers.no_whatsapp_copy')}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            copyNumber(c);
+                          }}
+                          className="-my-1 flex h-9 w-9 items-center justify-center rounded-lg py-1 text-muted-foreground/60 transition-colors hover:bg-muted"
+                        >
+                          <MessageCircleOff className="h-4 w-4" />
+                        </button>
                       )}
                       {dialable(c).length > 0 && (
                         <button

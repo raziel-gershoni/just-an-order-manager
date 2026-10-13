@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { orders, customers, orderItems, customerPhones } from '@/db/schema';
 import { eq, and, inArray, notInArray, asc, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from '@/lib/order-pricing';
+import { normalizePhoneNumber } from '@/lib/phone-links';
 
 // Active deliveries (is_delivery, not yet delivered/cancelled) for owner/manager
 // /driver. Returns the navigable address + private notes + the amount to collect.
@@ -53,17 +54,31 @@ export const GET = withGroup(async (_request, auth, groupId) => {
     : [];
   const goodsByOrder = new Map(sums.map((s) => [s.orderId, Number(s.goods)]));
 
-  // First phone per customer
+  // One phone per customer: the first one a chat can actually open (on WhatsApp
+  // and with a wa.me form), since the driver's button opens a chat; failing
+  // that the first number at all, so its digits are still on the screen.
   const customerIds = Array.from(new Set(rows.map((r) => r.customerId)));
   const phones = customerIds.length
     ? await db
-        .select({ customerId: customerPhones.customerId, phone: customerPhones.phone, sortOrder: customerPhones.sortOrder })
+        .select({
+          customerId: customerPhones.customerId,
+          phone: customerPhones.phone,
+          sortOrder: customerPhones.sortOrder,
+          hasWhatsapp: customerPhones.hasWhatsapp,
+        })
         .from(customerPhones)
         .where(inArray(customerPhones.customerId, customerIds))
         .orderBy(asc(customerPhones.sortOrder))
     : [];
-  const phoneByCustomer = new Map<number, string>();
-  for (const p of phones) if (!phoneByCustomer.has(p.customerId)) phoneByCustomer.set(p.customerId, p.phone);
+  const chatable = (p: { phone: string; hasWhatsapp: boolean }) =>
+    p.hasWhatsapp && normalizePhoneNumber(p.phone) !== null;
+  const phoneByCustomer = new Map<number, { phone: string; hasWhatsapp: boolean }>();
+  for (const p of phones) {
+    const seen = phoneByCustomer.get(p.customerId);
+    if (!seen || (!chatable(seen) && chatable(p))) {
+      phoneByCustomer.set(p.customerId, { phone: p.phone, hasWhatsapp: p.hasWhatsapp });
+    }
+  }
 
   const deliveries = rows.map((r) => {
     const goods = r.goodsSnapshot != null ? Number(r.goodsSnapshot) : (goodsByOrder.get(r.id) ?? 0);
@@ -78,7 +93,8 @@ export const GET = withGroup(async (_request, auth, groupId) => {
       address: r.address,
       city: r.city,
       deliveryNotes: r.deliveryNotes,
-      phone: phoneByCustomer.get(r.customerId) ?? null,
+      phone: phoneByCustomer.get(r.customerId)?.phone ?? null,
+      phoneHasWhatsapp: phoneByCustomer.get(r.customerId)?.hasWhatsapp ?? false,
     };
   });
 
