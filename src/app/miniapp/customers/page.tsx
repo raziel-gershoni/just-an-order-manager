@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
-import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send, MessageCircle, MessageCircleOff } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, ChevronLeft, SearchX, AlertCircle, CheckSquare, Send, MessageCircle, MessageCircleOff, BellOff } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { HandlerPicker, type GroupMember } from '@/components/customers/HandlerPicker';
 import { PhonePicker } from '@/components/customers/PhonePicker';
@@ -176,6 +176,16 @@ export default function CustomersPage() {
    */
   function offWhatsApp(c: Customer): boolean {
     return c.phones.length > 0 && c.phones.every((p) => p.hasWhatsapp === false);
+  }
+
+  /**
+   * Every number that could be messaged is silenced, so nothing automatic
+   * reaches this customer. Numbers off WhatsApp don't count either way — with
+   * none on WhatsApp the row already shows the crossed-out chat instead.
+   */
+  function allSilenced(c: Customer): boolean {
+    const onWhatsApp = c.phones.filter((p) => p.hasWhatsapp !== false);
+    return onWhatsApp.length > 0 && onWhatsApp.every((p) => !p.notify);
   }
 
   // Telegram's WebView can't dial (tel: is dropped), so the number on the
@@ -499,9 +509,18 @@ export default function CustomersPage() {
                         </button>
                       )}
                       {dialable(c).length > 0 && (
+                        // Still the chat button when every number is silenced —
+                        // a person can always write — but it wears the crossed-out
+                        // bell, so the list shows who gets no automatic messages
+                        // without spending another icon on the row.
                         <button
                           type="button"
-                          aria-label={`WhatsApp · ${c.name}`}
+                          aria-label={
+                            allSilenced(c)
+                              ? `WhatsApp · ${c.name} · ${t('customers.notify_off')}`
+                              : `WhatsApp · ${c.name}`
+                          }
+                          title={allSilenced(c) ? t('customers.notify_off') : undefined}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -509,7 +528,7 @@ export default function CustomersPage() {
                           }}
                           className="-my-1 flex h-9 w-9 items-center justify-center rounded-lg py-1 text-success transition-colors hover:bg-success/10"
                         >
-                          <MessageCircle className="h-4 w-4" />
+                          {allSilenced(c) ? <BellOff className="h-4 w-4" /> : <MessageCircle className="h-4 w-4" />}
                         </button>
                       )}
                       <Chevron className="h-4 w-4 text-muted-foreground/30" />
