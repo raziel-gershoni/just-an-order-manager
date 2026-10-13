@@ -7,6 +7,22 @@ export function todayStr(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
+/**
+ * Today on the bakery's calendar, whatever the server's clock says. Vercel runs
+ * in UTC, where January 1st is still last year for its first two hours — the
+ * hours a year-end report is most likely to be opened in.
+ */
+export function israelToday(now: Date = new Date()): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: part('year'), month: part('month'), day: part('day') };
+}
+
 /** The delivery-date string `days` from today (default 7) — the upcoming-window horizon. */
 export function upcomingHorizonStr(days = 7): string {
   return format(addDays(new Date(), days), 'yyyy-MM-dd');
