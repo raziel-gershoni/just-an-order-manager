@@ -78,6 +78,29 @@ export function nextRecurringDate(
   return resolveDeliveryDate(deliveryType);
 }
 
+/**
+ * `date` moved forward by whole weeks until it is after `floor` (both
+ * yyyy-MM-dd), keeping its weekday — the roll nextRecurringDate does, for a date
+ * that was chosen ahead of time and may have gone stale by delivery.
+ */
+export function rollWeeklyPast(date: string, floor: string): string {
+  let d = new Date(date + 'T00:00:00');
+  const f = new Date(floor + 'T00:00:00');
+  while (d <= f) d = addDays(d, 7);
+  return format(d, 'yyyy-MM-dd');
+}
+
+/**
+ * The Friday of the Sunday–Saturday week `date` falls in. Moving a standing
+ * order onto Shabbat "from next time" keeps the next occurrence's week and only
+ * moves the day: a Tuesday order whose next one is Tue 27/10 becomes Fri 30/10,
+ * not the Friday three days after this week's Tuesday.
+ */
+export function fridayOfWeek(date: string): string {
+  const d = new Date(date + 'T00:00:00');
+  return format(addDays(d, 5 - d.getDay()), 'yyyy-MM-dd');
+}
+
 export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
   const date = startOfDay(new Date(dateStr + 'T00:00:00'));
   const today = startOfDay(new Date());
@@ -152,6 +175,18 @@ export function daysAgoFromCount(days: number): string {
  * the bare ISO date, which reads slowly and buries the one thing a baker needs
  * off a glance: which day. Falls back to the raw string if it can't be parsed.
  */
+/** "30/10" — a date short enough for a link or a button label. */
+export function formatDayMonth(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return format(date, 'dd/MM');
+}
+
+/** The day after a yyyy-MM-dd date, as yyyy-MM-dd. */
+export function dayAfter(dateStr: string): string {
+  return format(addDays(new Date(dateStr + 'T00:00:00'), 1), 'yyyy-MM-dd');
+}
+
 export function formatWeekdayShort(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
   if (Number.isNaN(date.getTime())) return dateStr;

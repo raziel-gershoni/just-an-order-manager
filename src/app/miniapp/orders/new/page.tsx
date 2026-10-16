@@ -11,12 +11,16 @@ import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn, friendlyError } from '@/lib/utils';
-import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck } from 'lucide-react';
+import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck, CalendarClock } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
 import { computeOrderPricing } from '@/lib/pricing';
 import { formatAllocation } from '@/lib/pricing-format';
 import { Tag } from 'lucide-react';
+import { pricingKey } from '@/lib/order-fingerprint';
+import { dayAfter, formatDayMonth, formatWeekdayShort, fridayOfWeek, rollWeeklyPast } from '@/lib/date-utils';
+import { isFridayType, type NextChangeSection, type NextOccurrenceView } from '@/lib/order-next-change-types';
+import { NextChangeConflictSheet, sectionsLabel } from '@/components/orders/NextChangeConflictSheet';
 
 interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string; hasWhatsapp?: boolean }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
@@ -26,26 +30,17 @@ interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAddit
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
-/**
- * The pricing inputs of a basket, order-independent — the same fingerprint
- * src/app/api/orders/[id]/route.ts builds before deciding whether to re-price.
- *
- * It has to be the same shape, not merely a comparison: JSON.stringify is
- * sensitive to line order, to the order of the addition ids (tapping a chip off
- * and back on appends it to the end) and to which keys happen to be present, so
- * it called an untouched basket "changed" and priced the delivery fee against
- * today's catalog while the server kept the order's frozen one.
- */
-function itemsFingerprint(rows: LineItem[]): string {
-  return rows
-    .map(
-      (i) =>
-        `${i.breadTypeId}:${i.breadSizeId}:${i.quantity}:${[...i.breadAdditionIds]
-          .sort((a, b) => a - b)
-          .join(',')}:${i.additionsCharged == null ? 'n' : i.additionsCharged ? '1' : '0'}`
-    )
-    .sort()
-    .join('|');
+/** A basket whose goods are already frozen, and what they come to. */
+interface Baseline { key: string; goods: number }
+
+/** What a plain edit was loaded with, to tell which parts of the order it changed. */
+interface Loaded {
+  notes: string;
+  totalOverride: string;
+  isDelivery: boolean;
+  manualFee: string;
+  deliveryType: DeliveryType;
+  deliveryDate: string;
 }
 
 export default function NewOrderPage() {
@@ -80,6 +75,9 @@ function OrderFormContent() {
   const editId = searchParams.get('edit');
   const presetCustomerId = searchParams.get('customerId');
   const isEdit = !!editId;
+  // "From the next occurrence": the same form, saving what the next order of a
+  // recurring chain changes, while this one stays as it is.
+  const isNext = isEdit && searchParams.get('next') === '1';
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
@@ -92,12 +90,15 @@ function OrderFormContent() {
   );
   const [customerName, setCustomerName] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
-  // What this order was loaded with, for telling a real item edit from a
-  // notes/date/fee one — the server draws the same line before it re-prices,
-  // and the two have to agree or the fee is judged on the wrong basket.
-  const [frozenGoods, setFrozenGoods] = useState<number | null>(null);
-  const [loadedItemsKey, setLoadedItemsKey] = useState<string | null>(null);
-  const [loadedFlags, setLoadedFlags] = useState<{ deals: boolean; additions: boolean } | null>(null);
+  // The baskets whose prices are frozen — this order's, and in next mode also
+  // the waiting change's — for telling a real item edit from a notes/date/fee
+  // one. The server draws the same line before it re-prices, and the two have
+  // to agree or the fee is judged on the wrong basket.
+  const [baselines, setBaselines] = useState<Baseline[]>([]);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [orderDate, setOrderDate] = useState<string | null>(null);
+  const [nextOcc, setNextOcc] = useState<NextOccurrenceView | null>(null);
+  const [conflict, setConflict] = useState<NextChangeSection[] | null>(null);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -153,39 +154,82 @@ function OrderFormContent() {
             router.replace(`/miniapp/orders/${editId}`);
             return;
           }
+          const occ: NextOccurrenceView | null = order.nextOccurrence ?? null;
+          // Next mode needs an open recurring order to plan on; anything else
+          // (stopped meanwhile, an old link) goes back to the order itself.
+          if (isNext && !occ) {
+            router.replace(`/miniapp/orders/${editId}`);
+            return;
+          }
+          setNextOcc(occ);
+          setOrderDate(order.deliveryDate ?? null);
           setCustomerId(order.customerId);
           setCustomerName(order.customerName);
-          const loadedItems = order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[]; additionsCharged?: boolean | null }) => ({
+          const orderItems: LineItem[] = order.items.map((i: { breadTypeId: number; breadSizeId: number | null; quantity: number; additions?: { id: number }[]; additionsCharged?: boolean | null }) => ({
             breadTypeId: i.breadTypeId,
             breadSizeId: i.breadSizeId ?? null,
             breadAdditionIds: (i.additions ?? []).map((a) => a.id),
             quantity: i.quantity,
             additionsCharged: i.additionsCharged ?? null,
           }));
-          setItems(loadedItems);
-          setLoadedItemsKey(itemsFingerprint(loadedItems));
-          setDeliveryType(order.deliveryType as DeliveryType);
-          setDeliveryDate(order.deliveryDate || '');
-          setNotes(order.notes || '');
-          setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
-          setIsRecurring(order.deliveryType !== 'asap' && Boolean((order as { isRecurring?: boolean }).isRecurring));
-          const loadedDeals = (order as { dealsEnabled?: boolean }).dealsEnabled ?? true;
-          const loadedAdditions = (order as { additionsCharged?: boolean }).additionsCharged ?? true;
-          setDealsEnabled(loadedDeals);
-          setAdditionsCharged(loadedAdditions);
-          setLoadedFlags({ deals: loadedDeals, additions: loadedAdditions });
-          setIsDelivery(Boolean(order.isDelivery));
-          setDeliveryManualFee(
-            order.deliveryFee && Number(order.deliveryFee) > 0 ? String(Number(order.deliveryFee)) : ''
-          );
+          const orderDeals: boolean = order.dealsEnabled ?? true;
+          const orderAdditions: boolean = order.additionsCharged ?? true;
+          const money = (v: string | number | null | undefined) => (v != null && Number(v) > 0 ? String(Number(v)) : '');
           // The goods this order is actually charged for, frozen when it was
           // placed. The free-delivery threshold has to be judged against that,
           // not against what the same basket would cost at today's prices.
-          setFrozenGoods(
-            typeof (order as { calculatedTotal?: number }).calculatedTotal === 'number'
-              ? (order as { calculatedTotal: number }).calculatedTotal
-              : null
-          );
+          const frozen: Baseline[] =
+            typeof order.calculatedTotal === 'number'
+              ? [{ key: pricingKey(orderItems, orderDeals, orderAdditions), goods: order.calculatedTotal }]
+              : [];
+
+          // In next mode each part starts from the waiting change when it holds
+          // that part, else from this order — what the next one would be.
+          const plan = isNext ? occ?.change ?? null : null;
+          const basket = plan?.basket;
+          if (basket) {
+            const planItems: LineItem[] = basket.items.map((i) => ({
+              breadTypeId: i.breadTypeId,
+              breadSizeId: i.breadSizeId,
+              breadAdditionIds: i.breadAdditionIds,
+              quantity: i.quantity,
+              additionsCharged: i.additionsCharged,
+            }));
+            setItems(planItems);
+            setDealsEnabled(basket.dealsEnabled);
+            setAdditionsCharged(basket.additionsCharged);
+            setTotalOverride(basket.totalOverride ? String(Number(basket.totalOverride)) : '');
+            setIsDelivery(basket.isDelivery);
+            setDeliveryManualFee(money(basket.deliveryFee));
+            frozen.push({ key: pricingKey(planItems, basket.dealsEnabled, basket.additionsCharged), goods: basket.goods });
+          } else {
+            setItems(orderItems);
+            setDealsEnabled(orderDeals);
+            setAdditionsCharged(orderAdditions);
+            setTotalOverride(order.totalOverride ? String(Number(order.totalOverride)) : '');
+            setIsDelivery(Boolean(order.isDelivery));
+            setDeliveryManualFee(money(order.deliveryFee));
+          }
+          setBaselines(frozen);
+          setNotes(plan && plan.notes !== undefined ? plan.notes ?? '' : order.notes || '');
+          if (isNext && occ) {
+            setDeliveryType((plan?.schedule?.deliveryType ?? order.deliveryType) as DeliveryType);
+            // The date box starts on the day the next order would land, so
+            // switching to "a specific date" offers next week, not this one.
+            setDeliveryDate((plan?.schedule ? occ.date : occ.plainDate) ?? '');
+          } else {
+            setDeliveryType(order.deliveryType as DeliveryType);
+            setDeliveryDate(order.deliveryDate || '');
+          }
+          setIsRecurring(order.deliveryType !== 'asap' && Boolean(order.isRecurring));
+          setLoaded({
+            notes: order.notes || '',
+            totalOverride: order.totalOverride ? String(Number(order.totalOverride)) : '',
+            isDelivery: Boolean(order.isDelivery),
+            manualFee: money(order.deliveryFee),
+            deliveryType: order.deliveryType as DeliveryType,
+            deliveryDate: order.deliveryDate || '',
+          });
         } else if (!isEdit && b.breadTypes.length > 0) {
           const firstType = b.breadTypes[0];
           const defaultSize = firstType.enabledSizes?.[0];
@@ -310,8 +354,94 @@ function OrderFormContent() {
     }
   }
 
-  async function handleSubmit() {
+  /**
+   * The parts of a waiting next-occurrence change this plain edit also touches.
+   * Only those need asking about: an edit to anything else carries forward on
+   * its own, as edits always have.
+   */
+  /** Whether this plain edit moves this week's order to another day. */
+  function movesThisWeek(): boolean {
+    if (!loaded) return false;
+    return (
+      deliveryType !== loaded.deliveryType ||
+      (deliveryType === 'specific_date' && deliveryDate !== loaded.deliveryDate)
+    );
+  }
+
+  function conflictingSections(): NextChangeSection[] {
+    const waiting = nextOcc?.change?.sections ?? [];
+    const stillRepeats = deliveryType !== 'asap' && isRecurring;
+    if (waiting.length === 0 || !loaded || !stillRepeats) return [];
+    const changed: NextChangeSection[] = [];
+    if (
+      repriced ||
+      totalOverride !== loaded.totalOverride ||
+      isDelivery !== loaded.isDelivery ||
+      deliveryManualFee !== loaded.manualFee
+    ) {
+      changed.push('basket');
+    }
+    if (notes !== loaded.notes) changed.push('notes');
+    if (movesThisWeek()) changed.push('schedule');
+    return changed.filter((s) => waiting.includes(s));
+  }
+
+  function handleSubmit() {
     if (!customerId || items.length === 0) return;
+    if (isNext) {
+      void saveNextChange();
+      return;
+    }
+    if (isEdit) {
+      const conflicts = conflictingSections();
+      if (conflicts.length > 0) {
+        setConflict(conflicts);
+        return;
+      }
+    }
+    void saveOrder();
+  }
+
+  async function saveNextChange() {
+    setSubmitting(true);
+    try {
+      const { nextOccurrence } = await apiFetch<{ nextOccurrence: NextOccurrenceView | null }>(
+        `/orders/${editId}/next-change`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            deliveryType,
+            deliveryDate: deliveryType === 'specific_date' ? deliveryDate : undefined,
+            items,
+            notes,
+            totalOverride: totalOverride || null,
+            isDelivery,
+            deliveryFee: effectiveFee.toFixed(2),
+            dealsEnabled,
+            additionsCharged,
+          }),
+        }
+      );
+      if (nextOccurrence?.change && nextOccurrence.date) {
+        toast.success(t('orders.next_change_saved').replace('{date}', formatWeekdayShort(nextOccurrence.date)));
+      } else {
+        toast.success(t('orders.next_change_none'));
+      }
+      router.push(`/miniapp/orders/${editId}`);
+    } catch (e) {
+      if ((e as { status?: number }).status === 409) {
+        toast.error(t('orders.next_change_too_late'));
+        router.replace(`/miniapp/orders/${editId}`);
+      } else {
+        toast.error(friendlyError(e, t('orders.update_failed')));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function saveOrder(dropNextChange?: NextChangeSection[]) {
+    setConflict(null);
     setSubmitting(true);
     try {
       if (isEdit) {
@@ -332,6 +462,7 @@ function OrderFormContent() {
             isRecurring: deliveryType === 'asap' ? false : isRecurring,
             dealsEnabled,
             additionsCharged,
+            ...(dropNextChange?.length ? { dropNextChange } : {}),
           }),
         });
         toast.success(t('orders.updated'));
@@ -367,7 +498,7 @@ function OrderFormContent() {
   if (loading) {
     return (
       <>
-        <PageHeader title={isEdit ? t('orders.edit') : t('orders.new_order')} />
+        <PageHeader title={isEdit ? (isNext ? t('orders.next_change_title').replace('{date}', '…') : t('orders.edit')) : t('orders.new_order')} />
         <div className="p-5 space-y-4">
           <div className="h-24 rounded-xl bg-muted animate-pulse" />
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
@@ -427,13 +558,10 @@ function OrderFormContent() {
   // The flags count too: the route re-prices when dealsEnabled or
   // additionsCharged move, even if no line was touched, so pricing the fee on
   // the pre-toggle figure would bill a fee the re-priced order does not carry.
-  const repriced =
-    frozenGoods == null ||
-    loadedFlags == null ||
-    itemsFingerprint(items) !== loadedItemsKey ||
-    dealsEnabled !== loadedFlags.deals ||
-    additionsCharged !== loadedFlags.additions;
-  const goodsForThisOrder = repriced ? liveTotal : frozenGoods;
+  const currentKey = pricingKey(items, dealsEnabled, additionsCharged);
+  const frozenBaseline = baselines.find((b) => b.key === currentKey);
+  const repriced = frozenBaseline == null;
+  const goodsForThisOrder = frozenBaseline ? frozenBaseline.goods : liveTotal;
   const computedFee = delivSettings
     ? resolveDeliveryFee({
         city: custCity,
@@ -449,17 +577,69 @@ function OrderFormContent() {
     .toISOString()
     .slice(0, 10);
 
-  const deliveryOptions: [DeliveryType, string][] = [
+  // A next occurrence always has a day: no "בהקדם" there.
+  const deliveryOptions = ([
     ['shabbat', t('delivery.shabbat')],
     ['asap', t('delivery.asap')],
     ['specific_date', t('delivery.specific_date')],
     ['weekly', t('delivery.weekly')],
-  ];
+  ] as [DeliveryType, string][]).filter(([type]) => !isNext || type !== 'asap');
+
+  // Next mode: the day the change starts, by the server's rules. The next
+  // occurrence keeps its week — שבת/שבועי land on that week's Friday, a
+  // specific date is the one picked, and a Friday already planned stays put.
+  const plannedFriday =
+    nextOcc?.change?.schedule && isFridayType(nextOcc.change.schedule.deliveryType) ? nextOcc.date : null;
+  const nextDate =
+    isNext && nextOcc
+      ? deliveryType === 'specific_date'
+        ? deliveryDate || null
+        : plannedFriday ??
+          (nextOcc.plainDate ? rollWeeklyPast(fridayOfWeek(nextOcc.plainDate), nextOcc.floor) : null)
+      : null;
+  const minDate = isNext && nextOcc ? dayAfter(nextOcc.floor) : todayIso;
+  const waiting = !isNext ? nextOcc?.change ?? null : null;
 
   return (
     <>
-      <PageHeader title={isEdit ? t('orders.edit') : t('orders.new_order')} />
+      <PageHeader
+        title={
+          isNext
+            ? t('orders.next_change_title').replace('{date}', nextDate ? formatDayMonth(nextDate) : '…')
+            : isEdit
+              ? t('orders.edit')
+              : t('orders.new_order')
+        }
+      />
       <div className="p-5 space-y-4 animate-fade-in">
+        {/* Next mode says up front which order this is not touching. */}
+        {isNext && orderDate && (
+          <Card className="border-primary/30 bg-primary/5">
+            <div className="flex items-start gap-2.5">
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <p className="text-sm">
+                {t('orders.next_change_keeps')
+                  .replace('{date}', formatWeekdayShort(orderDate))
+                  .replace('{next}', nextDate ? formatWeekdayShort(nextDate) : '…')}
+              </p>
+            </div>
+          </Card>
+        )}
+        {/* A plain edit while a change waits: say so, since this edit then
+            reaches this week only for the parts the change holds. */}
+        {waiting && nextOcc?.date && (
+          <Card className="border-primary/30 bg-primary/5">
+            <div className="flex items-start gap-2.5">
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <p className="text-sm">
+                {t('orders.next_change_pending')
+                  .replace('{date}', formatWeekdayShort(nextOcc.date))
+                  .replace('{sections}', sectionsLabel(t, waiting.sections))}
+              </p>
+            </div>
+          </Card>
+        )}
+
         {/* Customer */}
         <Card>
           <h3 className="font-semibold mb-3">{t('form.customer')}</h3>
@@ -773,12 +953,18 @@ function OrderFormContent() {
             <Input
               type="date"
               value={deliveryDate}
-              min={todayIso}
+              min={minDate}
               onChange={(e) => setDeliveryDate(e.target.value)}
               className="mt-3"
             />
           )}
-          {deliveryType !== 'asap' && (
+          {isNext && nextDate && (
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CalendarClock className="h-3.5 w-3.5" />
+              {t('orders.next_change_starts').replace('{date}', formatWeekdayShort(nextDate))}
+            </p>
+          )}
+          {!isNext && deliveryType !== 'asap' && (
             <label className="mt-3 flex items-start gap-2.5 cursor-pointer p-2.5 -mx-2.5 rounded-lg hover:bg-muted/50 transition-colors">
               <input
                 type="checkbox"
@@ -945,15 +1131,30 @@ function OrderFormContent() {
               !customerId ||
               items.length === 0 ||
               items.some((i) => !i.breadSizeId) ||
-              (deliveryType === 'specific_date' && !deliveryDate)
+              (deliveryType === 'specific_date' && !deliveryDate) ||
+              (isNext && deliveryType === 'specific_date' && deliveryDate < minDate)
             }
             loading={submitting}
             onClick={handleSubmit}
           >
-            {isEdit ? t('form.update_order') : t('form.create_order')}
+            {isNext
+              ? t('orders.next_change_save').replace('{date}', nextDate ? formatDayMonth(nextDate) : '…')
+              : isEdit
+                ? t('form.update_order')
+                : t('form.create_order')}
           </Button>
         </div>
       </div>
+      {conflict && (
+        <NextChangeConflictSheet
+          // Moving this week's date moves the next one too, so the date known
+          // at load would be wrong in the labels; they say "the next orders".
+          date={nextOcc?.date && !movesThisWeek() ? formatDayMonth(nextOcc.date) : null}
+          sections={conflict}
+          onPick={(follow) => void saveOrder(follow ? conflict : undefined)}
+          onClose={() => setConflict(null)}
+        />
+      )}
     </>
   );
 }

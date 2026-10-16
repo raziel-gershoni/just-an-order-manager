@@ -3,10 +3,12 @@ import { db } from '@/db';
 import { breadAdditions, breadRecipeIngredients, breadRecipes, breadSizes, breadTypes, customerPhones, customers, orderItemAdditions, orderItems, orders, payments } from '@/db/schema';
 import { eq, and, inArray, sql, asc } from 'drizzle-orm';
 import { z } from 'zod/v4';
-import { resolveDeliveryDate } from '@/lib/date-utils';
+import { resolveDeliveryDate, todayStr } from '@/lib/date-utils';
 import { scaleRecipe, type Recipe, type ScaledRecipe } from '@/lib/recipe';
 import { goodsForRead, orderTotalFromGoods, priceOrderForWrite } from '@/lib/order-pricing';
 import { resolveAndPriceOrderLines, type ResolvedOrderLine } from '@/lib/order-lines';
+import { basketFingerprint } from '@/lib/order-fingerprint';
+import { buildNextOccurrenceView, parseNextChange, withoutSections } from '@/lib/order-next-change';
 
 function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
@@ -17,7 +19,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
   const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
   const isBaker = role === 'baker';
 
-  const [order] = await db
+  const [found] = await db
     .select({
       id: orders.id,
       deliveryType: orders.deliveryType,
@@ -40,13 +42,16 @@ export const GET = withGroup(async (request, auth, groupId) => {
       customerAddress: customers.address,
       customerCity: customers.city,
       customerDeliveryNotes: customers.deliveryNotes,
+      nextChange: orders.nextChange,
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
     .where(and(eq(orders.id, id), eq(orders.groupId, groupId)))
     .limit(1);
 
-  if (!order) return errorResponse('Order not found', 404);
+  if (!found) return errorResponse('Order not found', 404);
+  // The stored change goes out only as the view built from it, never raw.
+  const { nextChange, ...order } = found;
 
   const itemRows = await db
     .select({
@@ -178,6 +183,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
       calculatedTotal,
       customerPhoneCount: phoneCount,
       charged: Boolean(charge),
+      nextOccurrence: await buildNextOccurrenceView({ ...order, groupId, nextChange }),
     },
   });
 });
@@ -199,6 +205,9 @@ const updateOrderSchema = z.object({
     quantity: z.number().int().positive(),
     additionsCharged: z.boolean().nullable().optional(), // null/undefined = inherit order default
   })).min(1).optional(),
+  // Sections of a waiting next-occurrence change this edit replaces: the owner
+  // said "from 30/10 too", so the next order follows this one again for them.
+  dropNextChange: z.array(z.enum(['basket', 'notes', 'schedule'])).optional(),
 });
 
 export const PATCH = withGroup(async (request, auth, groupId) => {
@@ -266,29 +275,12 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     for (const a of existingAdditionLinks) {
       (existingAddByItem[a.orderItemId] ??= []).push(a.breadAdditionId);
     }
-    // Canonical, order-independent fingerprint of a line's pricing inputs.
-    const canonLine = (
-      breadTypeId: number,
-      breadSizeId: number | null,
-      quantity: number,
-      additionIds: number[],
-      additionsCharged: boolean | null | undefined
-    ) =>
-      `${breadTypeId}:${breadSizeId}:${quantity}:${[...additionIds].sort((a, b) => a - b).join(',')}:${
-        additionsCharged == null ? 'n' : additionsCharged ? '1' : '0'
-      }`;
-    const canonSet = (lines: string[]) => lines.slice().sort().join('|');
-    const existingCanon = canonSet(
-      existingItemRows.map((i) =>
-        canonLine(i.breadTypeId, i.breadSizeId, i.quantity, existingAddByItem[i.id] ?? [], i.additionsCharged)
-      )
+    // Canonical, order-independent fingerprint of the lines' pricing inputs —
+    // the same one the form draws, so the two agree on what "changed" means.
+    const existingCanon = basketFingerprint(
+      existingItemRows.map((i) => ({ ...i, breadAdditionIds: existingAddByItem[i.id] ?? [] }))
     );
-    const submittedCanon = canonSet(
-      parsed.data.items.map((i) =>
-        canonLine(i.breadTypeId, i.breadSizeId, i.quantity, i.breadAdditionIds ?? [], i.additionsCharged)
-      )
-    );
-    itemsChanged = submittedCanon !== existingCanon;
+    itemsChanged = basketFingerprint(parsed.data.items) !== existingCanon;
   }
   const pricingFlagsChanged =
     (parsed.data.dealsEnabled !== undefined && parsed.data.dealsEnabled !== order.dealsEnabled) ||
@@ -301,10 +293,25 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
 
   if (parsed.data.deliveryType) {
     updateData.deliveryType = parsed.data.deliveryType;
-    updateData.deliveryDate = resolveDeliveryDate(
-      parsed.data.deliveryType,
-      parsed.data.deliveryDate
-    );
+    // The form sends the type on every save, and for שבת/שבועי resolving it
+    // means "the coming Friday" — which is TODAY on a Friday. So editing next
+    // week's freshly cloned order on delivery day moved it to today, and one
+    // dated two Fridays out was pulled a week in. An unchanged Friday type keeps
+    // the date it has; only a past one (an order left overdue) rolls forward.
+    // שבת and שבועי are one rule under two labels, so swapping between them
+    // relabels the order without moving it.
+    const onFriday = (t: string) => t === 'shabbat' || t === 'weekly';
+    const keepsItsFriday =
+      onFriday(parsed.data.deliveryType) &&
+      onFriday(order.deliveryType) &&
+      order.deliveryDate != null &&
+      order.deliveryDate >= todayStr();
+    if (!keepsItsFriday) {
+      updateData.deliveryDate = resolveDeliveryDate(
+        parsed.data.deliveryType,
+        parsed.data.deliveryDate
+      );
+    }
   } else if (parsed.data.deliveryDate !== undefined) {
     updateData.deliveryDate = parsed.data.deliveryDate || null;
   }
@@ -319,6 +326,16 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
 
   if (parsed.data.isRecurring !== undefined) {
     updateData.isRecurring = parsed.data.isRecurring;
+  }
+
+  // A stopped repeat (or an order turned into בהקדם, which can't repeat) drops
+  // its waiting change: kept hidden, it came back unannounced when the box was
+  // ticked again and overrode whatever that same edit set.
+  if (parsed.data.isRecurring === false || parsed.data.deliveryType === 'asap') {
+    updateData.nextChange = null;
+  } else if (parsed.data.dropNextChange?.length) {
+    const waiting = parseNextChange(order.nextChange);
+    if (waiting) updateData.nextChange = withoutSections(waiting, parsed.data.dropNextChange);
   }
 
   if (parsed.data.dealsEnabled !== undefined) {

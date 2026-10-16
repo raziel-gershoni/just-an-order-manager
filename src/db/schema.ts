@@ -394,6 +394,10 @@ export const orders = pgTable('orders', {
   goodsSnapshot: decimal('goods_snapshot', { precision: 10, scale: 2 }),
   // Human-readable pricing breakdown rows (Allocation[]) for the detail view.
   pricingBreakdown: jsonb('pricing_breakdown'),
+  // On an open recurring order: what the NEXT occurrence should change (a
+  // NextChange, parsed in src/lib/order-next-change.ts), applied once when this
+  // order is delivered. Null = clone this order as it is.
+  nextChange: jsonb('next_change'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
-import { formatDateRelative } from '@/lib/date-utils';
+import { formatDateRelative, formatDayMonth } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
 import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft, Undo2 } from 'lucide-react';
 import { ORDER_STATUS_REVERSALS } from '@/lib/constants';
@@ -21,6 +21,9 @@ import { groupByKind } from '@/lib/recipe';
 import { cn } from '@/lib/utils';
 import { formatAllocation } from '@/lib/pricing-format';
 import type { Allocation } from '@/lib/pricing';
+import type { NextOccurrenceView } from '@/lib/order-next-change-types';
+import { NextChangeCard } from '@/components/orders/NextChangeCard';
+import { NextChangeConflictSheet } from '@/components/orders/NextChangeConflictSheet';
 import Link from 'next/link';
 
 interface ScaledIngredient {
@@ -73,6 +76,8 @@ interface OrderDetail {
   customerDeliveryNotes: string | null;
   /** Whether this order's charge is already on the ledger the balance sums. */
   charged?: boolean;
+  /** Open recurring orders only: where the next one lands, and any change saved for it. */
+  nextOccurrence?: NextOccurrenceView | null;
 }
 
 /**
@@ -126,6 +131,12 @@ export default function OrderDetailPage() {
   // Set after delivering a recurring order — the id of the auto-created next one.
   const [nextRecurringOrderId, setNextRecurringOrderId] = useState<number | null>(null);
   const [stoppingRecurring, setStoppingRecurring] = useState(false);
+  const [discardingNext, setDiscardingNext] = useState(false);
+  // A custom price waiting on the "this week only, or from the next one too?"
+  // question, when a planned change also sets the price. undefined = not asking.
+  const [priceConflict, setPriceConflict] = useState<string | null | undefined>(undefined);
+  // Drivers deliver but don't edit orders — nor plan their next occurrence.
+  const canEdit = activeGroupRole !== 'driver';
 
   useEffect(() => {
     // Clear any prior "next recurring created" banner — the App Router reuses
@@ -226,6 +237,10 @@ export default function OrderDetailPage() {
 
   async function handleStopRecurring() {
     if (stoppingRecurring) return;
+    // Stopping drops a planned change too, so a slip of the finger would lose
+    // it: ask, but only then — a plain stop stays one tap.
+    const planned = order?.nextOccurrence?.change ? order.nextOccurrence.date : null;
+    if (planned && !window.confirm(t('orders.stop_recurring_confirm').replace('{date}', formatDayMonth(planned)))) return;
     setStoppingRecurring(true);
     try {
       await apiFetch(`/orders/${id}`, {
@@ -241,12 +256,60 @@ export default function OrderDetailPage() {
     }
   }
 
-  async function handleSetPrice(override: string | null) {
+  async function handleDiscardNextChange() {
+    const date = order?.nextOccurrence?.date;
+    if (discardingNext || !date) return;
+    if (!window.confirm(t('orders.next_change_discard_confirm').replace('{date}', formatDayMonth(date)))) return;
+    setDiscardingNext(true);
+    try {
+      const { nextOccurrence } = await apiFetch<{ nextOccurrence: NextOccurrenceView | null }>(
+        `/orders/${id}/next-change`,
+        { method: 'DELETE' }
+      );
+      setOrder((prev) => (prev ? { ...prev, nextOccurrence } : prev));
+      toast.success(t('orders.next_change_discarded'));
+    } catch (e) {
+      if ((e as { status?: number }).status === 409) {
+        toast.error(t('orders.next_change_too_late'));
+        // Someone else delivered or stopped it meanwhile: show what is true now.
+        apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
+          .then((d) => setOrder(d.order))
+          .catch(() => {});
+      } else {
+        toast.error(t('orders.update_failed'));
+      }
+    } finally {
+      setDiscardingNext(false);
+    }
+  }
+
+  /**
+   * A planned change that sets the basket also sets the price of the orders
+   * from its date, so a new price here asks the order form's question first:
+   * this week only, or from then on too.
+   */
+  function handleSetPrice(override: string | null) {
+    const planned = order?.isRecurring ? order.nextOccurrence?.change?.sections ?? [] : [];
+    const current = order?.totalOverride ?? null;
+    const changes =
+      override == null || current == null ? override != current : Number(override) !== Number(current);
+    if (changes && planned.includes('basket')) {
+      setPriceConflict(override);
+      return;
+    }
+    void savePrice(override);
+  }
+
+  async function savePrice(override: string | null, dropPlannedBasket = false) {
+    setPriceConflict(undefined);
     setSavingPrice(true);
     try {
       await apiFetch(`/orders/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ totalOverride: override }),
+        body: JSON.stringify({
+          totalOverride: override,
+          ...(dropPlannedBasket ? { dropNextChange: ['basket'] } : {}),
+        }),
       });
     } catch {
       toast.error(t('orders.update_failed'));
@@ -317,6 +380,11 @@ export default function OrderDetailPage() {
   const reversals = ORDER_STATUS_REVERSALS[order.status] ?? [];
   const nonDeliverActions = actions.filter((s) => s !== 'delivered');
   const canDeliver = actions.includes('delivered');
+  const isOpen = order.status !== 'delivered' && order.status !== 'cancelled';
+  // Only an open recurring order carries a next occurrence (the API sends null
+  // otherwise), so a stopped repeat hides its waiting change with the row.
+  const nextOcc = order.isRecurring && isOpen ? order.nextOccurrence ?? null : null;
+  const nextChange = nextOcc?.change ?? null;
 
   return (
     <>
@@ -387,24 +455,49 @@ export default function OrderDetailPage() {
               </span>
             </div>
             {order.isRecurring && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">{t('orders.recurring')}</span>
-                <div className="flex items-center gap-2.5">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">{t('orders.recurring')}</span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                     <Repeat className="h-3 w-3" />
                     {t('orders.repeat_weekly')}
                   </span>
-                  {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                </div>
+                {isOpen && (
+                  <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
+                    {/* Named by its date, not "next time": right after a
+                        delivery the open order already IS next week's. */}
+                    {canEdit && nextOcc?.plainDate && !nextChange && (
+                      <>
+                        <Link
+                          href={`/miniapp/orders/new?edit=${order.id}&next=1`}
+                          className="font-medium text-primary underline underline-offset-2"
+                        >
+                          {t('orders.next_change_link').replace('{date}', formatDayMonth(nextOcc.plainDate))}
+                        </Link>
+                        <span aria-hidden className="text-muted-foreground/60">·</span>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={handleStopRecurring}
                       disabled={stoppingRecurring}
-                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-destructive transition-colors disabled:opacity-50"
+                      className="text-muted-foreground underline underline-offset-2 hover:text-destructive transition-colors disabled:opacity-50"
                     >
                       {t('orders.stop_recurring')}
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
+                {nextChange && nextOcc?.date && (
+                  <NextChangeCard
+                    view={nextOcc}
+                    orderIsDelivery={order.isDelivery}
+                    canEdit={canEdit}
+                    editHref={`/miniapp/orders/new?edit=${order.id}&next=1`}
+                    discarding={discardingNext}
+                    onDiscard={handleDiscardNextChange}
+                  />
+                )}
               </div>
             )}
             {order.notes && (
@@ -688,6 +781,15 @@ export default function OrderDetailPage() {
               showMarkPaid
             />
           </Card>
+        )}
+
+        {priceConflict !== undefined && (
+          <NextChangeConflictSheet
+            date={order.nextOccurrence?.date ? formatDayMonth(order.nextOccurrence.date) : null}
+            sections={['basket']}
+            onPick={(follow) => void savePrice(priceConflict, follow)}
+            onClose={() => setPriceConflict(undefined)}
+          />
         )}
 
         {/* Paid confirmation */}

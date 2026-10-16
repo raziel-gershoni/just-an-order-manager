@@ -105,6 +105,12 @@ export async function notifyNewOrder(
      * at a glance instead of blending into the run of new-order pings.
      */
     isRenewal?: boolean;
+    /**
+     * A renewal that was meant to carry a change saved "from the next
+     * occurrence": 'applied' when it does, 'failed' when the plain copy was
+     * made instead — the baker hears either way, since nothing else will say.
+     */
+    nextChange?: 'applied' | 'failed' | null;
   }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
@@ -115,6 +121,8 @@ export async function notifyNewOrder(
     const lines = order.isRenewal
       ? [`<b>🔁 ${t('notify.recurring_renewed', lang)}</b>`, RULE]
       : [`<b>🍞 ${t('notify.new_order', lang)}</b>`, ``];
+    if (order.nextChange === 'applied') lines.push(`✏️ ${t('notify.next_change_applied', lang)}`);
+    if (order.nextChange === 'failed') lines.push(`⚠️ ${t('notify.next_change_failed', lang)}`);
     lines.push(`<b>${t('notify.customer', lang)}:</b> ${esc(order.customerName)}`);
     for (const item of order.items) {
       lines.push(`  • ${item.quantity} ${esc(item.breadTypeName)}`);
