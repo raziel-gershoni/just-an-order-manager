@@ -111,6 +111,8 @@ export async function notifyNewOrder(
      * made instead — the baker hears either way, since nothing else will say.
      */
     nextChange?: 'applied' | 'failed' | null;
+    /** A renewal made by skipping a week: the day that was skipped. */
+    skippedDate?: string | null;
   }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
@@ -121,6 +123,7 @@ export async function notifyNewOrder(
     const lines = order.isRenewal
       ? [`<b>🔁 ${t('notify.recurring_renewed', lang)}</b>`, RULE]
       : [`<b>🍞 ${t('notify.new_order', lang)}</b>`, ``];
+    if (order.skippedDate) lines.push(`⏭️ ${t('notify.skipped', lang).replace('{date}', formatWeekdayShort(order.skippedDate))}`);
     if (order.nextChange === 'applied') lines.push(`✏️ ${t('notify.next_change_applied', lang)}`);
     if (order.nextChange === 'failed') lines.push(`⚠️ ${t('notify.next_change_failed', lang)}`);
     lines.push(`<b>${t('notify.customer', lang)}:</b> ${esc(order.customerName)}`);

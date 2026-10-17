@@ -401,6 +401,16 @@ const translations: Record<string, string> = {
   'orders.stop_recurring': 'הפסק חזרה',
   'orders.recurring_stopped': 'החזרה השבועית בוטלה',
   'orders.next_recurring_created': 'נוצרה ההזמנה החוזרת הבאה',
+  // Recurring — skip one week
+  'orders.skip_link': 'דלג על {date}',
+  'orders.skip_confirm': 'לדלג על {date}? ההזמנה הבאה תיווצר עכשיו, ל־{next}.',
+  'orders.skip_confirm_planned': 'לדלג על {date}? ההזמנה הבאה תיווצר עכשיו, ל־{next}, עם השינוי המתוכנן.',
+  'orders.skipped': 'ההזמנה של {date} בוטלה, החזרה ממשיכה',
+  'orders.skip_next_failed': 'ההזמנה של {date} בוטלה, אבל ההזמנה הבאה לא נוצרה — צריך ליצור אותה ידנית ולסמן חזרה שבועית',
+  'orders.skip_too_late': 'ההזמנה כבר נמסרה, בוטלה או הפסיקה לחזור. אם כבר דילגו עליה, ההזמנה הבאה ברשימת ההזמנות',
+  'orders.cancel_confirm': 'לבטל את ההזמנה?',
+  'orders.cancel_recurring_confirm': 'לבטל את ההזמנה? גם החזרה השבועית תיפסק.',
+  'orders.cancel_recurring_skip_hint': 'כדי לדלג רק על {date}, בחר "דלג על {date}" ליד "הפסק חזרה".',
   // Recurring — change from the next occurrence
   'orders.next_change_link': 'שינוי מ־{date}',
   'orders.next_change_title': 'שינוי מ־{date}',
@@ -434,8 +444,10 @@ const translations: Record<string, string> = {
   'orders.next_conflict_keep': 'רק להזמנה הזו',
   'orders.next_conflict_keep_hint': 'מ־{date} יישאר השינוי המתוכנן',
   'notify.next_change_applied': 'עם השינוי שתוכנן',
+  'notify.skipped': 'דילוג על {date}: ההזמנה של אותו יום בוטלה',
   'notify.next_change_failed': 'השינוי שתוכנן לא הוחל — שוכפלה כמו הקודמת',
   'notify.send_whatsapp': 'שלח התראה בוואטסאפ ללקוח',
+  'notify.send_whatsapp_cancel': 'שלח ללקוח הודעת ביטול בוואטסאפ',
 
   // Join
   'join.title': 'הזמנה לקבוצה',

@@ -97,12 +97,13 @@ function goodsPriceInput(order: { totalOverride: string | null; calculatedTotal:
 
 // Forward actions only — the primary buttons. Reversals come from the shared
 // state machine so the undo row and the server can never disagree about what
-// is safe to walk back.
+// is safe to walk back. Cancel stays on offer until delivery, as the server
+// allows: a customer can still call it off after the bread is baked.
 const statusActions: Record<string, string[]> = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['baking', 'ready', 'cancelled'],
-  baking: ['ready'],
-  ready: ['delivered'],
+  baking: ['ready', 'cancelled'],
+  ready: ['delivered', 'cancelled'],
 };
 
 export default function OrderDetailPage() {
@@ -132,6 +133,10 @@ export default function OrderDetailPage() {
   const [nextRecurringOrderId, setNextRecurringOrderId] = useState<number | null>(null);
   const [stoppingRecurring, setStoppingRecurring] = useState(false);
   const [discardingNext, setDiscardingNext] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+  // A skip whose week was cancelled but whose next order wasn't made: the date
+  // skipped. Kept on screen, since a toast would be the only trace of it.
+  const [skipFailedDate, setSkipFailedDate] = useState<string | null>(null);
   // A custom price waiting on the "this week only, or from the next one too?"
   // question, when a planned change also sets the price. undefined = not asking.
   const [priceConflict, setPriceConflict] = useState<string | null | undefined>(undefined);
@@ -143,6 +148,7 @@ export default function OrderDetailPage() {
     // this component instance across /orders/[id] navigations, so without this
     // the banner would follow you onto the freshly-created clone as a self-link.
     setNextRecurringOrderId(null);
+    setSkipFailedDate(null);
     apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
       .then((d) => {
         setOrder(d.order);
@@ -181,9 +187,21 @@ export default function OrderDetailPage() {
     });
   }
 
+  /**
+   * Cancelling a recurring order ends the repeat: no next order is made. Say
+   * so, and point at skip, which is usually what was meant.
+   */
+  function cancelConfirmText(): string {
+    if (!order?.isRecurring) return t('orders.cancel_confirm');
+    const text = t('orders.cancel_recurring_confirm');
+    const skipDate = canEdit && order.nextOccurrence?.date ? order.deliveryDate : null;
+    if (!skipDate) return text;
+    return `${text}\n\n${t('orders.cancel_recurring_skip_hint').split('{date}').join(formatDayMonth(skipDate))}`;
+  }
+
   async function handleStatusAction(status: string) {
     if (updating) return;
-    if (status === 'cancelled' && !window.confirm('לבטל את ההזמנה?')) return;
+    if (status === 'cancelled' && !window.confirm(cancelConfirmText())) return;
     setUpdating(true);
     try {
       await updateStatus(status);
@@ -253,6 +271,44 @@ export default function OrderDetailPage() {
       toast.error(t('orders.update_failed'));
     } finally {
       setStoppingRecurring(false);
+    }
+  }
+
+  /** Cancel this week only: the server makes the next order at once. */
+  async function handleSkip() {
+    const occ = order?.nextOccurrence;
+    if (skipping || !order?.deliveryDate || !occ?.date) return;
+    const date = formatDayMonth(order.deliveryDate);
+    const ask = t(occ.change ? 'orders.skip_confirm_planned' : 'orders.skip_confirm')
+      .replace('{date}', date)
+      .replace('{next}', formatDayMonth(occ.date));
+    if (!window.confirm(ask)) return;
+    setSkipping(true);
+    try {
+      const res = await apiFetch<{ nextRecurringOrderId: number | null }>(`/orders/${id}/skip`, {
+        method: 'POST',
+      });
+      setOrder((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
+      if (res.nextRecurringOrderId) {
+        setNextRecurringOrderId(res.nextRecurringOrderId);
+        toast.success(t('orders.skipped').replace('{date}', date));
+      } else {
+        // The week is cancelled but the repeat didn't carry on: nothing else
+        // would say so, and next week's bread would just never be ordered.
+        setSkipFailedDate(date);
+        toast.error(t('orders.skip_next_failed').replace('{date}', date));
+      }
+    } catch (e) {
+      if ((e as { status?: number }).status === 409) {
+        toast.error(t('orders.skip_too_late'));
+        apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
+          .then((d) => setOrder(d.order))
+          .catch(() => {});
+      } else {
+        toast.error(t('orders.update_failed'));
+      }
+    } finally {
+      setSkipping(false);
     }
   }
 
@@ -433,6 +489,15 @@ export default function OrderDetailPage() {
           </Link>
         )}
 
+        {skipFailedDate && (
+          <Card className="border-destructive/30 bg-destructive/10">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p className="text-sm">{t('orders.skip_next_failed').replace('{date}', skipFailedDate)}</p>
+            </div>
+          </Card>
+        )}
+
         {/* Details */}
         <Card>
           <div className="space-y-3">
@@ -475,6 +540,19 @@ export default function OrderDetailPage() {
                         >
                           {t('orders.next_change_link').replace('{date}', formatDayMonth(nextOcc.plainDate))}
                         </Link>
+                        <span aria-hidden className="text-muted-foreground/60">·</span>
+                      </>
+                    )}
+                    {canEdit && order.deliveryDate && nextOcc?.date && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSkip}
+                          disabled={skipping}
+                          className="font-medium text-primary underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {t('orders.skip_link').replace('{date}', formatDayMonth(order.deliveryDate))}
+                        </button>
                         <span aria-hidden className="text-muted-foreground/60">·</span>
                       </>
                     )}
@@ -694,6 +772,13 @@ export default function OrderDetailPage() {
           </Link>
         )}
 
+        {/* Deliver button — first, so a ready order's cancel sits under it */}
+        {canDeliver && !showDeliveryPay && (
+          <Button className="w-full" size="lg" onClick={handleDeliverClick}>
+            {translate('status.delivered', lang)}
+          </Button>
+        )}
+
         {/* Notify customer toggle (only when an action would send WA) */}
         {!showDeliveryPay && order.customerPhoneCount > 0 && (nonDeliverActions.includes('ready') || nonDeliverActions.includes('cancelled')) && (
           <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg hover:bg-muted/50 transition-colors -my-1">
@@ -703,7 +788,12 @@ export default function OrderDetailPage() {
               onChange={(e) => setNotifyCustomer(e.target.checked)}
               className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
             />
-            <span className="text-sm font-medium">{t('notify.send_whatsapp')}</span>
+            {/* Where cancel is the only action here that messages the
+                customer, say so: under נמסר the plain label read as if
+                delivering sent something. */}
+            <span className="text-sm font-medium">
+              {t(nonDeliverActions.includes('ready') ? 'notify.send_whatsapp' : 'notify.send_whatsapp_cancel')}
+            </span>
           </label>
         )}
 
@@ -722,13 +812,6 @@ export default function OrderDetailPage() {
               </Button>
             ))}
           </div>
-        )}
-
-        {/* Deliver button */}
-        {canDeliver && !showDeliveryPay && (
-          <Button className="w-full" size="lg" onClick={handleDeliverClick}>
-            {translate('status.delivered', lang)}
-          </Button>
         )}
 
         {/* Delivery payment flow */}

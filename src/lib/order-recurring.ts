@@ -84,7 +84,7 @@ async function insertOccurrence(
     }
     return { ok: true, id: nextOrder.id };
   } catch (err) {
-    console.error(`Failed to create next recurring order after delivering order ${order.id}:`, err);
+    console.error(`Failed to create the next recurring order after order ${order.id}:`, err);
     if (createdOrderId == null) return { ok: false, cleaned: true };
     // Unwind a half-inserted clone (a committed order row with no items would
     // otherwise surface in lists as a phantom priced order). Reverse-FK order.
@@ -119,13 +119,20 @@ async function insertOccurrence(
  * written — a size deleted since it was saved, say — the plain copy is made
  * instead and the baker is told, so a planned change never ends the chain.
  *
- * Fully best-effort: the delivery + charge are already committed by the caller,
- * so nothing here throws. The notification lives in its own block so a notify
- * failure can't delete a good clone.
+ * Skipping a week lands here too (`skipped`): this occurrence was cancelled
+ * instead of delivered, and the next one is born the same way, so a change
+ * planned from that date still applies. The baker's ping names the skipped day.
+ *
+ * Fully best-effort: the delivery + charge (or the skip's cancel) are already
+ * committed by the caller, so nothing here throws. The notification lives in
+ * its own block so a notify failure can't delete a good clone.
  *
  * Returns the new order id on full success, else null.
  */
-export async function createNextRecurringOrder(order: SourceOrder): Promise<number | null> {
+export async function createNextRecurringOrder(
+  order: SourceOrder,
+  opts: { skipped?: boolean } = {}
+): Promise<number | null> {
   let plain: OccurrenceSpec;
   let change: NextChange | null = null;
   let changeState: 'applied' | 'failed' | null = null;
@@ -220,6 +227,7 @@ export async function createNextRecurringOrder(order: SourceOrder): Promise<numb
         notes: spec.notes,
         isRenewal: true,
         nextChange: changeState,
+        skippedDate: opts.skipped ? order.deliveryDate : null,
       });
     }
   } catch (err) {

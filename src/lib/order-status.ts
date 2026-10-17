@@ -16,6 +16,7 @@ import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
 import { getNotifiablePhones } from './customer-phones';
 import { ensureOrderCharge, settleCoveredOrders } from './order-payments';
 import { createNextRecurringOrder } from './order-recurring';
+import { isOpenRecurring } from './order-next-change';
 
 type OrderRow = typeof orders.$inferSelect;
 
@@ -159,4 +160,28 @@ export async function transitionOrderStatus(
   }
 
   return { ok: true, order: updated, nextRecurringOrderId };
+}
+
+/**
+ * Skip one week of a recurring order. This occurrence is cancelled through the
+ * same compare-and-swap as any status change, so a double tap or a delivery
+ * racing the skip makes one next order, never two. The next one is then born
+ * at once, as if this one had been delivered, so the weekly repeat carries on
+ * and a change planned from that date applies.
+ *
+ * Nothing is charged, and the customer gets no "your order was cancelled"
+ * message: they asked for the week off. Plain cancel stays what it was, the
+ * end of the repeat.
+ *
+ * `nextRecurringOrderId` is null if the cancel went through but the next order
+ * could not be made (best-effort, like delivery), and the caller has to say so.
+ */
+export async function skipRecurringOccurrence(order: OrderRow): Promise<TransitionResult> {
+  if (!isOpenRecurring(order)) {
+    return { ok: false, status: 409, error: 'Only an open recurring order can skip a week' };
+  }
+  const result = await transitionOrderStatus(order, 'cancelled', { notifyCustomer: false });
+  if (!result.ok) return result;
+  const nextRecurringOrderId = await createNextRecurringOrder(order, { skipped: true });
+  return { ...result, nextRecurringOrderId };
 }
