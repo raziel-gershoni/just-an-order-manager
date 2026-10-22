@@ -239,7 +239,9 @@ function OrderBlock({ order, showDate }: { order: PrintOrder; showDate: boolean 
         <div className="who">
           <h3>{order.customerName}</h3>
           <span className="money">
-            <span className="sum" dir="ltr">₪{order.total.toFixed(0)}</span>
+            {/* Unpaid shows what is left to collect, so an order paid partly in
+                advance doesn't send the driver after the whole total again. */}
+            <span className="sum" dir="ltr">₪{(order.paid ? order.total : order.due).toFixed(0)}</span>
             <span className={order.paid ? 'pay paid' : 'pay owed'}>
               {order.paid ? 'שולם' : 'לתשלום'}
             </span>

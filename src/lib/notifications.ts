@@ -190,7 +190,7 @@ export async function notifyPendingApproval(
  */
 export async function notifyUnpaidOrders(
   groupId: number,
-  unpaid: { id: number; customerName: string; date: string; total: number }[],
+  unpaid: { id: number; customerName: string; date: string; owed: number }[],
   more: number
 ): Promise<{ sent: number; failed: number }> {
   const recipients = await getRecipientsByRole(groupId, ['manager']);
@@ -198,7 +198,7 @@ export async function notifyUnpaidOrders(
   unpaid.forEach((o, i) => {
     if (i > 0) keyboard.row();
     keyboard.text(
-      `${t('notify.mark_paid')} · #${o.id} ${shortName(o.customerName)} ₪${o.total.toFixed(0)}`,
+      `${t('notify.mark_paid')} · #${o.id} ${shortName(o.customerName)} ₪${o.owed.toFixed(0)}`,
       `order_pay:${o.id}:paid`
     );
   });
@@ -211,7 +211,7 @@ export async function notifyUnpaidOrders(
     const lines = [`<b>💰 ${title}</b>`, RULE];
     for (const o of unpaid) {
       lines.push(
-        `<b>#${o.id} ${esc(o.customerName)}</b> — ₪${o.total.toFixed(0)} · ${daysAgoLabel(o.date)}`
+        `<b>#${o.id} ${esc(o.customerName)}</b> — ₪${o.owed.toFixed(0)} · ${daysAgoLabel(o.date)}`
       );
     }
     if (more > 0) lines.push(``, `<i>${t('notify.and_more', lang)} ${more}</i>`);
@@ -289,16 +289,33 @@ export async function notifyCustomerWhatsApp(
   );
 }
 
+/**
+ * 💰 to the baker and the owner. Money paid ahead for an order (`order`) names
+ * that order instead of the balance: before delivery nothing is charged yet,
+ * so the balance would call the money loose credit.
+ */
 export async function notifyPrepayment(
   groupId: number,
-  data: { customerName: string; amount: string; balance: number }
+  data: {
+    customerName: string;
+    amount: string;
+    balance: number;
+    order?: { id: number; due: number };
+  }
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
   await sendToRecipients(recipients, (lang) => {
+    const order = data.order;
     const lines = [
-      `<b>💰 ${esc(data.customerName)} ${t('notify.prepayment', lang)} ₪${data.amount}</b>`,
+      `<b>💰 ${esc(data.customerName)} ${t('notify.prepayment', lang)} ₪${data.amount}${order ? ` ${t('notify.prepaid_suffix', lang)}` : ''}</b>`,
     ];
-    if (data.balance === 0) {
+    if (order) {
+      lines.push(
+        order.due > 0
+          ? t('notify.prepaid_due', lang).replace('{id}', String(order.id)).replace('{due}', order.due.toFixed(0))
+          : `✅ ${t('notify.prepaid_settled', lang).replace('{id}', String(order.id))}`
+      );
+    } else if (data.balance === 0) {
       lines.push(`✅ ${t('notify.settled', lang)}`);
     } else if (data.balance > 0) {
       lines.push(`${t('notify.credit_balance', lang)}: ₪${data.balance.toFixed(0)}`);

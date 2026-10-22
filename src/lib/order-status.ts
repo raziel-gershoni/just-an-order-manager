@@ -14,7 +14,12 @@ import { todayStr } from './date-utils';
 import { formatItemLineForStaff } from './order-display';
 import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
 import { getNotifiablePhones } from './customer-phones';
-import { ensureOrderCharge, settleCoveredOrders } from './order-payments';
+import {
+  ensureOrderCharge,
+  movePrepayment,
+  releasePrepayment,
+  settleCoveredOrders,
+} from './order-payments';
 import { createNextRecurringOrder } from './order-recurring';
 import { isOpenRecurring } from './order-next-change';
 
@@ -39,11 +44,13 @@ export type TransitionResult =
  * @param order  the current (pre-transition) order row, already authorized
  * @param newStatus  the target status
  * @param opts.notifyCustomer  send the customer WhatsApp on ready/cancel (default true)
+ * @param opts.holdPrepayment  on cancel, leave money paid in advance on the
+ *   order for the caller to move (skipping a week) instead of releasing it
  */
 export async function transitionOrderStatus(
   order: OrderRow,
   newStatus: string,
-  opts: { notifyCustomer?: boolean } = {}
+  opts: { notifyCustomer?: boolean; holdPrepayment?: boolean } = {}
 ): Promise<TransitionResult> {
   const shouldNotify = opts.notifyCustomer !== false;
 
@@ -150,6 +157,15 @@ export async function transitionOrderStatus(
     }
   }
 
+  if (newStatus === 'cancelled' && !opts.holdPrepayment) {
+    // Money paid ahead for it becomes the customer's credit.
+    try {
+      await releasePrepayment(order);
+    } catch (err) {
+      console.error(`Failed to release the payment in advance of cancelled order ${order.id}:`, err);
+    }
+  }
+
   if (newStatus === 'cancelled' && shouldNotify) {
     try {
       const phones = await getNotifiablePhones(order.customerId);
@@ -171,7 +187,8 @@ export async function transitionOrderStatus(
  *
  * Nothing is charged, and the customer gets no "your order was cancelled"
  * message: they asked for the week off. Plain cancel stays what it was, the
- * end of the repeat.
+ * end of the repeat. A week paid in advance hands its money to the next order;
+ * if that order could not be made, the money stays as credit, as on cancel.
  *
  * `nextRecurringOrderId` is null if the cancel went through but the next order
  * could not be made (best-effort, like delivery), and the caller has to say so.
@@ -180,8 +197,17 @@ export async function skipRecurringOccurrence(order: OrderRow): Promise<Transiti
   if (!isOpenRecurring(order)) {
     return { ok: false, status: 409, error: 'Only an open recurring order can skip a week' };
   }
-  const result = await transitionOrderStatus(order, 'cancelled', { notifyCustomer: false });
+  const result = await transitionOrderStatus(order, 'cancelled', {
+    notifyCustomer: false,
+    holdPrepayment: true,
+  });
   if (!result.ok) return result;
   const nextRecurringOrderId = await createNextRecurringOrder(order, { skipped: true });
+  try {
+    if (nextRecurringOrderId) await movePrepayment(order, nextRecurringOrderId);
+    else await releasePrepayment(order);
+  } catch (err) {
+    console.error(`Failed to carry the payment in advance of skipped order ${order.id}:`, err);
+  }
   return { ...result, nextRecurringOrderId };
 }

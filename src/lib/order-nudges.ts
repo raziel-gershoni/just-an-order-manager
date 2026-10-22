@@ -12,7 +12,7 @@ import { and, asc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import { format, subDays } from 'date-fns';
 import { todayStr } from './date-utils';
 import { formatStaffItemLabel } from './order-display';
-import { calculateOrderTotal } from './order-payments';
+import { orderPaymentState } from './order-payments';
 import { notifyPendingApproval, notifyUnpaidOrders } from './notifications';
 
 /**
@@ -119,10 +119,14 @@ export async function sendUnpaidNudge(groupId: number): Promise<NudgeResult | nu
   if (rows.length === 0) return null;
 
   // Amounts come from the one read-total rule rather than a re-derived sum, so
-  // a nudge can never quote a figure the order screen disagrees with.
+  // a nudge can never quote a figure the order screen disagrees with. It quotes
+  // what is still due: an order paid partly in advance owes only the rest, and
+  // that is also what its ✅ records.
   const withTotals = (
-    await Promise.all(rows.map(async (o) => ({ ...o, total: await calculateOrderTotal(o.id) })))
-  ).filter((o) => o.total > 0); // a zero-total order owes nothing to chase
+    await Promise.all(
+      rows.map(async (o) => ({ ...o, owed: (await orderPaymentState(o.id, groupId)).due }))
+    )
+  ).filter((o) => o.owed > 0); // nothing due, nothing to chase
 
   if (withTotals.length === 0) return null;
 
@@ -133,7 +137,7 @@ export async function sendUnpaidNudge(groupId: number): Promise<NudgeResult | nu
       id: o.id,
       customerName: o.customerName,
       date: o.deliveryDate ?? format(o.createdAt, 'yyyy-MM-dd'),
-      total: o.total,
+      owed: o.owed,
     })),
     withTotals.length - shown.length
   );

@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative, formatDayMonth } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft, Undo2 } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft, Undo2, Check, Wallet } from 'lucide-react';
 import { ORDER_STATUS_REVERSALS } from '@/lib/constants';
 import { useGroup } from '@/hooks/useGroup';
 import { buildWazeLink } from '@/lib/delivery';
@@ -76,6 +76,8 @@ interface OrderDetail {
   customerDeliveryNotes: string | null;
   /** Whether this order's charge is already on the ledger the balance sums. */
   charged?: boolean;
+  /** Money filed against this order: paid in advance while open, or at delivery. */
+  paidAmount: number;
   /** Open recurring orders only: where the next one lands, and any change saved for it. */
   nextOccurrence?: NextOccurrenceView | null;
 }
@@ -93,6 +95,11 @@ interface OrderDetail {
 function goodsPriceInput(order: { totalOverride: string | null; calculatedTotal: number }): string {
   const goods = order.totalOverride != null ? Number(order.totalOverride) : order.calculatedTotal;
   return Number.isInteger(goods) ? String(goods) : goods.toFixed(2);
+}
+
+/** An amount as the box shows it: "120", or "99.50" when there are agorot. */
+function amountInput(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 // Forward actions only — the primary buttons. Reversals come from the shared
@@ -125,10 +132,18 @@ export default function OrderDetailPage() {
 
   const [showDeliveryPay, setShowDeliveryPay] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
+  // The part of the balance free to spend on an order: money paid ahead for an
+  // order not yet delivered belongs to that order, not to "קזז מקרדיט".
+  const [available, setAvailable] = useState<number | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [showPaymentInput, setShowPaymentInput] = useState(false);
   const [submittingPay, setSubmittingPay] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
+  // Paid in advance: the amount box under the total, and its two requests.
+  const [showPrepay, setShowPrepay] = useState(false);
+  const [prepayAmount, setPrepayAmount] = useState('');
+  const [prepaying, setPrepaying] = useState(false);
+  const [undoingPrepay, setUndoingPrepay] = useState(false);
   // Set after delivering a recurring order — the id of the auto-created next one.
   const [nextRecurringOrderId, setNextRecurringOrderId] = useState<number | null>(null);
   const [stoppingRecurring, setStoppingRecurring] = useState(false);
@@ -149,18 +164,29 @@ export default function OrderDetailPage() {
     // the banner would follow you onto the freshly-created clone as a self-link.
     setNextRecurringOrderId(null);
     setSkipFailedDate(null);
+    setShowPrepay(false);
+    setBalance(null);
+    setAvailable(null);
     apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
       .then((d) => {
         setOrder(d.order);
         if (d.order.status === 'delivered' || d.order.status === 'ready') {
-          apiFetch<{ balance: string }>(`/customers/${d.order.customerId}/balance`)
-            .then((b) => setBalance(Number(b.balance)))
-            .catch(() => {});
+          refreshBalance(d.order.customerId);
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
+
+  /** The customer's balance, and how much of it is free to spend on an order. */
+  function refreshBalance(customerId: number) {
+    apiFetch<{ balance: string; available: string }>(`/customers/${customerId}/balance`)
+      .then((b) => {
+        setBalance(Number(b.balance));
+        setAvailable(Number(b.available));
+      })
+      .catch(() => {});
+  }
 
   async function updateStatus(status: string) {
     const willNotify = status === 'ready' || status === 'cancelled';
@@ -175,16 +201,16 @@ export default function OrderDetailPage() {
       throw err;
     }
     if (res.nextRecurringOrderId) setNextRecurringOrderId(res.nextRecurringOrderId);
-    setOrder((prev) => {
-      if (!prev) return prev;
-      const updated = { ...prev, status };
-      if (status === 'delivered') {
-        apiFetch<{ balance: string }>(`/customers/${prev.customerId}/balance`)
-          .then((b) => setBalance(Number(b.balance)))
-          .catch(() => {});
-      }
-      return updated;
-    });
+    // A cancelled order's payment in advance becomes credit: it reads unpaid.
+    setOrder((prev) => (prev ? { ...prev, status, ...(status === 'cancelled' ? { paid: false } : {}) } : prev));
+    if (status === 'delivered' && order) {
+      refreshBalance(order.customerId);
+      // Delivery writes the charge, best-effort: ask rather than assume. A
+      // charge is never taken back, so a late answer can only add it.
+      apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
+        .then((d) => setOrder((p) => (p ? { ...p, charged: p.charged || Boolean(d.order.charged) } : p)))
+        .catch(() => {});
+    }
   }
 
   /**
@@ -192,11 +218,17 @@ export default function OrderDetailPage() {
    * so, and point at skip, which is usually what was meant.
    */
   function cancelConfirmText(): string {
-    if (!order?.isRecurring) return t('orders.cancel_confirm');
-    const text = t('orders.cancel_recurring_confirm');
-    const skipDate = canEdit && order.nextOccurrence?.date ? order.deliveryDate : null;
-    if (!skipDate) return text;
-    return `${text}\n\n${t('orders.cancel_recurring_skip_hint').split('{date}').join(formatDayMonth(skipDate))}`;
+    if (!order) return t('orders.cancel_confirm');
+    const lines = [t(order.isRecurring ? 'orders.cancel_recurring_confirm' : 'orders.cancel_confirm')];
+    const skipDate = order.isRecurring && canEdit && order.nextOccurrence?.date ? order.deliveryDate : null;
+    if (skipDate) {
+      lines.push(t('orders.cancel_recurring_skip_hint').split('{date}').join(formatDayMonth(skipDate)));
+    }
+    // Money paid ahead isn't lost with the order: say where it goes.
+    if (order.paidAmount > 0) {
+      lines.push(t('orders.cancel_prepaid_hint').replace('{amount}', order.paidAmount.toFixed(0)));
+    }
+    return lines.join('\n\n');
   }
 
   async function handleStatusAction(status: string) {
@@ -213,12 +245,39 @@ export default function OrderDetailPage() {
     }
   }
 
-  function handleDeliverClick() {
-    if (balance === null && order) {
-      apiFetch<{ balance: string }>(`/customers/${order.customerId}/balance`)
-        .then((b) => setBalance(Number(b.balance)))
-        .catch(() => {});
+  async function handleDeliverClick() {
+    if (!order || updating) return;
+    // Paid in advance: nothing to ask at the door, so deliver straight away —
+    // after a re-read, since an edit or an undo on another phone may have left
+    // something due since this page loaded, and skipping the card would hand
+    // the bread over without collecting it.
+    if (order.paid) {
+      setUpdating(true);
+      let fresh: OrderDetail | null = null;
+      try {
+        fresh = (await apiFetch<{ order: OrderDetail }>(`/orders/${id}`)).order;
+        setOrder(fresh);
+      } catch {
+        // Couldn't re-check: fall through to the card, which asks.
+      }
+      if (fresh?.paid && fresh.status === 'ready') {
+        try {
+          await updateStatus('delivered');
+          toast.success(t('orders.updated'));
+        } catch {
+          // updateStatus already said it failed
+        }
+        setUpdating(false);
+        return;
+      }
+      setUpdating(false);
+      if (fresh && fresh.status !== 'ready') return;
     }
+    // Always fresh: money may have moved since the page loaded, and the card
+    // offers credit only on what is free right now.
+    setAvailable(null);
+    refreshBalance(order.customerId);
+    setShowPrepay(false);
     setShowDeliveryPay(true);
   }
 
@@ -232,10 +291,14 @@ export default function OrderDetailPage() {
       const { balance: newBalance, paid, outcome } = await apiFetch<{
         balance: string;
         paid: boolean;
-        outcome?: 'written' | 'duplicate' | 'already' | 'undone' | 'kept' | 'covered' | 'none';
+        outcome?: 'written' | 'duplicate' | 'already' | 'undone' | 'kept' | 'covered' | 'short' | 'none';
       }>(`/orders/${id}/pay`, { method: 'POST', body: JSON.stringify({ action, amount }) });
       setBalance(Number(newBalance));
-      setOrder((prev) => prev ? { ...prev, status: 'delivered', paid } : prev);
+      refreshBalance(order.customerId);
+      // Every action but mark_paid writes the charge before it answers.
+      setOrder((prev) =>
+        prev ? { ...prev, status: 'delivered', paid, charged: prev.charged || action !== 'mark_paid' } : prev
+      );
       setShowDeliveryPay(false);
       setShowPaymentInput(false);
       setPaymentAmount('');
@@ -244,6 +307,7 @@ export default function OrderDetailPage() {
       if (outcome === 'already') toast.error(t('orders.payment_already'));
       else if (outcome === 'kept') toast.error(t('orders.payment_kept'));
       else if (outcome === 'covered') toast.error(t('orders.payment_covered'));
+      else if (outcome === 'short') toast.error(t('orders.credit_short'));
       else if (outcome === 'undone') toast.success(t('orders.payment_undone'));
       else toast.success(action === 'unpaid' ? t('orders.charge_recorded') : t('orders.payment_recorded'));
     } catch {
@@ -282,13 +346,25 @@ export default function OrderDetailPage() {
     const ask = t(occ.change ? 'orders.skip_confirm_planned' : 'orders.skip_confirm')
       .replace('{date}', date)
       .replace('{next}', formatDayMonth(occ.date));
-    if (!window.confirm(ask)) return;
+    const prepaid =
+      order.paidAmount > 0
+        ? `\n\n${t('orders.skip_prepaid_hint')
+            .replace('{amount}', order.paidAmount.toFixed(0))
+            .replace('{next}', formatDayMonth(occ.date))}`
+        : '';
+    if (!window.confirm(ask + prepaid)) return;
     setSkipping(true);
     try {
       const res = await apiFetch<{ nextRecurringOrderId: number | null }>(`/orders/${id}/skip`, {
         method: 'POST',
       });
-      setOrder((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
+      // A paid week hands its money to the next order; otherwise it stays on
+      // this one as the customer's credit.
+      setOrder((prev) =>
+        prev
+          ? { ...prev, status: 'cancelled', paid: false, paidAmount: res.nextRecurringOrderId ? 0 : prev.paidAmount }
+          : prev
+      );
       if (res.nextRecurringOrderId) {
         setNextRecurringOrderId(res.nextRecurringOrderId);
         toast.success(t('orders.skipped').replace('{date}', date));
@@ -336,6 +412,67 @@ export default function OrderDetailPage() {
       }
     } finally {
       setDiscardingNext(false);
+    }
+  }
+
+  /** Paid before delivery: file it against the order. */
+  async function handlePrepay(amount: string) {
+    if (prepaying) return;
+    setPrepaying(true);
+    try {
+      const res = await apiFetch<{
+        outcome: 'written' | 'duplicate' | 'already' | 'none';
+        paid: boolean;
+        paidAmount: number;
+      }>(`/orders/${id}/prepay`, { method: 'POST', body: JSON.stringify({ amount }) });
+      setOrder((prev) => (prev ? { ...prev, paid: res.paid, paidAmount: res.paidAmount } : prev));
+      if (order) refreshBalance(order.customerId);
+      setShowPrepay(false);
+      setPrepayAmount('');
+      // Already holds a payment this one doesn't finish: it was not stored.
+      if (res.outcome === 'already') toast.error(t('orders.prepay_already'));
+      else toast.success(t('orders.prepay_recorded'));
+    } catch (e) {
+      if ((e as { status?: number }).status === 409) {
+        toast.error(t('orders.prepay_too_late'));
+        apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
+          .then((d) => {
+            setOrder(d.order);
+            refreshBalance(d.order.customerId);
+          })
+          .catch(() => {});
+      } else {
+        toast.error(t('orders.update_failed'));
+      }
+    } finally {
+      setPrepaying(false);
+    }
+  }
+
+  /** Take back a payment in advance recorded by mistake. */
+  async function handleUndoPrepay() {
+    if (undoingPrepay || !order) return;
+    if (!window.confirm(t('orders.prepay_undo_confirm').replace('{amount}', order.paidAmount.toFixed(0)))) return;
+    setUndoingPrepay(true);
+    try {
+      await apiFetch(`/orders/${id}/prepay`, { method: 'DELETE' });
+      setOrder((prev) => (prev ? { ...prev, paid: false, paidAmount: 0 } : prev));
+      refreshBalance(order.customerId);
+      toast.success(t('orders.prepay_undone'));
+    } catch (e) {
+      if ((e as { status?: number }).status === 409) {
+        toast.error(t('orders.prepay_too_late'));
+        apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
+          .then((d) => {
+            setOrder(d.order);
+            refreshBalance(d.order.customerId);
+          })
+          .catch(() => {});
+      } else {
+        toast.error(t('orders.update_failed'));
+      }
+    } finally {
+      setUndoingPrepay(false);
     }
   }
 
@@ -424,14 +561,6 @@ export default function OrderDetailPage() {
     cancelled: translate('status.cancelled', lang),
   };
 
-  // Once this order's charge is on the ledger the balance already accounts for
-  // it, so asking for balance >= total asks the customer to cover it twice —
-  // which hid the button from exactly the person who had prepaid. Keyed on the
-  // charge itself rather than on the status: the charge is written best-effort
-  // when the order is delivered, and if that write failed the balance in hand
-  // is still the pre-charge one.
-  const hasEnoughCredit =
-    balance !== null && (order.charged ? balance >= 0 : balance >= order.totalPrice);
   const actions = statusActions[order.status] || [];
   const reversals = ORDER_STATUS_REVERSALS[order.status] ?? [];
   const nonDeliverActions = actions.filter((s) => s !== 'delivered');
@@ -441,6 +570,31 @@ export default function OrderDetailPage() {
   // otherwise), so a stopped repeat hides its waiting change with the row.
   const nextOcc = order.isRecurring && isOpen ? order.nextOccurrence ?? null : null;
   const nextChange = nextOcc?.change ?? null;
+  // What the order still needs after the money already filed against it.
+  const due = Math.max(0, Math.round((order.totalPrice - order.paidAmount) * 100) / 100);
+  // Credit is spent from the free balance only (`available`: money paid ahead
+  // for an order not yet delivered is that order's, this one's included).
+  // Once this order's charge is on the ledger the balance already accounts for
+  // it, so asking for more than >= 0 asks the customer to cover it twice —
+  // which hid the button from exactly the person who had prepaid. Keyed on the
+  // charge itself rather than on the status: the charge is written best-effort
+  // when the order is delivered, and if that write failed the balance in hand
+  // is still the pre-charge one. An open order's own payments are held out of
+  // `available`, so it needs only what is due; a delivered one's are back in
+  // it, so without its charge it needs the whole total.
+  const hasEnoughCredit =
+    available !== null &&
+    (order.charged ? available >= 0 : isOpen ? available >= due : available >= order.totalPrice);
+  // Drivers collect at the door; they don't book money ahead. While the
+  // deliver card is open it is the one place money is recorded.
+  const prepayActions = isOpen && canEdit && !showDeliveryPay;
+  const canPrepay = prepayActions && order.totalPrice > 0;
+
+  function openPrepay() {
+    setShowPriceEdit(false);
+    setPrepayAmount(amountInput(due));
+    setShowPrepay(true);
+  }
 
   return (
     <>
@@ -722,7 +876,7 @@ export default function OrderDetailPage() {
                   {order.status !== 'delivered' && order.status !== 'cancelled' && (
                     <button
                       className="inline-flex items-center justify-center w-11 h-11 -m-2.5 rounded hover:bg-muted transition-colors"
-                      onClick={() => { setPriceInput(goodsPriceInput(order)); setShowPriceEdit(true); }}
+                      onClick={() => { setShowPrepay(false); setPriceInput(goodsPriceInput(order)); setShowPriceEdit(true); }}
                     >
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
@@ -758,6 +912,87 @@ export default function OrderDetailPage() {
                   )}
                 </div>
               )}
+
+              {/* Paid in advance. Amounts on the start side, what can be done
+                  with them on the end; a part-paid order gets a second row
+                  for what is still due. */}
+              {isOpen && order.paidAmount > 0 && (
+                <div
+                  className={cn(
+                    'mt-3 grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 text-sm',
+                    order.paid ? 'bg-success/10' : 'bg-muted'
+                  )}
+                >
+                  <span className={cn('inline-flex items-center gap-1.5 font-medium', order.paid && 'text-success')}>
+                    {order.paid && <Check className="h-4 w-4 shrink-0" />}
+                    {t('orders.prepaid').replace('{amount}', order.paidAmount.toFixed(0))}
+                  </span>
+                  {prepayActions ? (
+                    <button
+                      type="button"
+                      onClick={handleUndoPrepay}
+                      disabled={undoingPrepay}
+                      className="text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-destructive disabled:opacity-50"
+                    >
+                      {t('payments.cancel')}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  {!order.paid && due > 0 && (
+                    <>
+                      <span className="font-medium">{t('orders.prepaid_due').replace('{due}', due.toFixed(0))}</span>
+                      {canPrepay && !showPrepay ? (
+                        <button
+                          type="button"
+                          onClick={openPrepay}
+                          className="text-xs font-medium text-primary underline underline-offset-2"
+                        >
+                          {`${t('payments.record')} ₪${due.toFixed(0)}`}
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {canPrepay && order.paidAmount === 0 && !showPrepay && (
+                <div className="mt-3 flex justify-end">
+                  <Button size="sm" variant="outline" onClick={openPrepay}>
+                    <Wallet className="h-4 w-4" />
+                    {t('orders.prepay')}
+                  </Button>
+                </div>
+              )}
+              {canPrepay && showPrepay && (
+                <div className="mt-3 flex gap-2 animate-expand">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={prepayAmount}
+                    onChange={(e) => setPrepayAmount(e.target.value)}
+                    aria-label={t('orders.prepay')}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!(Number(prepayAmount) > 0)}
+                    loading={prepaying}
+                    onClick={() => handlePrepay(prepayAmount)}
+                  >
+                    {`${t('payments.record')} ₪${prepayAmount || '0'}`}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowPrepay(false)}>
+                    {t('payments.cancel')}
+                  </Button>
+                </div>
+              )}
+              {order.status === 'cancelled' && order.paidAmount > 0 && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {t('orders.prepaid_to_credit').replace('{amount}', order.paidAmount.toFixed(0))}
+                </p>
+              )}
             </div>
           )}
         </Card>
@@ -774,7 +1009,7 @@ export default function OrderDetailPage() {
 
         {/* Deliver button — first, so a ready order's cancel sits under it */}
         {canDeliver && !showDeliveryPay && (
-          <Button className="w-full" size="lg" onClick={handleDeliverClick}>
+          <Button className="w-full" size="lg" loading={updating} onClick={handleDeliverClick}>
             {translate('status.delivered', lang)}
           </Button>
         )}
@@ -820,7 +1055,8 @@ export default function OrderDetailPage() {
             <h3 className="font-semibold mb-3">{t('orders.deliver_and_pay')}</h3>
             <PaymentOptions
               order={order}
-              balance={balance}
+              balance={available}
+              due={due}
               hasEnoughCredit={hasEnoughCredit}
               showPaymentInput={showPaymentInput}
               paymentAmount={paymentAmount}
@@ -852,7 +1088,8 @@ export default function OrderDetailPage() {
             </div>
             <PaymentOptions
               order={order}
-              balance={balance}
+              balance={available}
+              due={due}
               hasEnoughCredit={hasEnoughCredit}
               showPaymentInput={showPaymentInput}
               paymentAmount={paymentAmount}
@@ -898,6 +1135,7 @@ export default function OrderDetailPage() {
 function PaymentOptions({
   order,
   balance,
+  due,
   hasEnoughCredit,
   showPaymentInput,
   paymentAmount,
@@ -909,7 +1147,10 @@ function PaymentOptions({
   showMarkPaid,
 }: {
   order: OrderDetail;
+  /** The customer's balance free to spend: less money held by open orders. */
   balance: number | null;
+  /** What the order still needs: the total less what was already paid on it. */
+  due: number;
   hasEnoughCredit: boolean;
   showPaymentInput: boolean;
   paymentAmount: string;
@@ -926,6 +1167,12 @@ function PaymentOptions({
         <span className="text-muted-foreground">{t('orders.total')}</span>
         <span className="font-bold tabular-nums">₪{order.totalPrice.toFixed(0)}</span>
       </div>
+      {order.paidAmount > 0 && (
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">{t('orders.paid_so_far')}</span>
+          <span className="font-medium tabular-nums">₪{order.paidAmount.toFixed(0)}</span>
+        </div>
+      )}
       {balance !== null && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">{t('customers.balance')}</span>
@@ -942,7 +1189,7 @@ function PaymentOptions({
             inputMode="decimal"
             value={paymentAmount}
             onChange={(e) => onSetPaymentAmount(e.target.value)}
-            placeholder={order.totalPrice.toFixed(0)}
+            placeholder={due.toFixed(0)}
           />
           <div className="flex gap-2">
             <Button className="flex-1" disabled={!paymentAmount} loading={submittingPay} onClick={() => onPayAction('paid', paymentAmount)}>
@@ -963,7 +1210,7 @@ function PaymentOptions({
           <Button
             className="flex-1"
             loading={submittingPay}
-            onClick={() => { onSetPaymentAmount(order.totalPrice.toFixed(2)); onSetShowPaymentInput(true); }}
+            onClick={() => { onSetPaymentAmount(amountInput(due)); onSetShowPaymentInput(true); }}
           >
             {t('orders.customer_paid')}
           </Button>

@@ -9,6 +9,7 @@ import { goodsForRead, orderTotalFromGoods, priceOrderForWrite } from '@/lib/ord
 import { resolveAndPriceOrderLines, type ResolvedOrderLine } from '@/lib/order-lines';
 import { basketFingerprint } from '@/lib/order-fingerprint';
 import { buildNextOccurrenceView, parseNextChange, withoutSections } from '@/lib/order-next-change';
+import { orderPaymentsTotals, syncPrepaidFlag } from '@/lib/order-payments';
 
 function getOrderId(url: string): number {
   return Number(new URL(url).pathname.split('/').at(-1));
@@ -165,6 +166,10 @@ export const GET = withGroup(async (request, auth, groupId) => {
     )
     .limit(1);
 
+  // Money filed against this order: paid in advance while it is open, or at
+  // delivery. The screen shows it and asks only for the rest.
+  const paidAmount = (await orderPaymentsTotals(groupId, [id])).get(id) ?? 0;
+
   // Bakers don't see delivery details (navigable address / private notes).
   const customerAddress = isBaker ? null : order.customerAddress;
   const customerCity = isBaker ? null : order.customerCity;
@@ -183,6 +188,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
       calculatedTotal,
       customerPhoneCount: phoneCount,
       charged: Boolean(charge),
+      paidAmount,
       nextOccurrence: await buildNextOccurrenceView({ ...order, groupId, nextChange }),
     },
   });
@@ -513,9 +519,20 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
   }
   const totalPrice = orderTotalFromGoods(updated, calculatedTotal);
 
+  // Paid in advance? The price may have just moved past (or back under) what
+  // the customer paid, and the flag has to follow it. The edit itself is
+  // saved by now, so a failure here is logged rather than reported as one.
+  let prepaid: Awaited<ReturnType<typeof syncPrepaidFlag>> = null;
+  try {
+    prepaid = await syncPrepaidFlag(id, groupId);
+  } catch (err) {
+    console.error(`Failed to re-check the paid flag of order ${id} after an edit:`, err);
+  }
+
   return jsonResponse({
     order: {
       ...updated,
+      paid: prepaid?.paid ?? updated.paid,
       deliveryFee: fee,
       pricingBreakdown: breakdown,
       items: updatedItems,

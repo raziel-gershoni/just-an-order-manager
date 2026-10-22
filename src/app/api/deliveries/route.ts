@@ -3,10 +3,12 @@ import { db } from '@/db';
 import { orders, customers, orderItems, customerPhones } from '@/db/schema';
 import { eq, and, inArray, notInArray, asc, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from '@/lib/order-pricing';
+import { orderPaymentsTotals } from '@/lib/order-payments';
 import { normalizePhoneNumber } from '@/lib/phone-links';
 
 // Active deliveries (is_delivery, not yet delivered/cancelled) for owner/manager
-// /driver. Returns the navigable address + private notes + the amount to collect.
+// /driver. Returns the navigable address + private notes + the amount to collect
+// (the total less anything paid in advance).
 export const GET = withGroup(async (_request, auth, groupId) => {
   const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
   if (role !== 'owner' && role !== 'manager' && role !== 'driver') {
@@ -53,6 +55,8 @@ export const GET = withGroup(async (_request, auth, groupId) => {
         .groupBy(orderItems.orderId)
     : [];
   const goodsByOrder = new Map(sums.map((s) => [s.orderId, Number(s.goods)]));
+  // Paid partly in advance: the driver collects the rest, not the total.
+  const paidByOrder = await orderPaymentsTotals(groupId, ids);
 
   // One phone per customer: the first one a chat can actually open (on WhatsApp
   // and with a wa.me form), since the driver's button opens a chat; failing
@@ -82,7 +86,8 @@ export const GET = withGroup(async (_request, auth, groupId) => {
 
   const deliveries = rows.map((r) => {
     const goods = r.goodsSnapshot != null ? Number(r.goodsSnapshot) : (goodsByOrder.get(r.id) ?? 0);
-    const amount = orderTotalFromGoods(r, goods);
+    const total = orderTotalFromGoods(r, goods);
+    const amount = Math.max(0, Math.round((total - (paidByOrder.get(r.id) ?? 0)) * 100) / 100);
     return {
       id: r.id,
       deliveryDate: r.deliveryDate,

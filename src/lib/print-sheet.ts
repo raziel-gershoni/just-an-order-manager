@@ -14,7 +14,7 @@ import { format, addDays, parseISO, isValid } from 'date-fns';
 import { he } from 'date-fns/locale/he';
 import { todayStr } from './date-utils';
 import { formatStaffItemLabel } from './order-display';
-import { calculateOrderTotal } from './order-payments';
+import { calculateOrderTotal, orderPaymentsTotals } from './order-payments';
 import { aggregateRecipesForOrders } from './order-recipe';
 import { groupByKind, kindLabel, kindLabelIsUseful, type IngredientKind } from './recipe';
 
@@ -49,6 +49,8 @@ export interface PrintOrder {
   status: string;
   paid: boolean;
   total: number;
+  /** What is left to collect: the total less anything paid in advance. */
+  due: number;
   items: PrintLine[];
 }
 
@@ -223,8 +225,9 @@ export async function buildPrintSheet(
     if (!phoneByCustomer.has(p.customerId)) phoneByCustomer.set(p.customerId, p.phone);
   }
 
-  const [totals, recipeAgg] = await Promise.all([
+  const [totals, paidByOrder, recipeAgg] = await Promise.all([
     Promise.all(rows.map((r) => calculateOrderTotal(r.id))),
+    orderPaymentsTotals(groupId, orderIds),
     aggregateRecipesForOrders(orderIds),
   ]);
 
@@ -256,6 +259,7 @@ export async function buildPrintSheet(
     status: r.status,
     paid: r.paid,
     total: totals[idx],
+    due: Math.max(0, Math.round((totals[idx] - (paidByOrder.get(r.id) ?? 0)) * 100) / 100),
     items: itemsByOrder.get(r.id) ?? [],
   }));
 

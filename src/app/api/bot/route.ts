@@ -18,7 +18,7 @@ import {
 import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
-import { calculateOrderTotal, recordOrderPayment } from '@/lib/order-payments';
+import { orderPaymentState, recordOrderPayment } from '@/lib/order-payments';
 import { transitionOrderStatus } from '@/lib/order-status';
 import { resolveBotOrderAccess } from '@/lib/telegram-auth';
 import { respondToInvite } from '@/lib/invites';
@@ -490,10 +490,17 @@ function setupHandlers(bot: import('grammy').Bot) {
       remaining.length ? { reply_markup: { inline_keyboard: remaining } } : undefined
     );
 
-    // Follow up with payment dialog after delivery
+    // Follow up with payment dialog after delivery — unless it is already paid
+    // (in advance, or settled from the tab on delivery): asking again invites a
+    // ✅ that files the money twice, or a 📝 out of habit.
     if (newStatus === 'delivered') {
-      const total = await calculateOrderTotal(orderId);
-      if (total > 0) {
+      const [after] = await db
+        .select({ paid: orders.paid })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      const { due, paidAmount } = await orderPaymentState(orderId, order.groupId);
+      if (!after?.paid && due > 0) {
         const [customer] = await db
           .select({ name: customers.name })
           .from(customers)
@@ -505,7 +512,8 @@ function setupHandlers(bot: import('grammy').Bot) {
         const lines = [
           `<b>${escapeHtml(customer?.name ?? '')}</b>`,
           `${t('bot.payment_question', lang)}`,
-          `${t('bot.amount', lang)}: ₪${total.toFixed(0)}`,
+          ...(paidAmount > 0 ? [`${t('bot.prepaid', lang)}: ₪${paidAmount.toFixed(0)}`] : []),
+          `${t('bot.amount', lang)}: ₪${due.toFixed(0)}`,
         ];
         await ctx.reply(lines.join('\n'), {
           parse_mode: 'HTML',
@@ -531,18 +539,17 @@ function setupHandlers(bot: import('grammy').Bot) {
     }
 
     if (action === 'paid') {
-      const total = await calculateOrderTotal(orderId);
-      const amount = total.toFixed(2);
       const [customer] = await db
         .select({ name: customers.name })
         .from(customers)
         .where(eq(customers.id, order.customerId))
         .limit(1);
       // Shared post-delivery payment sequence (charge + payment + paid + notify).
-      const { outcome } = await recordOrderPayment(
+      // No amount: paid in full, which records what is still due — the total,
+      // or the rest of an order paid partly in advance — and nothing on a retry.
+      const { outcome, recorded } = await recordOrderPayment(
         { id: order.id, groupId: order.groupId, customerId: order.customerId, customerName: customer?.name ?? '' },
-        'paid',
-        amount
+        'paid'
       );
 
       // These buttons outlive their orders — the unpaid nudge mints a fresh one
@@ -573,7 +580,7 @@ function setupHandlers(bot: import('grammy').Bot) {
         await ctx.editMessageText(
           notRecorded
             ? `⚠️ ${t('bot.payment_already', lang)}`
-            : `✅ ${t('bot.payment_recorded', lang)}: ₪${total.toFixed(0)}`
+            : `✅ ${t('bot.payment_recorded', lang)}${recorded ? `: ₪${Number(recorded).toFixed(0)}` : ''}`
         );
       }
     } else {
