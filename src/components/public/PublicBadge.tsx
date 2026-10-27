@@ -1,5 +1,5 @@
 import type { ResolvedBadge } from '@/lib/badges';
-import { badgeIconComponent } from '@/lib/badge-icons';
+import { BADGE_ICONS } from '@/lib/badge-icons';
 
 /**
  * A small solid chip in the badge's own colour.
@@ -16,7 +16,9 @@ export function PublicBadge({
   badge: ResolvedBadge;
   small?: boolean;
 }) {
-  const Icon = badgeIconComponent(badge.iconKey);
+  // Read straight off the static map: through a function call, the rule against
+  // components made during render can't tell it is always the same icon.
+  const Icon = badge.iconKey ? BADGE_ICONS[badge.iconKey] : undefined;
   const iconOnly = !badge.text;
   const pad = iconOnly
     ? small ? 'p-1' : 'p-1.5'

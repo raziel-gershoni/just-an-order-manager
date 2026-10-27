@@ -19,6 +19,6 @@ export function getDb() {
 // Convenience export — lazy initialized on first access
 export const db = new Proxy({} as NeonHttpDatabase<typeof schema & typeof relations>, {
   get(_target, prop) {
-    return (getDb() as any)[prop];
+    return Reflect.get(getDb(), prop);
   },
 });

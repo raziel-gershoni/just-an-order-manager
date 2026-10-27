@@ -30,7 +30,16 @@ export function useTelegram() {
 }
 
 function tryInitTelegram(): TelegramContext | null {
-  const webApp = (window as any).Telegram?.WebApp;
+  const webApp = (window as unknown as {
+    Telegram?: {
+      WebApp?: {
+        ready: () => void;
+        expand: () => void;
+        initData?: string;
+        initDataUnsafe?: { user?: { id: number; first_name: string; last_name?: string; username?: string } };
+      };
+    };
+  }).Telegram?.WebApp;
   if (!webApp) return null;
 
   webApp.ready();

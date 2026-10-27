@@ -23,7 +23,7 @@ export function StatusFlow({
     );
   }
 
-  const currentIdx = STEPS.indexOf(status as any);
+  const currentIdx = (STEPS as readonly string[]).indexOf(status);
 
   return (
     <div className="flex items-center gap-0.5 py-4 px-1">

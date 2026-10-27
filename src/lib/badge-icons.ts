@@ -32,8 +32,3 @@ export const BADGE_ICONS: Record<string, LucideIcon> = {
 };
 
 export const BADGE_ICON_KEYS = Object.keys(BADGE_ICONS);
-
-export function badgeIconComponent(key: string | null | undefined): LucideIcon | null {
-  if (!key) return null;
-  return BADGE_ICONS[key] ?? null;
-}

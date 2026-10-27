@@ -6,7 +6,7 @@ import { format, addDays } from 'date-fns';
 import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { formatItemLine } from '@/lib/order-display';
 
-async function enrichOrdersWithItems(orderRows: { id: number; [key: string]: any }[]) {
+async function enrichOrdersWithItems<T extends { id: number }>(orderRows: T[]) {
   const orderIds = orderRows.map((o) => o.id);
   if (orderIds.length === 0) return orderRows.map((o) => ({ ...o, items: [], totalQuantity: 0, itemsSummary: '' }));
 
