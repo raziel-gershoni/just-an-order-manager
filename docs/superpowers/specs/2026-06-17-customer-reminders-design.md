@@ -1,7 +1,7 @@
 # Customer Reminders (WhatsApp) — Design Spec
 
 - **Date:** 2026-06-17
-- **Status:** **Implemented** 2026-06-17 (plan: `docs/superpowers/plans/2026-06-17-customer-reminders.md`). Out-of-scope/future items below remain unbuilt. Pending: owner must register the Meta templates and add them in the תזכורות tab, then run the manual smoke test.
+- **Status:** **Implemented** 2026-06-17 (its plan was removed once it shipped; it is in git history). Out-of-scope/future items below remain unbuilt. Pending: owner must register the Meta templates and add them in the תזכורות tab, then run the manual smoke test.
 - **Author:** Claude (with Raziel)
 
 ## 1. Context & Goal
