@@ -5,6 +5,10 @@ export { normalizePhoneNumber };
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
+// Meta retires each Graph API version about two years after the next one
+// ships (v21.0 goes on 2027-01-21; v26.0 has no date yet). Raise it here, the
+// one place the app calls Meta, after reading the WhatsApp changelog.
+const GRAPH_API_VERSION = 'v26.0';
 
 
 export async function sendWhatsAppTemplate(
@@ -58,7 +62,7 @@ export async function sendWhatsAppTemplate(
 
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_ID}/messages`,
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_ID}/messages`,
       {
         method: 'POST',
         headers: {
