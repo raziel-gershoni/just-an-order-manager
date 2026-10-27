@@ -1,7 +1,7 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
-import { eq, and, asc, desc, gte, lte, inArray, notInArray } from 'drizzle-orm';
+import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions, orderStatusEnum } from '@/db/schema';
+import { eq, and, asc, desc, gte, lte, inArray, notInArray, sql } from 'drizzle-orm';
 import { formatItemLine, formatItemLabel, formatStaffItemLabel } from '@/lib/order-display';
 import { z } from 'zod/v4';
 import { resolveDeliveryDate } from '@/lib/date-utils';
@@ -12,18 +12,32 @@ import { resolveAndPriceOrderLines } from '@/lib/order-lines';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
-  const status = url.searchParams.get('status');
+  const statusParam = url.searchParams.get('status');
+  const status = orderStatusEnum.enumValues.find((s) => s === statusParam) ?? null;
+  // Not one of the statuses: say so, rather than let Postgres reject the enum.
+  if (statusParam && !status) return errorResponse('Unknown status', 400);
   const active = url.searchParams.get('active');
   const dateFrom = url.searchParams.get('dateFrom');
   const dateTo = url.searchParams.get('dateTo');
   const customerId = url.searchParams.get('customerId');
 
   const conditions = [eq(orders.groupId, groupId)];
-  if (status) conditions.push(eq(orders.status, status as any));
+  if (status) conditions.push(eq(orders.status, status));
   if (active === 'true') conditions.push(notInArray(orders.status, ['delivered', 'cancelled']));
   if (dateFrom) conditions.push(gte(orders.deliveryDate, dateFrom));
   if (dateTo) conditions.push(lte(orders.deliveryDate, dateTo));
   if (customerId) conditions.push(eq(orders.customerId, Number(customerId)));
+
+  // A list of open orders reads soonest first, the next one to bake on top.
+  // Any list with finished orders in it (history, a customer's orders, the
+  // "all" tab) reads latest first; an ASAP order, which has no date, sits at
+  // the day it was written. Sorted oldest first, those lists opened on the
+  // first weeks of the business, and a client showing the first ten showed a
+  // regular's ten oldest orders.
+  const openOnly = active === 'true' || (status != null && status !== 'delivered' && status !== 'cancelled');
+  const ordering = openOnly
+    ? [asc(orders.deliveryDate), desc(orders.createdAt)]
+    : [sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) desc`, desc(orders.createdAt)];
 
   // Get orders
   const orderRows = await db
@@ -43,7 +57,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
     .where(and(...conditions))
-    .orderBy(asc(orders.deliveryDate), desc(orders.createdAt));
+    .orderBy(...ordering);
 
   // Get items for all these orders
   const orderIds = orderRows.map((o) => o.id);

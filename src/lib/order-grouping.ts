@@ -18,7 +18,9 @@ const ASAP_KEY = '__asap__';
  * Group orders by delivery date, preserving the input order of date keys (so an
  * API-sorted list stays sorted). Each group carries a human date label (reusing
  * formatDateRelative — "היום" / "מחר" / "שבת הקרובה"…) and a loaf total. Orders
- * with no delivery date (ASAP) collapse into one trailing-labelled group.
+ * with no delivery date (ASAP) collapse into one "בהקדם" group, placed where the
+ * first of them falls: last in a soonest-first list (Postgres sorts the missing
+ * date last), at the newest one's day in a latest-first one.
  */
 export function groupByDeliveryDate<T extends DatedOrder>(
   orders: T[],
