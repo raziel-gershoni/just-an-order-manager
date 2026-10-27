@@ -154,7 +154,8 @@ export const POST = withGroup(async (request, auth, groupId) => {
         template.metaTemplateName,
         'he',
         undefined,
-        headerImageUrl
+        headerImageUrl,
+        { marketing: true }
       );
       await db.insert(reminderSends).values({
         groupId,

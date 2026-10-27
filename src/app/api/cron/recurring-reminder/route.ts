@@ -175,7 +175,7 @@ async function handler(request: Request) {
           }
 
           for (const ph of phones) {
-            const ok = await sendWhatsAppTemplate(ph.phone, template.metaTemplateName, 'he', [summary]);
+            const ok = await sendWhatsAppTemplate(ph.phone, template.metaTemplateName, 'he', [summary], undefined, { marketing: true });
             await db.insert(reminderSends).values({
               groupId: group.id,
               customerId: c.customerId,

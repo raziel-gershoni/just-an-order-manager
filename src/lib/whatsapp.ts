@@ -10,6 +10,27 @@ const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 // one place the app calls Meta, after reading the WhatsApp changelog.
 const GRAPH_API_VERSION = 'v26.0';
 
+/**
+ * One POST to a Graph send endpoint. A refusal comes back as { ok: false };
+ * a network failure throws, since the message may have gone out anyway.
+ */
+async function postToMeta(
+  endpoint: 'messages' | 'marketing_messages',
+  body: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await fetch(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_ID}/${endpoint}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body,
+    }
+  );
+  return res.ok ? { ok: true } : { ok: false, error: await res.text() };
+}
 
 export async function sendWhatsAppTemplate(
   to: string,
@@ -19,7 +40,11 @@ export async function sendWhatsAppTemplate(
   // For templates with an IMAGE header: Meta does NOT reuse the sample image
   // uploaded at template creation — the image must be supplied (as a public
   // URL) on every send.
-  headerImageUrl?: string
+  headerImageUrl?: string,
+  // Reminders are promotional. Meta moves those to the Marketing Messages API
+  // and stops taking them on /messages on 2027-10-13; order notifications are
+  // utility and stay on /messages.
+  opts: { marketing?: boolean } = {}
 ): Promise<boolean> {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) return false;
 
@@ -60,27 +85,29 @@ export async function sendWhatsAppTemplate(
     template.components = components;
   }
 
-  try {
-    const res = await fetch(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_ID}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: normalized,
-          type: 'template',
-          template,
-        }),
-      }
-    );
+  const body = JSON.stringify({
+    messaging_product: 'whatsapp',
+    to: normalized,
+    type: 'template',
+    template,
+  });
 
+  try {
+    if (opts.marketing) {
+      const mm = await postToMeta('marketing_messages', body);
+      if (mm.ok) {
+        console.log('WhatsApp sent (marketing_messages):', normalized, templateName);
+        return true;
+      }
+      // Refused there, so nothing was sent: the business hasn't accepted the
+      // Marketing Messages terms yet, or Meta files this template as utility
+      // (134100). /messages carries it, as it always has.
+      console.warn('WhatsApp marketing_messages refused, sending via messages:', normalized, templateName, mm.error);
+    }
+
+    const res = await postToMeta('messages', body);
     if (!res.ok) {
-      const err = await res.text();
-      console.error('WhatsApp send failed:', normalized, err);
+      console.error('WhatsApp send failed:', normalized, res.error);
       return false;
     }
 
