@@ -23,6 +23,7 @@ This is the production order system for a real Israeli bakery. Staff take, price
 - **Tiered bulk pricing** — bread sizes offer bundle tiers (e.g. 6 for a pack price, 30 for another); the system automatically charges customers the cheapest valid combination of packs and singles.
 - **Order lifecycle workflow** — pending → confirmed → baking → ready → delivered, with cancellation, driven by one shared state machine for both web and bot.
 - **Recurring orders** — standing orders auto-generate their next occurrence when the current one is delivered.
+- **Order again** — any past order (or a customer's last one) opens the order form pre-filled with the same basket, priced from today's catalog.
 - **Payments & customer balances** — record payments (also ahead of delivery, against the order), auto-charge on delivery, and track running per-customer balances with a debt threshold.
 - **Deliveries with a driver role** — delivery addresses, per-city routing, and a dedicated driver view.
 - **Automated customer reminders** — scheduled WhatsApp reminders (week-start and Shabbat) and "order ready" notifications via the WhatsApp Business Cloud API.

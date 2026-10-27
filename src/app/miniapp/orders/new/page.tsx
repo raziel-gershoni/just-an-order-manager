@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
@@ -11,7 +11,7 @@ import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn, friendlyError } from '@/lib/utils';
-import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck, CalendarClock } from 'lucide-react';
+import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck, CalendarClock, CopyPlus, AlertTriangle } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
 import { computeOrderPricing } from '@/lib/pricing';
@@ -21,6 +21,7 @@ import { pricingKey } from '@/lib/order-fingerprint';
 import { dayAfter, formatDayMonth, formatWeekdayShort, fridayOfWeek, rollWeeklyPast } from '@/lib/date-utils';
 import { isFridayType, type NextChangeSection, type NextOccurrenceView } from '@/lib/order-next-change-types';
 import { NextChangeConflictSheet, sectionsLabel } from '@/components/orders/NextChangeConflictSheet';
+import { copyLinesToMenu, type SourceLine } from '@/lib/order-copy';
 
 interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string; hasWhatsapp?: boolean }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
@@ -32,6 +33,37 @@ type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
 
 /** A basket whose goods are already frozen, and what they come to. */
 interface Baseline { key: string; goods: number }
+
+/** A saved order as GET /orders/[id] returns it: what edit, next mode and a copy read. */
+interface SavedOrder {
+  id: number;
+  customerId: number;
+  customerName: string;
+  deliveryType: string;
+  deliveryDate: string | null;
+  notes: string | null;
+  status: string;
+  isRecurring?: boolean;
+  isDelivery?: boolean;
+  deliveryFee?: string | number | null;
+  totalOverride?: string | null;
+  dealsEnabled?: boolean;
+  additionsCharged?: boolean;
+  calculatedTotal?: number;
+  nextOccurrence?: NextOccurrenceView | null;
+  items: SourceLine[];
+}
+
+interface GroupSettings {
+  group?: {
+    additionsSurcharge?: string;
+    deliveryEnabled?: boolean;
+    deliveryHomeCity?: string | null;
+    deliveryFee?: string | number;
+    deliveryFreeOver?: string | number | null;
+    deliveryCities?: string[];
+  };
+}
 
 /** What a plain edit was loaded with, to tell which parts of the order it changed. */
 interface Loaded {
@@ -78,6 +110,8 @@ function OrderFormContent() {
   // "From the next occurrence": the same form, saving what the next order of a
   // recurring chain changes, while this one stays as it is.
   const isNext = isEdit && searchParams.get('next') === '1';
+  // "Order again": a new order that starts as a copy of a saved one.
+  const copyFromId = isEdit ? null : searchParams.get('from');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
@@ -99,6 +133,9 @@ function OrderFormContent() {
   const [orderDate, setOrderDate] = useState<string | null>(null);
   const [nextOcc, setNextOcc] = useState<NextOccurrenceView | null>(null);
   const [conflict, setConflict] = useState<NextChangeSection[] | null>(null);
+  const [copiedFrom, setCopiedFrom] = useState<{ id: number; date: string | null; customerId: number; dropped: boolean; none: boolean; droppedTotal: boolean } | null>(null);
+  // A copy's own pickup or delivery choice holds until the customer is changed.
+  const copyHold = useRef(false);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -126,17 +163,33 @@ function OrderFormContent() {
     ];
 
     if (activeGroupId) {
-      loads.push(apiFetch<{ group: { additionsSurcharge: string } }>(`/groups/${activeGroupId}`));
+      loads.push(apiFetch<GroupSettings>(`/groups/${activeGroupId}`));
     } else {
       loads.push(Promise.resolve({ group: { additionsSurcharge: '0' } }));
     }
 
     if (isEdit) {
-      loads.push(apiFetch<{ order: { customerId: number; customerName: string; deliveryType: string; deliveryDate: string | null; notes: string | null; status: string; items: { breadTypeId: number; breadSizeId: number | null; quantity: number }[] } }>(`/orders/${editId}`));
+      loads.push(apiFetch<{ order: SavedOrder }>(`/orders/${editId}`));
+    } else if (copyFromId) {
+      // Its own catch: an order that can't be read leaves a blank new order,
+      // not a form that never loads.
+      loads.push(
+        apiFetch<{ order: SavedOrder }>(`/orders/${copyFromId}`).catch((e) => {
+          console.error(`Order again: failed to load order ${copyFromId}`, e);
+          toast.error(t('orders.copy_failed'));
+          return null;
+        })
+      );
     }
 
     Promise.all(loads)
-      .then(([c, b, g, o]: any[]) => {
+      .then((loaded) => {
+        const [c, b, g, o] = loaded as [
+          { customers: Customer[] },
+          { breadTypes: BreadType[] },
+          GroupSettings,
+          { order: SavedOrder } | null | undefined,
+        ];
         setCustomers(c.customers);
         setBreadTypes(b.breadTypes);
         setAdditionsSurcharge(Number(g?.group?.additionsSurcharge ?? 0));
@@ -147,6 +200,7 @@ function OrderFormContent() {
           freeOver: g?.group?.deliveryFreeOver != null ? Number(g.group.deliveryFreeOver) : null,
           cities: g?.group?.deliveryCities ?? [],
         });
+        const money = (v: string | number | null | undefined) => (v != null && Number(v) > 0 ? String(Number(v)) : '');
 
         if (isEdit && o?.order) {
           const order = o.order;
@@ -174,7 +228,6 @@ function OrderFormContent() {
           }));
           const orderDeals: boolean = order.dealsEnabled ?? true;
           const orderAdditions: boolean = order.additionsCharged ?? true;
-          const money = (v: string | number | null | undefined) => (v != null && Number(v) > 0 ? String(Number(v)) : '');
           // The goods this order is actually charged for, frozen when it was
           // placed. The free-delivery threshold has to be judged against that,
           // not against what the same basket would cost at today's prices.
@@ -230,10 +283,46 @@ function OrderFormContent() {
             deliveryType: order.deliveryType as DeliveryType,
             deliveryDate: order.deliveryDate || '',
           });
-        } else if (!isEdit && b.breadTypes.length > 0) {
-          const firstType = b.breadTypes[0];
-          const defaultSize = firstType.enabledSizes?.[0];
-          setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [], quantity: 1 }]);
+        } else if (!isEdit) {
+          // The same customer, basket, pickup or delivery, notes and price
+          // terms as the saved order, as the weekly repeat copies them; not its
+          // day (a specific date is picked again), and not the repeat itself.
+          const src = o?.order;
+          if (src) {
+            const copied = copyLinesToMenu(src.items, b.breadTypes);
+            // A customer deactivated since is left for the owner to pick: the
+            // form knows only listed customers' phones and city, which the
+            // WhatsApp checkbox and the delivery fee go by.
+            if (c.customers.some((x) => x.id === src.customerId)) setCustomerId(src.customerId);
+            copyHold.current = true;
+            // Only while delivery is still offered: with it switched off the
+            // delivery card is hidden, and nothing could take it back off.
+            const delivery = Boolean(src.isDelivery) && Boolean(g?.group?.deliveryEnabled);
+            setIsDelivery(delivery);
+            setDeliveryManualFee(delivery ? money(src.deliveryFee) : '');
+            setDealsEnabled(src.dealsEnabled ?? true);
+            setAdditionsCharged(src.additionsCharged ?? true);
+            // A custom total priced that basket; with part of it gone it would
+            // price something else.
+            const customTotal = src.totalOverride != null && Number(src.totalOverride) > 0;
+            setTotalOverride(customTotal && !copied.dropped ? String(Number(src.totalOverride)) : '');
+            setNotes(src.notes || '');
+            setDeliveryType(src.deliveryType as DeliveryType);
+            setCopiedFrom({
+              id: src.id,
+              date: src.deliveryDate ?? null,
+              customerId: src.customerId,
+              dropped: copied.dropped,
+              none: copied.lines.length === 0,
+              droppedTotal: customTotal && copied.dropped,
+            });
+            // Nothing left is left empty, not filled with a bread nobody chose.
+            setItems(copied.lines);
+          } else if (b.breadTypes.length > 0) {
+            const firstType = b.breadTypes[0];
+            const defaultSize = firstType.enabledSizes?.[0];
+            setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [], quantity: 1 }]);
+          }
         }
       })
       .catch(() => {})
@@ -243,6 +332,14 @@ function OrderFormContent() {
   // Auto-suggest delivery when the selected customer's city changes (create mode).
   useEffect(() => {
     if (isEdit || !delivSettings) return;
+    if (copyHold.current) {
+      // "שנה" alone clears the customer to open the list; only picking
+      // someone else lets go of the copy.
+      if (customerId == null || customerId === copiedFrom?.customerId) return;
+      // Another customer: the suggestion is theirs, and so is any manual fee.
+      copyHold.current = false;
+      setDeliveryManualFee('');
+    }
     const cust = customers.find((c) => c.id === customerId);
     setIsDelivery(classifyCity(cust?.city ?? null, delivSettings).available);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -636,6 +733,33 @@ function OrderFormContent() {
                   .replace('{date}', formatWeekdayShort(nextOcc.date))
                   .replace('{sections}', sectionsLabel(t, waiting.sections))}
               </p>
+            </div>
+          </Card>
+        )}
+
+        {copiedFrom && (
+          <Card className="border-primary/30 bg-primary/5">
+            <div className="flex items-start gap-2.5">
+              <CopyPlus className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="space-y-1 text-sm">
+                <p>
+                  {(copiedFrom.date ? t('orders.copied_from') : t('orders.copied_from_nodate'))
+                    .replace('{id}', String(copiedFrom.id))
+                    .replace('{date}', copiedFrom.date ? formatWeekdayShort(copiedFrom.date) : '')}
+                </p>
+                {copiedFrom.dropped && (
+                  <p className="flex items-start gap-1.5 text-warning">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {t(
+                      copiedFrom.none
+                        ? 'orders.copied_none'
+                        : copiedFrom.droppedTotal
+                          ? 'orders.copied_dropped_total'
+                          : 'orders.copied_dropped'
+                    )}
+                  </p>
+                )}
+              </div>
             </div>
           </Card>
         )}

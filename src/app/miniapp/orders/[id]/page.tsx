@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusFlow } from '@/components/orders/StatusFlow';
 import { formatDateRelative, formatDayMonth } from '@/lib/date-utils';
 import { t as translate } from '@/lib/i18n';
-import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft, Undo2, Check, Wallet } from 'lucide-react';
+import { Calendar, Pencil, AlertTriangle, Repeat, ChefHat, Truck, Navigation, ChevronLeft, Undo2, Check, Wallet, CopyPlus } from 'lucide-react';
 import { ORDER_STATUS_REVERSALS } from '@/lib/constants';
 import { useGroup } from '@/hooks/useGroup';
 import { buildWazeLink } from '@/lib/delivery';
@@ -1125,6 +1125,17 @@ export default function OrderDetailPage() {
               )}
             </div>
           </Card>
+        )}
+
+        {/* Order again: a new order starting as a copy of this one. Last on
+            the page, under the payment cards a delivered order still needs. */}
+        {!isOpen && canEdit && (
+          <Link href={`/miniapp/orders/new?from=${order.id}`}>
+            <Button variant="outline" className="w-full">
+              <CopyPlus className="h-4 w-4" />
+              {t('orders.order_again')}
+            </Button>
+          </Link>
         )}
       </div>
     </>

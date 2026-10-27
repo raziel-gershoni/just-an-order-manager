@@ -24,7 +24,8 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, MessageCircleOff, Copy, UserPlus, Send, Navigation } from 'lucide-react';
+import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, MessageCircleOff, Copy, UserPlus, Send, Navigation, CopyPlus, ChevronLeft } from 'lucide-react';
+import { formatWeekdayShort } from '@/lib/date-utils';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
 import { buildWazeLink } from '@/lib/delivery';
 import Link from 'next/link';
@@ -49,7 +50,7 @@ interface Customer {
   phones: CustomerPhone[];
   lastReminder: { occasion: string; status: string; sentAt: string } | null;
 }
-interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; isRecurring?: boolean; totalQuantity: number; itemsSummary: string }
+interface Order { id: number; deliveryDate: string | null; status: string; paid: boolean; isRecurring?: boolean; totalQuantity: number; itemsSummary: string; createdAt: string }
 interface Payment { id: number; amount: string; type: string; description: string | null; createdAt: string }
 
 export default function CustomerDetailPage() {
@@ -311,6 +312,12 @@ export default function CustomerDetailPage() {
   const messagingPhone = messagingFor == null ? null : customer.phones.find((x) => x.id === messagingFor) ?? null;
   const balanceNum = Number(balance);
   const ordW = docketWidth(orders.map((o) => o.id));
+  // "Same as last time": the order this customer placed most recently. A
+  // cancelled one is passed over; its own page still offers to order it again.
+  const lastOrder = orders.reduce<Order | null>(
+    (latest, o) => (o.status !== 'cancelled' && (!latest || o.createdAt > latest.createdAt) ? o : latest),
+    null
+  );
 
   return (
     <>
@@ -352,6 +359,25 @@ export default function CustomerDetailPage() {
               <span className="font-medium text-sm">{t('dash.record_payment')}</span>
             </Card>
           </Link>
+          {lastOrder && (
+            <Link href={`/miniapp/orders/new?from=${lastOrder.id}`} className="col-span-2">
+              <Card className="flex items-center gap-2.5 p-3 hover:shadow-md cursor-pointer">
+                <CopyPlus className="h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-medium text-sm">{t('customers.same_as_last')}</span>
+                    {lastOrder.deliveryDate && (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatWeekdayShort(lastOrder.deliveryDate)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">{lastOrder.itemsSummary}</p>
+                </div>
+                <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Card>
+            </Link>
+          )}
         </div>
 
         {/* Phones — manage inline (always visible, independent of edit drawer) */}
