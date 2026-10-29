@@ -600,6 +600,7 @@ const translations: Record<string, string> = {
   'orders.copied_dropped': 'חלק ממה שהוזמן אז כבר לא בתפריט, ולכן לא הועתק',
   'orders.copied_dropped_total': 'חלק ממה שהוזמן אז כבר לא בתפריט ולא הועתק, וכך גם הסכום המותאם',
   'orders.copied_none': 'אף אחד מהלחמים בהזמנה ההיא כבר לא בתפריט',
+  'orders.load_failed': 'טעינת הטופס נכשלה',
   'orders.copy_failed': 'טעינת ההזמנה להעתקה נכשלה',
   // Order from a message: what the reading left out or couldn't place
   'draft.warn_not_on_menu': 'לא זוהה: "{heard}" (לא בתפריט)',

@@ -11,7 +11,8 @@ import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn, friendlyError } from '@/lib/utils';
-import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck, CalendarClock, CopyPlus, AlertTriangle } from 'lucide-react';
+import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck, CalendarClock, CopyPlus, AlertTriangle, MessageSquareText } from 'lucide-react';
+import Link from 'next/link';
 import { getInitial, customerNameMatches } from '@/lib/name-utils';
 import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
 import { computeOrderPricing } from '@/lib/pricing';
@@ -21,8 +22,9 @@ import { pricingKey } from '@/lib/order-fingerprint';
 import { dayAfter, formatDayMonth, formatWeekdayShort, fridayOfWeek, rollWeeklyPast } from '@/lib/date-utils';
 import { isFridayType, type NextChangeSection, type NextOccurrenceView } from '@/lib/order-next-change-types';
 import { NextChangeConflictSheet, sectionsLabel } from '@/components/orders/NextChangeConflictSheet';
-import { copyLinesToMenu, type SourceLine } from '@/lib/order-copy';
-import { money } from '@/lib/order-prefill';
+import type { SourceLine } from '@/lib/order-copy';
+import { buildPrefill, money, nextHold, type PrefillEnv, type PrefillHold, type PrefillPatch } from '@/lib/order-prefill';
+import type { OrderDraft } from '@/lib/order-draft-types';
 
 interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string; hasWhatsapp?: boolean }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
@@ -31,6 +33,16 @@ interface BreadType { id: number; name: string; enabledSizes?: BreadSize[]; enab
 interface LineItem { breadTypeId: number; breadSizeId: number | null; breadAdditionIds: number[]; quantity: number; additionsCharged?: boolean | null }
 
 type DeliveryType = 'shabbat' | 'asap' | 'specific_date' | 'weekly';
+
+/** GET /order-drafts/<code>: an order read from a message, or the order it already became. */
+type DraftResponse =
+  | { status: 'ready'; groupId: number; transcript: string; draft: OrderDraft }
+  | { status: 'used'; groupId: number; orderId: number | null };
+
+/** Today's date in the device's local time, as yyyy-MM-dd. */
+function localTodayIso(): string {
+  return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
 
 /** A basket whose goods are already frozen, and what they come to. */
 interface Baseline { key: string; goods: number }
@@ -113,6 +125,9 @@ function OrderFormContent() {
   const isNext = isEdit && searchParams.get('next') === '1';
   // "Order again": a new order that starts as a copy of a saved one.
   const copyFromId = isEdit ? null : searchParams.get('from');
+  // An order read from a bot message. "Order again" wins when both are given.
+  const draftParam = isEdit ? null : searchParams.get('draft');
+  const draftCode = copyFromId ? null : draftParam;
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
@@ -135,8 +150,12 @@ function OrderFormContent() {
   const [nextOcc, setNextOcc] = useState<NextOccurrenceView | null>(null);
   const [conflict, setConflict] = useState<NextChangeSection[] | null>(null);
   const [copiedFrom, setCopiedFrom] = useState<{ id: number; date: string | null; customerId: number; dropped: boolean; none: boolean; droppedTotal: boolean } | null>(null);
-  // A copy's own pickup or delivery choice holds until the customer is changed.
-  const copyHold = useRef(false);
+  // What a message said about the order (or a copy kept) of the delivery choice
+  // holds until the customer is changed; see nextHold.
+  const holdRef = useRef<PrefillHold | null>(null);
+  const [draftBanner, setDraftBanner] = useState<{ transcript: string; warnings: string[] } | null>(null);
+  const [draftUsed, setDraftUsed] = useState<{ orderId: number | null } | null>(null);
+  const [quickPicks, setQuickPicks] = useState<number[]>([]);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -156,6 +175,32 @@ function OrderFormContent() {
   const [newSizeWeight, setNewSizeWeight] = useState('');
   const [newSizePrice, setNewSizePrice] = useState('');
   const [addingSize, setAddingSize] = useState(false);
+
+  /** Fill the form from a prefill patch: only what it names, so the rest keeps its defaults. */
+  function applyPrefill(p: PrefillPatch) {
+    if (p.customerId !== undefined) setCustomerId(p.customerId);
+    holdRef.current = p.hold;
+    if (p.isDelivery !== undefined) setIsDelivery(p.isDelivery);
+    if (p.deliveryManualFee !== undefined) setDeliveryManualFee(p.deliveryManualFee);
+    if (p.dealsEnabled !== undefined) setDealsEnabled(p.dealsEnabled);
+    if (p.additionsCharged !== undefined) setAdditionsCharged(p.additionsCharged);
+    if (p.totalOverride !== undefined) setTotalOverride(p.totalOverride);
+    if (p.notes !== undefined) setNotes(p.notes);
+    if (p.deliveryType !== undefined) setDeliveryType(p.deliveryType);
+    if (p.deliveryDate !== undefined) setDeliveryDate(p.deliveryDate);
+    if (p.isRecurring !== undefined) setIsRecurring(p.isRecurring);
+    if (p.customerSearch !== undefined) setCustomerSearch(p.customerSearch);
+    if (p.newCustomerName !== undefined) setNewCustomerName(p.newCustomerName);
+    if (p.showNewCustomer !== undefined) setShowNewCustomer(p.showNewCustomer);
+    if (p.quickPicks !== undefined) setQuickPicks(p.quickPicks);
+    setItems(p.items);
+    if (p.banner.kind === 'copy') {
+      const b = p.banner;
+      setCopiedFrom({ id: b.id, date: b.date, customerId: b.customerId, dropped: b.dropped, none: b.none, droppedTotal: b.droppedTotal });
+    } else {
+      setDraftBanner({ transcript: p.banner.transcript, warnings: p.banner.warnings });
+    }
+  }
 
   useEffect(() => {
     const loads: Promise<unknown>[] = [
@@ -183,13 +228,25 @@ function OrderFormContent() {
       );
     }
 
+    if (draftParam && copyFromId) {
+      console.warn('[order-draft] both from and draft given, ignoring draft');
+    } else if (draftCode) {
+      loads.push(
+        apiFetch<DraftResponse>(`/order-drafts/${draftCode}`).catch((e) => {
+          console.error(`[order-draft] failed to load draft ${draftCode}`, e);
+          toast.error(t('orders.draft_missing'));
+          return null;
+        })
+      );
+    }
+
     Promise.all(loads)
       .then((loaded) => {
         const [c, b, g, o] = loaded as [
           { customers: Customer[] },
           { breadTypes: BreadType[] },
           GroupSettings,
-          { order: SavedOrder } | null | undefined,
+          { order: SavedOrder } | DraftResponse | null | undefined,
         ];
         setCustomers(c.customers);
         setBreadTypes(b.breadTypes);
@@ -201,7 +258,7 @@ function OrderFormContent() {
           freeOver: g?.group?.deliveryFreeOver != null ? Number(g.group.deliveryFreeOver) : null,
           cities: g?.group?.deliveryCities ?? [],
         });
-        if (isEdit && o?.order) {
+        if (isEdit && o && 'order' in o) {
           const order = o.order;
           if (order.status === 'delivered' || order.status === 'cancelled') {
             router.replace(`/miniapp/orders/${editId}`);
@@ -286,59 +343,54 @@ function OrderFormContent() {
           // The same customer, basket, pickup or delivery, notes and price
           // terms as the saved order, as the weekly repeat copies them; not its
           // day (a specific date is picked again), and not the repeat itself.
-          const src = o?.order;
+          const src = copyFromId && o && 'order' in o ? o.order : undefined;
+          const env: PrefillEnv = {
+            customers: c.customers,
+            breadTypes: b.breadTypes,
+            deliveryEnabled: Boolean(g?.group?.deliveryEnabled),
+            today: localTodayIso(),
+          };
+          const draftRes = draftCode && o && 'status' in o ? o : null;
+          let filled = false;
           if (src) {
-            const copied = copyLinesToMenu(src.items, b.breadTypes);
-            // A customer deactivated since is left for the owner to pick: the
-            // form knows only listed customers' phones and city, which the
-            // WhatsApp checkbox and the delivery fee go by.
-            if (c.customers.some((x) => x.id === src.customerId)) setCustomerId(src.customerId);
-            copyHold.current = true;
-            // Only while delivery is still offered: with it switched off the
-            // delivery card is hidden, and nothing could take it back off.
-            const delivery = Boolean(src.isDelivery) && Boolean(g?.group?.deliveryEnabled);
-            setIsDelivery(delivery);
-            setDeliveryManualFee(delivery ? money(src.deliveryFee) : '');
-            setDealsEnabled(src.dealsEnabled ?? true);
-            setAdditionsCharged(src.additionsCharged ?? true);
-            // A custom total priced that basket; with part of it gone it would
-            // price something else.
-            const customTotal = src.totalOverride != null && Number(src.totalOverride) > 0;
-            setTotalOverride(customTotal && !copied.dropped ? String(Number(src.totalOverride)) : '');
-            setNotes(src.notes || '');
-            setDeliveryType(src.deliveryType as DeliveryType);
-            setCopiedFrom({
-              id: src.id,
-              date: src.deliveryDate ?? null,
-              customerId: src.customerId,
-              dropped: copied.dropped,
-              none: copied.lines.length === 0,
-              droppedTotal: customTotal && copied.dropped,
-            });
-            // Nothing left is left empty, not filled with a bread nobody chose.
-            setItems(copied.lines);
-          } else if (b.breadTypes.length > 0) {
+            applyPrefill(buildPrefill({ kind: 'copy', order: src }, env));
+            filled = true;
+          } else if (draftRes && draftRes.groupId !== activeGroupId) {
+            // Never open another bakery's order in this one.
+            console.error(`[order-draft] draft ${draftCode} belongs to another bakery`);
+            toast.error(t('orders.draft_other_bakery'));
+          } else if (draftRes?.status === 'used') {
+            setDraftUsed({ orderId: draftRes.orderId });
+          } else if (draftRes?.status === 'ready') {
+            try {
+              applyPrefill(buildPrefill({ kind: 'draft', code: draftCode!, transcript: draftRes.transcript, draft: draftRes.draft }, env));
+              filled = true;
+            } catch (e) {
+              console.error(`[order-draft] prefill failed ${draftCode}`, e);
+              toast.error(t('orders.draft_missing'));
+            }
+          }
+          if (!filled && b.breadTypes.length > 0) {
             const firstType = b.breadTypes[0];
             const defaultSize = firstType.enabledSizes?.[0];
             setItems([{ breadTypeId: firstType.id, breadSizeId: defaultSize?.id ?? null, breadAdditionIds: [], quantity: 1 }]);
           }
         }
       })
-      .catch(() => {})
+      .catch((e) => {
+        console.error('New order: failed to load the form', e);
+        toast.error(t('orders.load_failed'));
+      })
       .finally(() => setLoading(false));
   }, []);
 
   // Auto-suggest delivery when the selected customer's city changes (create mode).
   useEffect(() => {
     if (isEdit || !delivSettings) return;
-    if (copyHold.current) {
-      // "שנה" alone clears the customer to open the list; only picking
-      // someone else lets go of the copy.
-      if (customerId == null || customerId === copiedFrom?.customerId) return;
-      // Another customer: the suggestion is theirs, and so is any manual fee.
-      copyHold.current = false;
-      setDeliveryManualFee('');
-    }
+    const held = nextHold(holdRef.current, customerId);
+    holdRef.current = held.hold;
+    if (held.clearFee) setDeliveryManualFee('');
+    if (held.skipSuggest) return;
     const cust = customers.find((c) => c.id === customerId);
     setIsDelivery(classifyCity(cust?.city ?? null, delivSettings).available);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -579,13 +631,23 @@ function OrderFormContent() {
             dealsEnabled,
             additionsCharged,
             notifyCustomer,
+            ...(draftCode && draftBanner ? { draftId: draftCode } : {}),
           }),
         });
         toast.success(t('orders.created'));
         router.push('/miniapp');
       }
-    } catch {
-      toast.error(isEdit ? t('orders.update_failed') : t('orders.create_failed'));
+    } catch (e) {
+      const status = (e as { status?: number } | null)?.status;
+      console.error(
+        draftCode && draftBanner ? '[order-draft] save failed' : 'New order: save failed',
+        draftCode && draftBanner ? { draftId: draftCode, status, error: String(e) } : e
+      );
+      toast.error(
+        status === 409 && draftCode && draftBanner
+          ? t('orders.draft_already_saved')
+          : isEdit ? t('orders.update_failed') : t('orders.create_failed')
+      );
     } finally {
       setSubmitting(false);
     }
@@ -669,9 +731,7 @@ function OrderFormContent() {
   const effectiveFee = isDelivery ? computedFee : 0;
 
   // Earliest selectable delivery date (today, local time) as yyyy-MM-dd
-  const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
+  const todayIso = localTodayIso();
 
   // A next occurrence always has a day: no "בהקדם" there.
   const deliveryOptions = ([
@@ -763,6 +823,47 @@ function OrderFormContent() {
           </Card>
         )}
 
+        {draftBanner && (
+          <Card className="border-primary/30 bg-primary/5">
+            <div className="flex items-start gap-2.5">
+              <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1 space-y-1 text-sm">
+                <p>{t('orders.draft_filled')}</p>
+                <details>
+                  <summary className="cursor-pointer text-muted-foreground">{t('orders.draft_heard')}</summary>
+                  <p className="mt-1 whitespace-pre-wrap break-words" dir="auto">{draftBanner.transcript}</p>
+                </details>
+                {draftBanner.warnings.map((w, i) => (
+                  <p key={i} className="flex items-start gap-1.5 text-warning">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {w}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {draftUsed && (
+          <Card className="border-primary/30 bg-primary/5">
+            <div className="flex items-start gap-2.5">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+              <div className="space-y-1 text-sm">
+                <p>
+                  {draftUsed.orderId != null
+                    ? t('orders.draft_used').replace('{id}', String(draftUsed.orderId))
+                    : t('orders.draft_used').replace(/\s*\(#\{id\}\)/, '')}
+                </p>
+                {draftUsed.orderId != null && (
+                  <Link href={`/miniapp/orders/${draftUsed.orderId}`} className="font-medium text-primary underline">
+                    {t('orders.draft_used_open')}
+                  </Link>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Customer */}
         <Card>
           <h3 className="font-semibold mb-3">{t('form.customer')}</h3>
@@ -788,6 +889,25 @@ function OrderFormContent() {
             </div>
           ) : (
             <div className="space-y-2">
+              {quickPicks.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">{t('orders.draft_did_you_mean')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickPicks.flatMap((id) => {
+                      const c = customers.find((x) => x.id === id);
+                      return c ? [c] : [];
+                    }).map((c) => (
+                      <button
+                        key={c.id}
+                        className="px-2.5 py-1.5 rounded-md text-xs font-medium border bg-primary/10 border-primary/30 text-primary"
+                        onClick={() => { setCustomerId(c.id); setCustomerSearch(''); }}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="relative">
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input

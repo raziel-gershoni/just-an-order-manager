@@ -171,3 +171,23 @@ function prefillFromDraft(source: Extract<PrefillSource, { kind: 'draft' }>, env
 export function buildPrefill(source: PrefillSource, env: PrefillEnv): PrefillPatch {
   return source.kind === 'copy' ? prefillFromCopy(source.order, env) : prefillFromDraft(source, env);
 }
+
+/**
+ * What the delivery auto-suggest does when the customer changes while a
+ * prefill holds the stated pickup/delivery choice. Pure, so the rule is
+ * checked without a browser.
+ */
+export function nextHold(
+  hold: PrefillHold | null,
+  customerId: number | null
+): { hold: PrefillHold | null; clearFee: boolean; skipSuggest: boolean } {
+  if (!hold) return { hold: null, clearFee: false, skipSuggest: false };
+  // "שנה" alone clears the customer to open the list; only picking
+  // someone else lets go. A draft that named no one anchors on the first
+  // pick, so choosing from its "התכוונת ל…" list keeps the delivery it stated.
+  if (customerId == null) return { hold, clearFee: false, skipSuggest: true };
+  if (hold.anchor == null) return { hold: { anchor: customerId }, clearFee: false, skipSuggest: true };
+  if (customerId === hold.anchor) return { hold, clearFee: false, skipSuggest: true };
+  // Another customer: the suggestion is theirs, and so is any manual fee.
+  return { hold: null, clearFee: true, skipSuggest: false };
+}
