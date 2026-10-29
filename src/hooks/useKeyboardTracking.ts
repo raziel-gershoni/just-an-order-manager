@@ -87,7 +87,25 @@ export function useKeyboardTracking() {
     let baseline = window.innerHeight;
     let resetBaseline = false;
     let frame = 0;
-    let cancelEnsure: (() => void) | null = null;
+    let settle = 0;
+
+    // Places the focused field once the screen stops changing size. Telegram on
+    // iOS shrinks the whole page some time after the field is focused (later
+    // than any fixed wait), and Android resizes once per animation frame, so
+    // this re-arms on every resize while a field is focused instead of firing
+    // once at focus time and missing the resize that matters.
+    function scheduleEnsure(delay: number) {
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement && isTextField(el)) ensureVisible(el, vv!);
+      }, delay);
+    }
+
+    function onViewportResize() {
+      update();
+      if (isTextField(document.activeElement)) scheduleEnsure(RESIZE_SETTLE_MS);
+    }
 
     function update() {
       baseline = Math.max(baseline, window.innerHeight);
@@ -115,6 +133,7 @@ export function useKeyboardTracking() {
         resetBaseline = false;
       }
       update();
+      if (isTextField(document.activeElement)) scheduleEnsure(RESIZE_SETTLE_MS);
     }
 
     function onOrientation() {
@@ -125,27 +144,9 @@ export function useKeyboardTracking() {
 
     function onFocusIn(e: FocusEvent) {
       update();
-      const el = e.target;
-      if (!(el instanceof HTMLElement) || !isTextField(el)) return;
-      cancelEnsure?.();
-      const run = () => {
-        cancel();
-        if (document.activeElement === el) ensureVisible(el, vv!);
-      };
-      // Android sends a resize per animation frame while the keyboard slides in;
-      // the field is placed once they stop, not against a half-open keyboard.
-      let timer = window.setTimeout(run, SETTLE_FALLBACK_MS);
-      const onResize = () => {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(run, RESIZE_SETTLE_MS);
-      };
-      const cancel = () => {
-        window.clearTimeout(timer);
-        vv!.removeEventListener('resize', onResize);
-        cancelEnsure = null;
-      };
-      vv!.addEventListener('resize', onResize);
-      cancelEnsure = cancel;
+      // Moving between fields with the keyboard already up brings no resize, so
+      // a focus also places the field on its own after a short wait.
+      if (isTextField(e.target as Element | null)) scheduleEnsure(SETTLE_FALLBACK_MS);
     }
 
     function onFocusOut() {
@@ -155,16 +156,16 @@ export function useKeyboardTracking() {
     }
 
     update();
-    vv.addEventListener('resize', update);
+    vv.addEventListener('resize', onViewportResize);
     vv.addEventListener('scroll', update);
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('orientationchange', onOrientation);
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
     return () => {
-      cancelEnsure?.();
+      window.clearTimeout(settle);
       cancelAnimationFrame(frame);
-      vv.removeEventListener('resize', update);
+      vv.removeEventListener('resize', onViewportResize);
       vv.removeEventListener('scroll', update);
       window.removeEventListener('resize', onWindowResize);
       window.removeEventListener('orientationchange', onOrientation);
