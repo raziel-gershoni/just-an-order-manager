@@ -225,6 +225,19 @@ html[data-keyboard='open'] [data-bottom-nav] {
 html[data-keyboard='open'] .sticky-save-bar {
   bottom: var(--kb-inset, 0px);
 }
+/* Where the keyboard covers the page instead of shrinking it (iOS), the page
+   gains no scroll room, so the last fields can't rise above the lifted bar and
+   stay behind the keyboard. A spacer as tall as the keyboard at the end of each
+   scrolling area gives them that room; a sheet pinned to the bottom is lifted. */
+.kb-spacer {
+  height: 0;
+}
+html[data-keyboard='open'] .kb-spacer {
+  height: var(--kb-inset, 0px);
+}
+html[data-keyboard='open'] .kb-lift {
+  padding-bottom: var(--kb-inset, 0px);
+}
 
 /* Keyboard focus baseline (fixes "no visible focus anywhere") */
 :focus-visible {

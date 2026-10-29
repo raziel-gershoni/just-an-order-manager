@@ -116,7 +116,7 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
   const tile = 'relative h-16 w-16 flex-none overflow-hidden rounded-lg border';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="kb-lift fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-t-2xl bg-card p-5 space-y-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}

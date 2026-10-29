@@ -316,6 +316,7 @@ export default function RemindersPage() {
               </Button>
             </StickySaveBar>
           </div>
+          <div className="kb-spacer" aria-hidden />
         </div>
       )}
     </>

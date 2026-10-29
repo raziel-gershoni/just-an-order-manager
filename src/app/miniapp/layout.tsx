@@ -99,7 +99,10 @@ function AppProviders({ children }: { children: ReactNode }) {
               <LoadingSplash />
             ) : (
               <>
-                <div className="pb-20 animate-fade-in">{children}</div>
+                <div className="pb-20 animate-fade-in">
+                  {children}
+                  <div className="kb-spacer" aria-hidden />
+                </div>
                 <BottomNav
                   labels={{
                     home: t('nav.home', lang),

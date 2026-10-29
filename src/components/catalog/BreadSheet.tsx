@@ -272,6 +272,7 @@ export function BreadSheet({
           </>
         )}
       </div>
+      <div className="kb-spacer" aria-hidden />
     </div>
   );
 }
