@@ -39,3 +39,9 @@ export function phoneContactName(
   if (first) return { firstName: first, lastName: last };
   return { firstName: last || customerName.trim(), lastName: '' };
 }
+
+/** The customer picker's search, shared so a dictated name is matched the same way the owner's typing is. */
+export function customerNameMatches(name: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return q.length > 0 && name.toLowerCase().includes(q);
+}

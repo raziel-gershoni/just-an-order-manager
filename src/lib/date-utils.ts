@@ -23,6 +23,32 @@ export function israelToday(now: Date = new Date()): { year: number; month: numb
   return { year: part('year'), month: part('month'), day: part('day') };
 }
 
+/** Today in Israel as yyyy-MM-dd: what a dictated "today" or "Friday" counts from. */
+export function israelTodayStr(now: Date = new Date()): string {
+  const { year, month, day } = israelToday(now);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Calendar arithmetic on a yyyy-MM-dd string. Done in UTC so the server's own
+ * zone and its DST changes can never shift the day.
+ */
+export function addDaysStr(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** 0 = Sunday ... 6 = Saturday, for a yyyy-MM-dd string. */
+export function weekdayIndex(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** The Friday a שבת order lands on: today when today is Friday, else the next one. */
+export function comingFriday(today: string): string {
+  return addDaysStr(today, (5 - weekdayIndex(today) + 7) % 7);
+}
+
 /** The delivery-date string `days` from today (default 7) — the upcoming-window horizon. */
 export function upcomingHorizonStr(days = 7): string {
   return format(addDays(new Date(), days), 'yyyy-MM-dd');

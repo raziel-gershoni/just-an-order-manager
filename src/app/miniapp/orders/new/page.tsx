@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn, friendlyError } from '@/lib/utils';
 import { Search, UserPlus, Minus, Plus, Trash2, Calendar, Zap, CalendarDays, Repeat, Check, Truck, CalendarClock, CopyPlus, AlertTriangle } from 'lucide-react';
-import { getInitial } from '@/lib/name-utils';
+import { getInitial, customerNameMatches } from '@/lib/name-utils';
 import { classifyCity, resolveDeliveryFee, type DeliverySettings } from '@/lib/delivery';
 import { computeOrderPricing } from '@/lib/pricing';
 import { formatAllocation } from '@/lib/pricing-format';
@@ -346,7 +346,7 @@ function OrderFormContent() {
   }, [customerId, delivSettings, customers]);
 
   const filteredCustomers = customers.filter((c) =>
-    c.name.toLowerCase().includes(customerSearch.toLowerCase())
+    !customerSearch.trim() || customerNameMatches(c.name, customerSearch)
   );
 
   function updateItem(index: number, update: Partial<LineItem>) {
