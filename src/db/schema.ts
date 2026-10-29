@@ -11,6 +11,8 @@ import {
   varchar,
   boolean,
   jsonb,
+  bigint,
+  index,
   uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core';
@@ -429,6 +431,31 @@ export const orderItemAdditions = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.orderItemId, table.breadAdditionId] }),
+  ]
+);
+
+// A dictated or typed order the bot read, waiting to be opened in the new-order
+// form. Never an order by itself: the owner checks it and saves it as one.
+export const orderDrafts = pgTable(
+  'order_drafts',
+  {
+    id: varchar('id', { length: 21 }).primaryKey(),
+    groupId: integer('group_id').notNull().references(() => groups.id),
+    createdBy: integer('created_by').notNull().references(() => users.id),
+    source: varchar('source', { length: 10 }).notNull(),
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgMessageId: integer('tg_message_id').notNull(),
+    replyMessageId: integer('reply_message_id'),
+    status: varchar('status', { length: 10 }).notNull().default('pending'),
+    transcript: text('transcript'),
+    draft: jsonb('draft').$type<unknown>(),
+    orderId: integer('order_id').references(() => orders.id),
+    error: text('error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('order_drafts_tg_message_uniq').on(table.tgChatId, table.tgMessageId),
+    index('order_drafts_created_at_idx').on(table.createdAt),
   ]
 );
 
