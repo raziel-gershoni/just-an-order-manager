@@ -27,7 +27,7 @@ import { formatStaffItemLabel } from '@/lib/order-display';
 import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
 import { siteBaseUrl } from '@/lib/site-url';
 import { createDraft, setDraftReply } from '@/lib/order-drafts';
-import { resolveDraftSender, processOrderDraft, type DraftJob } from '@/lib/order-draft-process';
+import { resolveDraftSender, processOrderDraft, reportStaleDrafts, type DraftJob } from '@/lib/order-draft-process';
 
 // A dictated order is read after the reply to Telegram, inside after(); 300 s is the Hobby ceiling.
 export const maxDuration = 300;
@@ -139,6 +139,7 @@ async function receiveOrderMessage(ctx: Context, source: 'voice' | 'text') {
       console.error('[order-draft] working reply failed', { draftId: draft.id, error: e instanceof Error ? e.message : String(e) });
     } finally {
       after(() => processOrderDraft(job));
+      after(() => reportStaleDrafts(job.chatId));
     }
   } catch (e) {
     console.error('[order-draft] handler failed', { telegramId, error: e instanceof Error ? e.message : String(e) });

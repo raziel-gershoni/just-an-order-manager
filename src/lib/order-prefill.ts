@@ -156,7 +156,16 @@ function prefillFromDraft(source: Extract<PrefillSource, { kind: 'draft' }>, env
     })),
     env.breadTypes
   );
-  if (copied.dropped) warnings.push(t('draft.warn_menu_changed'));
+  // copyLinesToMenu also counts a size nobody chose, which a draft has on purpose
+  // (the form asks for it); only what the menu took away since is a change. It
+  // keeps the order of the lines it keeps, so equal lengths line up one to one.
+  const menuChanged =
+    copied.lines.length < draft.lines.length ||
+    draft.lines.some((l, i) => {
+      const c = copied.lines[i];
+      return (l.breadSizeId != null && c.breadSizeId == null) || c.breadAdditionIds.length < l.breadAdditionIds.length;
+    });
+  if (menuChanged) warnings.push(t('draft.warn_menu_changed'));
 
   if (draft.notes != null) patch.notes = draft.notes;
 

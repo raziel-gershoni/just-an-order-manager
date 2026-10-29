@@ -95,6 +95,25 @@ export async function releaseDraft(id: string): Promise<void> {
     .where(and(eq(orderDrafts.id, id), eq(orderDrafts.status, 'used'), isNull(orderDrafts.orderId)));
 }
 
+/**
+ * Drafts of this chat still `pending` well past the bot route's 300 s ceiling:
+ * the platform ended that run before it could say anything, so they are marked
+ * failed for the sender to be told. Returns their "מפענח…" messages.
+ */
+export async function failStaleDrafts(tgChatId: number): Promise<{ id: string; replyMessageId: number | null }[]> {
+  return db
+    .update(orderDrafts)
+    .set({ status: 'failed', error: 'timed_out' })
+    .where(
+      and(
+        eq(orderDrafts.tgChatId, tgChatId),
+        eq(orderDrafts.status, 'pending'),
+        lt(orderDrafts.createdAt, sql`now() - interval '6 minutes'`)
+      )
+    )
+    .returning({ id: orderDrafts.id, replyMessageId: orderDrafts.replyMessageId });
+}
+
 export async function attachDraftOrder(id: string, orderId: number): Promise<void> {
   await db.update(orderDrafts).set({ orderId }).where(eq(orderDrafts.id, id));
 }

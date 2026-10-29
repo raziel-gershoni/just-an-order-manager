@@ -6,7 +6,7 @@ import { getBot } from '@/lib/bot';
 import { t } from '@/lib/i18n';
 import { siteBaseUrl } from '@/lib/site-url';
 import { describeGeminiError, GeminiNotConfiguredError, type generateJson } from '@/lib/gemini';
-import { finishDraft } from '@/lib/order-drafts';
+import { failStaleDrafts, finishDraft } from '@/lib/order-drafts';
 import { loadDraftContext, parseOrderMessage, type MessageInput } from '@/lib/order-from-message';
 import { formatDraftMessage } from '@/lib/order-draft-format';
 
@@ -84,6 +84,33 @@ async function deliver(api: Api, job: DraftJob, html: string, keyboard?: Keyboar
 async function tooLong(api: Api, job: DraftJob, error: string): Promise<void> {
   await finishDraft(job.draftId, { status: 'failed', error });
   await deliver(api, job, t('bot.draft_too_long'));
+}
+
+/**
+ * A run cut off at the platform's limit leaves its draft `pending` and the sender
+ * looking at "מפענח…". The next message from that chat settles it: the old
+ * message says the reading failed, so it can be sent again. Never throws.
+ */
+export async function reportStaleDrafts(chatId: number, deps: { api?: Api } = {}): Promise<void> {
+  try {
+    const stale = await failStaleDrafts(chatId);
+    if (!stale.length) return;
+    const api = deps.api ?? getBot().api;
+    for (const d of stale) {
+      console.error('[order-draft] stale draft marked failed', { draftId: d.id });
+      if (d.replyMessageId == null) continue;
+      try {
+        await api.editMessageText(chatId, d.replyMessageId, t('bot.draft_failed'));
+      } catch (e) {
+        console.error('[order-draft] could not edit a stale draft', {
+          draftId: d.id,
+          description: e instanceof GrammyError ? e.description : e instanceof Error ? e.name : 'unknown',
+        });
+      }
+    }
+  } catch (e) {
+    console.error('[order-draft] stale check failed', { error: e instanceof Error ? e.message : String(e) });
+  }
 }
 
 /** Reads one message into a draft and tells the sender. Never throws: it runs after the reply to Telegram. */
