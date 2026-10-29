@@ -1,7 +1,7 @@
 # Order from a message — Design
 
 **Date:** 2026-10-29
-**Status:** design agreed in chat, part by part; this spec is awaiting the owner's review
+**Status:** approved ("just implement it", 2026-10-29); autonomous build
 
 The owner wants to dictate an order and get a filled-in order form, using
 Gemini. Today the only way to create an order is the mini app form.
@@ -101,7 +101,7 @@ draft. A banner sits at the top:
 |---|---|---|
 | Breads, sizes, quantities, additions | Matched to the catalog. A bread not on the menu is left out, with a warning naming it. An addition not offered with that bread is left out, with a warning. A size not said or not matched stays empty, and the save button waits for it (as for a copied order). | The basket starts **empty**, not with a default bread. |
 | Customer | **Selected** only when exactly one active customer fits: Gemini named one, and the picker's own search on the spoken name finds no other. **Several fit:** no customer is selected, and "התכוונת ל…" quick-pick buttons list them all above the search box, which holds the spoken name. **None fit:** the search box holds the spoken name, so partial matches still show, and "לקוח חדש" opens with the name filled in. | Nothing selected, as on a blank form. |
-| Date and type | "לשבת" → שבת. "בהקדם", "דחוף", "כמה שיותר מהר", "עכשיו" → בהקדם. A weekday or date → that date as a specific date (but see the open question about the coming Friday). A date that can't be placed, or that has passed by the time the link is opened → a **specific date left empty** with a warning ("לא הצלחתי להבין את התאריך" / "התאריך שנאמר כבר עבר"), so the save button waits for a date. | The form's default (שבת). |
+| Date and type | "לשבת" → שבת. "בהקדם", "דחוף", "כמה שיותר מהר", "עכשיו" → בהקדם. A weekday or date → that date as a specific date, except the coming Friday, which is שבת (below). A date that can't be placed, or that has passed by the time the link is opened → a **specific date left empty** with a warning ("לא הצלחתי להבין את התאריך" / "התאריך שנאמר כבר עבר"), so the save button waits for a date. | The form's default (שבת). |
 | Weekly repeat | "כל שבוע", "קבוע" → the repeat switch on, with the type above. The old שבועי type is never chosen. Not for בהקדם, as in the form. | Off. |
 | Pickup or delivery | "משלוח" → delivery on; "איסוף" → off. Only while delivery is enabled in settings. The fee follows the city, as now. | The city-based suggestion runs when the customer is selected, as for any new order. |
 | Notes | Anything that doesn't fit a field: "לא לפרוס", a time of day, "בשבוע הבא" with no day. Capped at the form's 1,000 characters. | Empty. |
@@ -126,15 +126,13 @@ draft. A banner sits at the top:
   belongs to another bakery, a toast says "ההזמנה מההודעה לא נמצאה או שפג
   תוקפה" and the form opens blank.
 
-## Open question for the owner
+## The coming Friday (decided: שבת)
 
-**The coming Friday.** In this app the שבת type is the order delivered on the
-coming Friday (today, if today is Friday). When the message names that same
-Friday ("לשישי", "ל-30/10", or "מחרתיים" when that is Friday), the form can show
-it either way:
-- **A (recommended):** as **שבת**, the way the app already files the Friday
-  delivery. Any later Friday is a specific date.
-- **B:** always as a **specific date**.
+In this app the שבת type is the order delivered on the coming Friday (today, if
+today is Friday). When the message names that same Friday ("לשישי", "ל-30/10",
+or "מחרתיים" when that is Friday), the draft uses **שבת**, the way the app
+already files the Friday delivery. Any later Friday is a specific date. The owner
+said to go ahead without further questions, and this was the recommended option.
 
 ## Architecture
 
@@ -344,7 +342,7 @@ From **2027-01-01** Google's price doubles ($1.50 / $7.50).
      - a past date or an unplaceable one leaves the date empty, with a warning;
      - the table is built in Israel time, including Friday 23:30 and Saturday
        00:30 Israel time while the server's clock is UTC;
-     - the coming-Friday rule, once the open question is answered.
+     - the coming Friday becomes שבת, including when today is Friday, and a later Friday stays a specific date.
    - **Other rules:** recurring is ignored for בהקדם, delivery is ignored when
      it's off, and a past-order reference becomes a warning.
    - **Gemini calls:** a malformed answer gets one more call; the SDK's retry
