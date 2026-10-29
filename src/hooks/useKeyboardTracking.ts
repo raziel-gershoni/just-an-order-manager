@@ -8,6 +8,8 @@ const MARGIN_PX = 8;
 const BAR_MARGIN_PX = 12;
 // Used when the keyboard was already open (field to field) so no resize comes.
 const SETTLE_FALLBACK_MS = 350;
+// Quiet time after the last viewport resize before the keyboard counts as settled.
+const RESIZE_SETTLE_MS = 120;
 
 function nearestScroller(el: HTMLElement): HTMLElement | null {
   for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
@@ -114,13 +116,19 @@ export function useKeyboardTracking() {
         cancel();
         if (document.activeElement === el) ensureVisible(el, vv!);
       };
-      const timer = window.setTimeout(run, SETTLE_FALLBACK_MS);
+      // Android sends a resize per animation frame while the keyboard slides in;
+      // the field is placed once they stop, not against a half-open keyboard.
+      let timer = window.setTimeout(run, SETTLE_FALLBACK_MS);
+      const onResize = () => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(run, RESIZE_SETTLE_MS);
+      };
       const cancel = () => {
         window.clearTimeout(timer);
-        vv!.removeEventListener('resize', run);
+        vv!.removeEventListener('resize', onResize);
         cancelEnsure = null;
       };
-      vv!.addEventListener('resize', run);
+      vv!.addEventListener('resize', onResize);
       cancelEnsure = cancel;
     }
 
