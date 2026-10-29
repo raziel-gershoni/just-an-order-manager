@@ -22,6 +22,7 @@ import { dayAfter, formatDayMonth, formatWeekdayShort, fridayOfWeek, rollWeeklyP
 import { isFridayType, type NextChangeSection, type NextOccurrenceView } from '@/lib/order-next-change-types';
 import { NextChangeConflictSheet, sectionsLabel } from '@/components/orders/NextChangeConflictSheet';
 import { copyLinesToMenu, type SourceLine } from '@/lib/order-copy';
+import { money } from '@/lib/order-prefill';
 
 interface Customer { id: number; name: string; city?: string | null; phones?: { id: number; phone: string; hasWhatsapp?: boolean }[] }
 interface BreadSize { id: number; name: string; weightGrams: number | null; price: string; tiers?: Record<number, number> }
@@ -200,8 +201,6 @@ function OrderFormContent() {
           freeOver: g?.group?.deliveryFreeOver != null ? Number(g.group.deliveryFreeOver) : null,
           cities: g?.group?.deliveryCities ?? [],
         });
-        const money = (v: string | number | null | undefined) => (v != null && Number(v) > 0 ? String(Number(v)) : '');
-
         if (isEdit && o?.order) {
           const order = o.order;
           if (order.status === 'delivered' || order.status === 'cancelled') {

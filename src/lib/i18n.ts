@@ -607,6 +607,7 @@ const translations: Record<string, string> = {
   'draft.warn_bad_quantity': 'כמות לא ברורה, השורה הושמטה: "{heard}"',
   'draft.warn_date_unclear': 'לא הצלחתי להבין את התאריך: "{heard}"',
   'draft.warn_date_past': 'התאריך שנאמר ({date}) כבר עבר',
+  'draft.warn_menu_changed': 'חלק מהלחמים כבר לא בתפריט ולכן לא נוספו',
   'draft.warn_multiple_orders': 'נראה שבהודעה יש יותר מהזמנה אחת, מולאה רק הראשונה',
   'draft.warn_past_order_reference': 'לא זוהה: "{heard}" (אפשר ״הזמן שוב״ בכרטיס הלקוח)',
   'draft.warn_not_on_menu_bare': 'לחם שלא נמצא בתפריט לא נוסף',
