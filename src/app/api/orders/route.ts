@@ -9,6 +9,7 @@ import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
 import { getNotifiablePhones } from '@/lib/customer-phones';
 import { priceOrderForWrite } from '@/lib/order-pricing';
 import { resolveAndPriceOrderLines } from '@/lib/order-lines';
+import { claimDraft, releaseDraft, attachDraftOrder } from '@/lib/order-drafts';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -148,6 +149,7 @@ const createOrderSchema = z.object({
   dealsEnabled: z.boolean().optional(),
   additionsCharged: z.boolean().optional(),
   notifyCustomer: z.boolean().optional(),
+  draftId: z.string().min(1).max(21).optional(),
 });
 
 export const POST = withGroup(async (request, auth, groupId) => {
@@ -158,7 +160,7 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, dealsEnabled, additionsCharged, notifyCustomer } = parsed.data;
+  const { customerId, deliveryType, deliveryDate, items, notes, totalOverride, isDelivery, deliveryFee, isRecurring, dealsEnabled, additionsCharged, notifyCustomer, draftId } = parsed.data;
   const chargeAdd = additionsCharged ?? true;
 
   // Verify customer
@@ -186,25 +188,45 @@ export const POST = withGroup(async (request, auth, groupId) => {
 
   const resolvedDate = resolveDeliveryDate(deliveryType, deliveryDate);
 
+  // A draft read from a message becomes one order only: the claim is a single
+  // conditional update, so a second save (a re-opened link, a double tap) gets
+  // a 409 instead of a second order and a second WhatsApp to the customer.
+  if (draftId && !(await claimDraft(draftId, groupId))) return errorResponse('Draft already used', 409);
+
   // Create order
-  const [order] = await db
-    .insert(orders)
-    .values({
-      groupId,
-      customerId,
-      deliveryType,
-      deliveryDate: resolvedDate,
-      notes,
-      totalOverride: totalOverride || null,
-      isDelivery: isDelivery ?? false,
-      deliveryFee: (isDelivery && deliveryFee) ? deliveryFee : '0',
-      isRecurring: isRecurring ?? false,
-      dealsEnabled: dealsOn,
-      additionsCharged: chargeAdd,
-      goodsSnapshot: pricing.goods.toFixed(2),
-      pricingBreakdown: pricing.rows,
-    })
-    .returning();
+  let order;
+  try {
+    [order] = await db
+      .insert(orders)
+      .values({
+        groupId,
+        customerId,
+        deliveryType,
+        deliveryDate: resolvedDate,
+        notes,
+        totalOverride: totalOverride || null,
+        isDelivery: isDelivery ?? false,
+        deliveryFee: (isDelivery && deliveryFee) ? deliveryFee : '0',
+        isRecurring: isRecurring ?? false,
+        dealsEnabled: dealsOn,
+        additionsCharged: chargeAdd,
+        goodsSnapshot: pricing.goods.toFixed(2),
+        pricingBreakdown: pricing.rows,
+      })
+      .returning();
+  } catch (e) {
+    if (draftId) {
+      await releaseDraft(draftId).catch((e2) =>
+        console.error('[order-draft] release failed', { draftId, error: String(e2) })
+      );
+    }
+    throw e;
+  }
+  if (draftId) {
+    await attachDraftOrder(draftId, order.id).catch((e) =>
+      console.error('[order-draft] attach failed', { draftId, orderId: order.id, error: String(e) })
+    );
+  }
 
   // Insert the items now that we have the order id (lines stay in input order).
   const insertedItems = await db
