@@ -10,6 +10,7 @@ Telegram Mini App (@telegram-apps/sdk) + grammy bot · WhatsApp Cloud API · Ver
 ## Working in this repo
 - Build runs Drizzle migrations before `next build`; see `package.json` scripts for the exact commands.
 - Verification gate is TypeScript + build — there is no test runner.
+- Gemini is called only through `src/lib/gemini.ts` (model and thinking level are constants there); orders read from a bot message are drafts (`order_drafts`) that the owner saves through the normal form.
 - All order pricing must route through the single bulk-pricing engine (one source of truth).
 - Telegram init-data is HMAC-verified; bot authorization mirrors the web layer and enforces
   group membership so order IDs can't cross tenants (multi-tenant by group).
