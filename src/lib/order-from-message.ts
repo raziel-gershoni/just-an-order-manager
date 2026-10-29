@@ -96,6 +96,8 @@ function stripForGemini(node: unknown): unknown {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node)) {
       if (k === '$schema' || k === 'additionalProperties') continue;
+      // zod bounds every integer by the safe-integer range, which says nothing to Gemini.
+      if ((k === 'minimum' || k === 'maximum') && (v === Number.MIN_SAFE_INTEGER || v === Number.MAX_SAFE_INTEGER)) continue;
       out[k] = stripForGemini(v);
     }
     return out;
@@ -130,9 +132,9 @@ The customer:
 
 Timing:
 - "לשבת" → kind shabbat.
-- "בהקדם", "דחוף", "כמה שיותר מהר", "עכשיו", "היום" → kind asap.
+- "בהקדם", "דחוף", "כמה שיותר מהר", "עכשיו" → kind asap.
+- "היום", "מחר" and "מחרתיים" → kind date, from the dates table.
 - A weekday name → kind date, with its next occurrence from the dates table. The same weekday as today means next week, unless "היום" is said.
-- "מחר" and "מחרתיים" → kind date, from the dates table.
 - An explicit date (d/m or d.m) → that date this year, or next year if it has already passed.
 - "בשבוע הבא" with no day, or a time of day → kind none, and the words go to notes.
 - A date you cannot place → kind date with date null, and the words in heard.
@@ -180,7 +182,7 @@ export function buildDataBlock(ctx: DraftContext): string {
 }
 
 export type ValidateResult =
-  | { ok: true; status: 'ready' | 'empty'; transcript: string; draft: OrderDraft }
+  | { ok: true; status: 'ready' | 'empty'; transcript: string; draft: OrderDraft; dropped: { sizes: number; candidates: number } }
   | { ok: false; error: string };
 
 /** A real calendar day: "2026-02-30" parses as a Date, so the round trip is what tells. */
@@ -191,6 +193,11 @@ function isCalendarDate(s: string): boolean {
 }
 
 const textOrNull = (s: string | null) => (s?.trim() ? s.trim() : null);
+
+// The model's quoted words go into warnings and the bot's summary; a runaway
+// quote must not crowd out the rest of a Telegram message.
+const HEARD_MAX = 120;
+const clip = (s: string) => (s.length > HEARD_MAX ? s.slice(0, HEARD_MAX - 1) + '…' : s);
 
 /**
  * The model's answer, checked into a draft the form can open. Only ids on
@@ -209,8 +216,9 @@ export function validateAnswer(raw: unknown, ctx: DraftContext): ValidateResult 
   const warnings: DraftWarning[] = [];
 
   const lines: DraftLine[] = [];
+  let sizesCleared = 0;
   for (const item of a.items) {
-    const heard = item.heard.trim();
+    const heard = clip(item.heard.trim());
     const bread = item.breadTypeId == null ? undefined : ctx.menu.find((b) => b.id === item.breadTypeId);
     if (!bread) {
       warnings.push({ kind: 'not_on_menu', heard });
@@ -222,6 +230,7 @@ export function validateAnswer(raw: unknown, ctx: DraftContext): ValidateResult 
     }
     // A size this bread isn't sold in is cleared, and the form waits for one.
     const sizeOffered = item.breadSizeId != null && bread.enabledSizes.some((s) => s.id === item.breadSizeId);
+    if (item.breadSizeId != null && !sizeOffered) sizesCleared++;
     const offered = new Set(bread.enabledAdditions.map((x) => x.id));
     const additionIds = [...new Set(item.additionIds)];
     const kept = additionIds.filter((id) => offered.has(id));
@@ -235,10 +244,14 @@ export function validateAnswer(raw: unknown, ctx: DraftContext): ValidateResult 
     });
   }
 
-  const spokenName = textOrNull(a.customer.spokenName);
+  const rawSpokenName = textOrNull(a.customer.spokenName);
+  const spokenName = rawSpokenName && clip(rawSpokenName);
   const candidateIds = resolveCustomerCandidates(spokenName, a.customer.candidateIds, ctx.customers);
+  const activeIds = new Set(ctx.customers.map((c) => c.id));
+  const candidatesDropped = new Set(a.customer.candidateIds.filter((id) => !activeIds.has(id))).size;
 
-  const timingHeard = textOrNull(a.timing.heard);
+  const rawTimingHeard = textOrNull(a.timing.heard);
+  const timingHeard = rawTimingHeard && clip(rawTimingHeard);
   let timing: OrderDraft['timing'] = { kind: a.timing.kind, date: null, heard: timingHeard };
   if (a.timing.kind === 'date') {
     const date = a.timing.date?.trim() || null;
@@ -257,7 +270,7 @@ export function validateAnswer(raw: unknown, ctx: DraftContext): ValidateResult 
   const notes = textOrNull(a.notes)?.slice(0, NOTES_MAX) ?? null;
 
   const pastOrderReference = textOrNull(a.pastOrderReference);
-  if (pastOrderReference) warnings.push({ kind: 'past_order_reference', heard: pastOrderReference });
+  if (pastOrderReference) warnings.push({ kind: 'past_order_reference', heard: clip(pastOrderReference) });
   if (a.multipleOrders) warnings.push({ kind: 'multiple_orders' });
 
   const empty = !a.hasOrder || (lines.length === 0 && candidateIds.length === 0 && !spokenName);
@@ -266,6 +279,7 @@ export function validateAnswer(raw: unknown, ctx: DraftContext): ValidateResult 
     status: empty ? 'empty' : 'ready',
     transcript: a.transcript.trim(),
     draft: { customer: { spokenName, candidateIds }, lines, timing, recurring, delivery, notes, warnings },
+    dropped: { sizes: sizesCleared, candidates: candidatesDropped },
   };
 }
 
@@ -321,6 +335,8 @@ export async function parseOrderMessage(
       candidates: draft.customer.candidateIds.length,
       timing: draft.timing.kind,
       warnings: draft.warnings.map((w) => w.kind),
+      sizesCleared: result.dropped.sizes,
+      candidatesDropped: result.dropped.candidates,
     });
     return { status: result.status, transcript: result.transcript, draft };
   }

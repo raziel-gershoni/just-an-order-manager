@@ -73,24 +73,27 @@ export function resolveDraftTiming(
   return { deliveryType: 'specific_date', deliveryDate: timing.date };
 }
 
-// A function replacer, so a `$&` in what the model heard is printed as it is.
-const fill = (key: string, name: string, value: string) => t(key).replace(`{${name}}`, () => value);
+/** An i18n string with one placeholder filled. A function replacer, so a `$&` in what the model heard is printed as it is. */
+export const fillText = (key: string, name: string, value: string) => t(key).replace(`{${name}}`, () => value);
+
+// When the model kept no words for a warning, the wording without a quote, not an empty "".
+const heardOr = (key: string, heard: string) => (heard ? fillText(key, 'heard', heard) : t(`${key}_bare`));
 
 export function draftWarningText(w: DraftWarning): string {
   switch (w.kind) {
     case 'not_on_menu':
-      return fill('draft.warn_not_on_menu', 'heard', w.heard);
+      return heardOr('draft.warn_not_on_menu', w.heard);
     case 'addition_dropped':
-      return fill('draft.warn_addition_dropped', 'heard', w.heard);
+      return heardOr('draft.warn_addition_dropped', w.heard);
     case 'bad_quantity':
-      return fill('draft.warn_bad_quantity', 'heard', w.heard);
+      return heardOr('draft.warn_bad_quantity', w.heard);
     case 'date_unclear':
-      return fill('draft.warn_date_unclear', 'heard', w.heard);
+      return heardOr('draft.warn_date_unclear', w.heard);
     case 'date_past':
-      return fill('draft.warn_date_past', 'date', formatDayMonth(w.date));
+      return fillText('draft.warn_date_past', 'date', formatDayMonth(w.date));
     case 'multiple_orders':
       return t('draft.warn_multiple_orders');
     case 'past_order_reference':
-      return fill('draft.warn_past_order_reference', 'heard', w.heard);
+      return heardOr('draft.warn_past_order_reference', w.heard);
   }
 }
