@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { isTextField, keyboardState, scrollDelta } from '@/lib/keyboard';
+import { kbDiagEvent, kbDiagLive, kbDiagOn } from '@/lib/kb-diag';
 
 // Gap kept between a scrolled-to field and the header / save bar.
 const MARGIN_PX = 8;
@@ -51,6 +52,18 @@ function ensureVisible(el: HTMLElement, vv: VisualViewport) {
   }
 
   const delta = scrollDelta({ target, viewTop, viewBottom });
+  if (kbDiagOn()) {
+    const bar = document.querySelector<HTMLElement>('[data-sticky-save]');
+    const br = bar && bar.offsetParent !== null ? bar.getBoundingClientRect() : null;
+    const n = Math.round;
+    const scr = nearestScroller(el) ? 'el' : 'win';
+    kbDiagEvent(`focus f=${n(rect.top)}..${n(rect.bottom)} bar=${br ? n(br.top) + '..' + n(br.bottom) : '-'} hdr=${header ? n(header.getBoundingClientRect().bottom) : '-'} vT=${n(viewTop)} vB=${n(viewBottom)} d=${n(delta)} ${scr} sy=${n(window.scrollY)} vvo=${n(vv.offsetTop)} vvh=${n(vv.height)} ih=${window.innerHeight}`);
+    window.setTimeout(() => {
+      const r2 = el.getBoundingClientRect();
+      const b2 = bar && bar.offsetParent !== null ? bar.getBoundingClientRect() : null;
+      kbDiagEvent(`after f=${n(r2.top)}..${n(r2.bottom)} bar=${b2 ? n(b2.top) + '..' + n(b2.bottom) : '-'} sy=${n(window.scrollY)} vvo=${n(vv.offsetTop)} vvh=${n(vv.height)} sh=${document.documentElement.scrollHeight}`);
+    }, 700);
+  }
   if (delta === 0) return;
   const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ? 'auto'
@@ -86,6 +99,9 @@ export function useKeyboardTracking() {
         fieldFocused: isTextField(document.activeElement),
       });
       const state = open ? 'open' : 'closed';
+      if (kbDiagOn()) {
+        kbDiagLive(`live ih=${window.innerHeight} vvh=${Math.round(vv!.height)} vvo=${Math.round(vv!.offsetTop)} sy=${Math.round(window.scrollY)} inset=${inset} ${state}`);
+      }
       if (root.dataset.keyboard !== state) root.dataset.keyboard = state;
       const px = `${inset}px`;
       if (root.style.getPropertyValue('--kb-inset') !== px) root.style.setProperty('--kb-inset', px);
