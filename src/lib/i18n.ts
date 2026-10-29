@@ -559,6 +559,23 @@ const translations: Record<string, string> = {
   'bot.marked_to_be_paid': 'סומן לתשלום',
   'bot.order_already_updated': 'ההזמנה כבר עודכנה, רעננו',
   'bot.status_change_failed': 'לא ניתן לשנות את הסטטוס',
+  // Order from a message: the bot's replies and the summary of a read order
+  'bot.draft_working': 'מפענח…',
+  'bot.draft_open': 'פתח הזמנה',
+  'bot.draft_heard': 'מה ששמעתי',
+  'bot.draft_no_order': 'לא מצאתי הזמנה בהודעה',
+  'bot.draft_failed': 'הפענוח נכשל, נסה לשלוח שוב',
+  'bot.draft_too_long': 'ההקלטה ארוכה מדי',
+  'bot.draft_not_configured': 'הזמנה מהודעה עדיין לא הוגדרה',
+  'bot.draft_voice_or_text': 'אפשר לשלוח הקלטה קולית או הודעת טקסט',
+  'bot.draft_several_customers': '{name} (כמה לקוחות מתאימים)',
+  'bot.draft_new_customer': '{name} (לקוח חדש)',
+  'bot.draft_no_items': 'ללא פריטים',
+  'bot.draft_size_missing': 'גודל לא נבחר',
+  'bot.draft_note': 'הערה: {notes}',
+  'bot.draft_delivery': 'משלוח',
+  'bot.draft_pickup': 'איסוף',
+  'bot.draft_repeat': 'כל שבוע',
 
   // Balance labels
   'customers.balance_square': 'מסולק',
