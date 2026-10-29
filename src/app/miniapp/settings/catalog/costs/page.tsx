@@ -7,6 +7,7 @@ import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Wheat, Trash2, Sparkles, Lock } from 'lucide-react';
@@ -273,7 +274,7 @@ export default function CostsPage() {
   return (
     <>
       <PageHeader title={t('costs.title')} />
-      <div className="p-5 pb-32 space-y-4 animate-fade-in">
+      <div className="p-5 space-y-4 animate-fade-in">
         {/* PRICES */}
         <Card className="space-y-3">
           <h2 className="text-sm font-bold">{t('costs.prices')}</h2>
@@ -544,16 +545,16 @@ export default function CostsPage() {
             {t('costs.excludes_additions')}
           </p>
         </Card>
-      </div>
 
-      {/* One save, and it only appears when there is something to save. */}
-      {dirty && (
-        <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card/95 px-5 py-3 backdrop-blur">
-          <Button className="w-full" onClick={save} loading={saving}>
-            {t('costs.save')}
-          </Button>
-        </div>
-      )}
+        {/* One save, and it only appears when there is something to save. */}
+        {dirty && (
+          <StickySaveBar>
+            <Button className="w-full" onClick={save} loading={saving}>
+              {t('costs.save')}
+            </Button>
+          </StickySaveBar>
+        )}
+      </div>
     </>
   );
 }

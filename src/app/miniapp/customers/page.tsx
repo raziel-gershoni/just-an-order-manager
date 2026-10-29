@@ -7,6 +7,7 @@ import { useT, useLang } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
@@ -551,7 +552,7 @@ export default function CustomersPage() {
       )}
 
       {selectMode && (
-        <div className="sticky bottom-14 -mx-5 flex items-center justify-between gap-3 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
+        <StickySaveBar className="flex items-center justify-between gap-3">
           <span className="text-sm text-muted-foreground">
             {t('reminders.selected_count').replace('{n}', String(selected.size))}
           </span>
@@ -559,7 +560,7 @@ export default function CustomersPage() {
             <Send className="h-4 w-4" />
             {t('reminders.send')}
           </Button>
-        </div>
+        </StickySaveBar>
       )}
 
       {showSend && (

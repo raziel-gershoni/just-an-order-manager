@@ -9,6 +9,7 @@ import { ToastCtx, type Toast } from '@/hooks/useToast';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { LoadingSplash } from '@/components/ui/LoadingSplash';
 import { LangCtx } from '@/hooks/useLang';
+import { useKeyboardTracking } from '@/hooks/useKeyboardTracking';
 import { t, type Lang } from '@/lib/i18n';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ function AppProviders({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [authResolved, setAuthResolved] = useState(false);
   const { initDataRaw, ready } = useTelegram();
+  useKeyboardTracking();
 
   const showToast = useCallback(
     (message: string, type: 'success' | 'error' = 'success') => {

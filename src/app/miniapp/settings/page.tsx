@@ -184,7 +184,7 @@ export default function SettingsPage() {
       <div className="p-5 space-y-6 animate-fade-in">
 
       {/* Group Name */}
-      <section>
+      <section data-save-scope>
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
           {t('settings.group_name')}
         </h2>
@@ -195,6 +195,7 @@ export default function SettingsPage() {
               size="sm"
               disabled={!groupName.trim()}
               loading={savingName}
+              data-save-button
               onClick={async () => {
                 if (!activeGroupId || !groupName.trim()) return;
                 setSavingName(true);
@@ -254,7 +255,7 @@ export default function SettingsPage() {
 
       {/* Delivery settings (owner/manager) */}
       {canManage && (
-        <section>
+        <section data-save-scope>
           <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
             {t('deliv.title')}
           </h2>
@@ -312,7 +313,7 @@ export default function SettingsPage() {
               </>
             )}
 
-            <Button size="sm" loading={savingDeliv} onClick={saveDelivery}>{t('settings.save')}</Button>
+            <Button size="sm" loading={savingDeliv} onClick={saveDelivery} data-save-button>{t('settings.save')}</Button>
           </Card>
         </section>
       )}

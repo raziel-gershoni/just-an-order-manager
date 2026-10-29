@@ -7,6 +7,7 @@ import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { friendlyError } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
@@ -301,7 +302,7 @@ export default function RemindersPage() {
               value={editing.bodyPreview ?? ''}
               onChange={(e) => setEditing((p) => ({ ...p!, bodyPreview: e.target.value }))}
             />
-            <div className="flex gap-2 pt-2">
+            <StickySaveBar flush className="-mb-5 flex gap-2">
               <Button
                 className="flex-1"
                 onClick={save}
@@ -313,7 +314,7 @@ export default function RemindersPage() {
               <Button variant="ghost" onClick={() => setEditing(null)}>
                 {t('reminders.cancel')}
               </Button>
-            </div>
+            </StickySaveBar>
           </div>
         </div>
       )}

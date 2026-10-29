@@ -10,7 +10,7 @@ export function PageHeader({ title }: { title: string }) {
   const BackIcon = lang === 'he' ? ChevronRight : ChevronLeft;
 
   return (
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
+    <div data-sticky-header className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
       <button
         onClick={() => router.back()}
         className="w-11 h-11 -ms-1.5 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"

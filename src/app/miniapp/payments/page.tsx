@@ -6,6 +6,7 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -206,18 +207,20 @@ function PaymentsContent() {
           />
         </Card>
 
-        <Button
-          className="w-full"
-          size="lg"
-          variant={type === 'charge' ? 'danger' : 'primary'}
-          disabled={!customerId || !amountValid}
-          loading={submitting}
-          onClick={handleSubmit}
-        >
-          {submitting
-            ? t('payments.recording')
-            : `${t('payments.record')} ${type === 'payment' ? '+' : '-'}₪${amount || '0'}`}
-        </Button>
+        <StickySaveBar>
+          <Button
+            className="w-full"
+            size="lg"
+            variant={type === 'charge' ? 'danger' : 'primary'}
+            disabled={!customerId || !amountValid}
+            loading={submitting}
+            onClick={handleSubmit}
+          >
+            {submitting
+              ? t('payments.recording')
+              : `${t('payments.record')} ${type === 'payment' ? '+' : '-'}₪${amount || '0'}`}
+          </Button>
+        </StickySaveBar>
       </div>
     </>
   );

@@ -45,6 +45,7 @@ export function SectionCard({
 
   return (
     <section
+      data-save-scope
       className={cn(
         'rounded-lg border bg-card transition-colors',
         dirty ? 'border-primary/50' : 'border-border'
@@ -82,7 +83,7 @@ export function SectionCard({
       <div className={cn('space-y-3 border-t border-border px-3 py-3', !open && 'hidden')}>
         {children}
         {onSave && dirty && (
-          <Button size="sm" className="w-full" loading={saving} onClick={onSave}>
+          <Button size="sm" className="w-full" loading={saving} onClick={onSave} data-save-button>
             {t('settings.save')}
           </Button>
         )}

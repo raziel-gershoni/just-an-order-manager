@@ -651,7 +651,7 @@ export default function CatalogPage() {
               {sizes.map((s, idx) => (
                 <div key={s.id} className={cn(idx > 0 && 'border-t border-dashed border-border')}>
                   {editingSizeId === s.id ? (
-                  <div className="animate-expand p-3 space-y-3">
+                  <div data-save-scope className="animate-expand p-3 space-y-3">
                     <Input
                       label={t('settings.size_name')}
                       value={editSizeName}
@@ -674,7 +674,7 @@ export default function CatalogPage() {
                       />
                     </div>
                     <div className="flex gap-2 items-center pt-1">
-                      <Button size="sm" className="flex-1" onClick={() => saveSize(s.id)}>{t('settings.save')}</Button>
+                      <Button size="sm" className="flex-1" onClick={() => saveSize(s.id)} data-save-button>{t('settings.save')}</Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditingSizeId(null)}>{t('payments.cancel')}</Button>
                       <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteSize(s.id)}>
                         <Trash2 className="h-4 w-4" />
@@ -849,7 +849,7 @@ export default function CatalogPage() {
           </button>
 
           {additionsSectionOpen && (<>
-          <Card className="mb-3 p-3 space-y-2">
+          <Card data-save-scope className="mb-3 p-3 space-y-2">
             <label className="text-sm font-medium">
               {t('settings.additions_surcharge')}
             </label>
@@ -867,6 +867,7 @@ export default function CatalogPage() {
                 size="sm"
                 onClick={() => saveAdditionsSurcharge(additionsSurcharge)}
                 loading={savingSurcharge}
+                data-save-button
               >
                 {t('settings.save')}
               </Button>
@@ -883,6 +884,7 @@ export default function CatalogPage() {
                 editingAdditionId === a.id ? (
                   <div
                     key={a.id}
+                    data-save-scope
                     className={cn('animate-expand p-3 space-y-3', idx > 0 && 'border-t border-dashed border-border')}
                   >
                     <Input
@@ -891,7 +893,7 @@ export default function CatalogPage() {
                       onChange={(e) => setEditAdditionName(e.target.value)}
                     />
                     <div className="flex gap-2 items-center pt-1">
-                      <Button size="sm" className="flex-1" onClick={() => saveAddition(a.id)}>{t('settings.save')}</Button>
+                      <Button size="sm" className="flex-1" onClick={() => saveAddition(a.id)} data-save-button>{t('settings.save')}</Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditingAdditionId(null)}>{t('payments.cancel')}</Button>
                       <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => deleteAddition(a.id)}>
                         <Trash2 className="h-4 w-4" />

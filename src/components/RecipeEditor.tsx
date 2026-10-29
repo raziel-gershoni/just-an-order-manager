@@ -402,7 +402,7 @@ export function RecipeEditor({
   // EDITOR UI (state A or edit-from-state-B)
   if (editing) {
     return (
-      <div className="border-t border-border pt-3 space-y-3">
+      <div data-save-scope className="border-t border-border pt-3 space-y-3">
         <div className="text-sm font-medium text-muted-foreground">{t('settings.recipe')}</div>
 
         <Input
@@ -478,7 +478,7 @@ export function RecipeEditor({
         )}
 
         <div className="flex gap-2 items-center">
-          <Button size="sm" className="flex-1" loading={saving} onClick={save}>
+          <Button size="sm" className="flex-1" loading={saving} onClick={save} data-save-button>
             {t('settings.save')}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>

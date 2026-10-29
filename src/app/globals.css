@@ -209,6 +209,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* On-screen keyboard (see useKeyboardTracking). The nav hides while it is up,
+   and the page-level save bar drops from above the nav to sitting on the
+   keyboard. --kb-inset is 0 where the browser resizes the viewport itself
+   (Android) and the covered height where it overlays it (iOS). */
+html[data-keyboard='open'] [data-bottom-nav] {
+  display: none;
+}
+.sticky-save-bar {
+  bottom: calc(3.5rem + env(safe-area-inset-bottom));
+}
+.sticky-save-bar--flush {
+  bottom: 0;
+}
+html[data-keyboard='open'] .sticky-save-bar {
+  bottom: var(--kb-inset, 0px);
+}
+
 /* Keyboard focus baseline (fixes "no visible focus anywhere") */
 :focus-visible {
   outline: 2px solid var(--ring);

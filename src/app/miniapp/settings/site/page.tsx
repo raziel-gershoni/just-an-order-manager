@@ -6,6 +6,7 @@ import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
@@ -354,11 +355,11 @@ export default function SiteEditorPage() {
             <Input label={t('site.f_map')} inputMode="url" value={form.mapUrl} onChange={(e) => set('mapUrl', e.target.value)} />
           </Card>
 
-          <div className="sticky bottom-4">
+          <StickySaveBar>
             <Button className="w-full" onClick={save} loading={saving}>
               {t('site.save')}
             </Button>
-          </div>
+          </StickySaveBar>
         </div>
       )}
     </>

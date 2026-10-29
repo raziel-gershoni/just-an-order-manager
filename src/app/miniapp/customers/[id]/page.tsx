@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { DocketRow } from '@/components/ui/DocketRow';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input, TextArea } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SendReminderSheet } from '@/components/ui/SendReminderSheet';
@@ -578,14 +579,6 @@ export default function CustomerDetailPage() {
               <Input label={t('customers.city')} value={editCity} onChange={(e) => setEditCity(e.target.value)} />
               <TextArea label={t('deliv.notes')} value={editDeliveryNotes} onChange={(e) => setEditDeliveryNotes(e.target.value)} />
               <TextArea label={t('notify.notes')} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
-              <div className="flex gap-2">
-                <Button size="sm" disabled={!editName.trim()} loading={saving} onClick={handleSave}>
-                  {t('settings.save')}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                  {t('payments.cancel')}
-                </Button>
-              </div>
             </div>
           ) : (
             <div>
@@ -644,6 +637,17 @@ export default function CustomerDetailPage() {
             </div>
           )}
         </Card>
+
+        {editing && (
+          <StickySaveBar className="flex gap-2">
+            <Button size="sm" disabled={!editName.trim()} loading={saving} onClick={handleSave}>
+              {t('settings.save')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              {t('payments.cancel')}
+            </Button>
+          </StickySaveBar>
+        )}
 
         {/* Order History */}
         <div>

@@ -884,7 +884,7 @@ export default function OrderDetailPage() {
                 </div>
               </div>
               {showPriceEdit && (
-                <div className="mt-3 animate-expand">
+                <div data-save-scope className="mt-3 animate-expand">
                   <div className="flex gap-2">
                     <Input
                       type="number"
@@ -893,7 +893,7 @@ export default function OrderDetailPage() {
                       onChange={(e) => setPriceInput(e.target.value)}
                       className="flex-1"
                     />
-                    <Button size="sm" disabled={!priceInput} loading={savingPrice} onClick={() => handleSetPrice(priceInput)}>
+                    <Button size="sm" disabled={!priceInput} loading={savingPrice} onClick={() => handleSetPrice(priceInput)} data-save-button>
                       {t('settings.save')}
                     </Button>
                     {order.totalOverride && (
@@ -966,7 +966,7 @@ export default function OrderDetailPage() {
                 </div>
               )}
               {canPrepay && showPrepay && (
-                <div className="mt-3 flex gap-2 animate-expand">
+                <div data-save-scope className="mt-3 flex gap-2 animate-expand">
                   <Input
                     type="number"
                     inputMode="decimal"
@@ -979,6 +979,7 @@ export default function OrderDetailPage() {
                     size="sm"
                     disabled={!(Number(prepayAmount) > 0)}
                     loading={prepaying}
+                    data-save-button
                     onClick={() => handlePrepay(prepayAmount)}
                   >
                     {`${t('payments.record')} ₪${prepayAmount || '0'}`}
@@ -1194,7 +1195,7 @@ function PaymentOptions({
       )}
 
       {showPaymentInput ? (
-        <div className="space-y-2">
+        <div data-save-scope className="space-y-2">
           <Input
             type="number"
             inputMode="decimal"
@@ -1203,7 +1204,7 @@ function PaymentOptions({
             placeholder={due.toFixed(0)}
           />
           <div className="flex gap-2">
-            <Button className="flex-1" disabled={!paymentAmount} loading={submittingPay} onClick={() => onPayAction('paid', paymentAmount)}>
+            <Button className="flex-1" disabled={!paymentAmount} loading={submittingPay} onClick={() => onPayAction('paid', paymentAmount)} data-save-button>
               {`${t('payments.record')} ₪${paymentAmount || '0'}`}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => onSetShowPaymentInput(false)}>

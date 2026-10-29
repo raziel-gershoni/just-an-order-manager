@@ -7,6 +7,7 @@ import { useGroup } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
+import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -1332,8 +1333,8 @@ function OrderFormContent() {
           </label>
         )}
 
-        {/* Sticky submit footer — stays above the fixed bottom nav */}
-        <div className="sticky bottom-14 -mx-5 -mb-4 mt-4 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-md">
+        {/* Sticky submit footer — stays above the fixed bottom nav, and on the keyboard when it is up */}
+        <StickySaveBar className="-mb-4 mt-4">
           {hasPricedItem && (
             <div className="mb-2.5 space-y-1">
               {/* Only when the order will actually be re-priced: on a
@@ -1386,7 +1387,7 @@ function OrderFormContent() {
                 ? t('form.update_order')
                 : t('form.create_order')}
           </Button>
-        </div>
+        </StickySaveBar>
       </div>
       {conflict && (
         <NextChangeConflictSheet
