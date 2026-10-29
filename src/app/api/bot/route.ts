@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { webhookCallback, InlineKeyboard, type Context } from 'grammy';
 import { escapeHtml } from '@/lib/telegram-html';
 import { ensureBotSetup } from '@/lib/bot';
@@ -25,6 +26,11 @@ import { respondToInvite } from '@/lib/invites';
 import { formatStaffItemLabel } from '@/lib/order-display';
 import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
 import { siteBaseUrl } from '@/lib/site-url';
+import { createDraft, setDraftReply } from '@/lib/order-drafts';
+import { resolveDraftSender, processOrderDraft, type DraftJob } from '@/lib/order-draft-process';
+
+// A dictated order is read after the reply to Telegram, inside after(); 300 s is the Hobby ceiling.
+export const maxDuration = 300;
 
 // ---- Helpers ----
 
@@ -75,6 +81,69 @@ async function getUserGroups(userId: number) {
 }
 
 type Lang = 'en' | 'he';
+
+/**
+ * A voice message or text from staff becomes a draft order. Telegram only gets
+ * a 200 once this returns, so the slow part (Gemini) is handed to after().
+ * Everything is caught: a thrown handler makes Telegram re-send the update.
+ */
+async function receiveOrderMessage(ctx: Context, source: 'voice' | 'text') {
+  if (ctx.chat?.type !== 'private' || !ctx.from || !ctx.msg) return;
+  const telegramId = ctx.from.id;
+  try {
+    const sender = await resolveDraftSender(String(telegramId));
+    if (!sender) {
+      console.info('[order-draft] ignored', { telegramId, reason: 'not staff' });
+      return;
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('[order-draft] GEMINI_API_KEY is not set', { telegramId });
+      await ctx.reply(t('bot.draft_not_configured', sender.lang));
+      return;
+    }
+    const draft = await createDraft({
+      groupId: sender.groupId,
+      createdBy: sender.userId,
+      source,
+      tgChatId: ctx.chat.id,
+      tgMessageId: ctx.msg.message_id,
+    });
+    if (!draft) {
+      console.info('[order-draft] duplicate update', { telegramId, messageId: ctx.msg.message_id });
+      return;
+    }
+    const msg = ctx.msg;
+    const job: DraftJob = {
+      draftId: draft.id,
+      chatId: ctx.chat.id,
+      replyMessageId: null,
+      groupId: sender.groupId,
+      input:
+        source === 'voice' && msg.voice
+          ? {
+              kind: 'voice',
+              fileId: msg.voice.file_id,
+              fileSize: msg.voice.file_size ?? null,
+              mimeType: msg.voice.mime_type ?? null,
+              duration: msg.voice.duration,
+              caption: msg.caption ?? null,
+            }
+          : { kind: 'text', text: msg.text ?? '' },
+    };
+    try {
+      const reply = await ctx.reply(t('bot.draft_working', sender.lang));
+      job.replyMessageId = reply.message_id;
+      await setDraftReply(draft.id, reply.message_id);
+    } catch (e) {
+      // Without the reply id the answer is sent as a new message instead of an edit.
+      console.error('[order-draft] working reply failed', { draftId: draft.id, error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      after(() => processOrderDraft(job));
+    }
+  } catch (e) {
+    console.error('[order-draft] handler failed', { telegramId, error: e instanceof Error ? e.message : String(e) });
+  }
+}
 
 // ---- Bot handler setup (called lazily on first request) ----
 
@@ -623,6 +692,29 @@ function setupHandlers(bot: import('grammy').Bot) {
       }
     }
   });
+
+  // ---- Orders sent as a message (voice or text) ----
+  // Registered last: a handled command never calls next(), so it never gets here.
+  // An edited message arrives as `edited_message` and matches none of these filters.
+  bot.on('message:voice', (ctx) => receiveOrderMessage(ctx, 'voice'));
+  bot.on('message:text', (ctx) => {
+    // Unknown commands and commands for other bots reach this handler too.
+    if (ctx.msg.text.startsWith('/')) return;
+    return receiveOrderMessage(ctx, 'text');
+  });
+  bot.on(
+    ['message:audio', 'message:document', 'message:video', 'message:video_note', 'message:photo', 'message:sticker', 'message:animation'],
+    async (ctx) => {
+      try {
+        if (ctx.chat.type !== 'private') return;
+        const sender = await resolveDraftSender(String(ctx.from.id));
+        if (!sender) return;
+        await ctx.reply(t('bot.draft_voice_or_text', sender.lang));
+      } catch (e) {
+        console.error('[order-draft] other-message reply failed', { telegramId: ctx.from?.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+  );
 }
 
 // Webhook handler — lazily initializes bot on first request
