@@ -37,7 +37,8 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
   const [disconnected, setDisconnected] = useState(false);
   const stampRef = useRef(stamp);
 
-  useKeepAwake();
+  // A disconnected screen has nothing left to show, so it may sleep again.
+  useKeepAwake(!disconnected);
 
   useEffect(() => {
     let stopped = false;

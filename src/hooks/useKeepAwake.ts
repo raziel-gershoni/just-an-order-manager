@@ -6,10 +6,12 @@ import { useEffect } from 'react';
  * Keeps the screen on with the Wake Lock API while the component is mounted.
  * The browser drops the lock whenever the page is hidden, so it is asked for
  * again each time the page becomes visible. Used by the kitchen screen and by
- * its error view, so a failed load never lets the phone go dark.
+ * its error view, so a failed load never lets the phone go dark. Passing false
+ * lets the screen sleep again, as on a disconnected screen.
  */
-export function useKeepAwake(): void {
+export function useKeepAwake(enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     let lock: WakeLockSentinel | null = null;
     let unmounted = false;
     const release = (sentinel: WakeLockSentinel) =>
@@ -39,5 +41,5 @@ export function useKeepAwake(): void {
       document.removeEventListener('visibilitychange', onVisible);
       if (lock) void release(lock);
     };
-  }, []);
+  }, [enabled]);
 }
