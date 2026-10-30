@@ -810,6 +810,7 @@ const translations: Record<string, string> = {
   'kitchen.pair_body': 'הטלפון הזה יציג את גיליונות ההזמנות של היום והימים הבאים ויתעדכן לבד. אי אפשר לשנות ממנו שום דבר.',
   'kitchen.pair_button': 'חבר את המסך הזה',
   'kitchen.pair_expired': 'הקוד פג או כבר נוצל. צרו קוד חדש באפליקציה: הגדרות ← מסך מטבח ← חבר מסך.',
+  'kitchen.pair_unavailable': 'לא הצלחנו לחבר כרגע. נסו שוב בעוד רגע.',
   'kitchen.settings_title': 'מסך מטבח',
   'kitchen.settings_hint': 'טלפון במטבח שמציג את ההזמנות של היום והימים הבאים ומתעדכן לבד. לצפייה בלבד.',
   'kitchen.connect': 'חבר מסך',

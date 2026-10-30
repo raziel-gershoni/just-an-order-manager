@@ -9,18 +9,20 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 // never wakes the database unless something was saved since the last build.
 export async function GET(request: NextRequest) {
   const token = request.cookies.get(KITCHEN_COOKIE)?.value;
-  const screen = token ? await verifyScreenToken(token) : null;
-  if (!screen) {
-    console.warn(token ? '[kitchen] screen cookie rejected (disconnected or not ours)' : '[kitchen] state check without a screen cookie');
-    return NextResponse.json({ error: 'disconnected' }, { status: 401, headers: NO_STORE });
-  }
+  let groupId: number | null = null;
   try {
+    const screen = token ? await verifyScreenToken(token) : null;
+    if (!screen) {
+      console.warn(token ? '[kitchen] screen cookie rejected (disconnected or not ours)' : '[kitchen] state check without a screen cookie');
+      return NextResponse.json({ error: 'disconnected' }, { status: 401, headers: NO_STORE });
+    }
+    groupId = screen.groupId;
     const data = await getKitchenData(screen.groupId);
     const res = NextResponse.json({ stamp: kitchenStamp(data) }, { headers: NO_STORE });
     res.cookies.set(screenCookie(signScreenToken(screen.groupId, screen.version)));
     return res;
   } catch (err) {
-    console.error(`[kitchen] state check failed for group ${screen.groupId}:`, err);
+    console.error(`[kitchen] state check failed for group ${groupId ?? 'unknown'}:`, err);
     return NextResponse.json({ error: 'unavailable' }, { status: 500, headers: NO_STORE });
   }
 }

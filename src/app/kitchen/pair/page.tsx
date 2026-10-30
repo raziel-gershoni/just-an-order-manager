@@ -1,4 +1,5 @@
 import { t } from '@/lib/i18n';
+import { PairForm } from '@/components/kitchen/PairForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,15 +8,13 @@ export default async function KitchenPairPage({ searchParams }: { searchParams: 
   return (
     <main className="notice">
       <h1 className="notice-title">{t('kitchen.pair_title')}</h1>
-      {error || !code ? (
+      {!code || (error && error !== 'unavailable') ? (
         <p className="notice-body">{t('kitchen.pair_expired')}</p>
       ) : (
         <>
-          <p className="notice-body">{t('kitchen.pair_body')}</p>
-          <form method="post" action="/api/kitchen/pair">
-            <input type="hidden" name="code" value={code} />
-            <button type="submit" className="pair-btn">{t('kitchen.pair_button')}</button>
-          </form>
+          {/* The code was not spent when the attempt failed, so the same button tries again. */}
+          <p className="notice-body">{t(error ? 'kitchen.pair_unavailable' : 'kitchen.pair_body')}</p>
+          <PairForm code={code} label={t('kitchen.pair_button')} />
         </>
       )}
     </main>
