@@ -2,7 +2,8 @@ import { unstable_cache } from 'next/cache';
 import { and, asc, eq, gte, ne } from 'drizzle-orm';
 import { db } from '@/db';
 import { orders } from '@/db/schema';
-import { buildPrintSheet, type PrintSheet } from './print-sheet';
+import { buildPrintSheet, headingFor, type PrintSheet } from './print-sheet';
+import { t } from './i18n';
 import { addDaysStr, israelTodayStr } from './date-utils';
 import { DATA_TAG } from './cache-tags';
 import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
@@ -19,12 +20,22 @@ export interface KitchenDay {
   key: string;
   kind: KitchenDayKind;
   date: string | null;
+  /** The heading, built here because this module can't be imported by the client component that shows it. */
+  title: string;
   sheet: PrintSheet;
 }
 export interface KitchenData {
   today: string;
   builtAt: string;
   days: KitchenDay[];
+}
+
+function dayTitle(kind: KitchenDayKind, date: string | null): string {
+  if (kind === 'asap') return t('kitchen.asap');
+  const heading = headingFor(date);
+  if (kind === 'today') return `${t('kitchen.today')} · ${heading}`;
+  if (kind === 'tomorrow') return `${t('kitchen.tomorrow')} · ${heading}`;
+  return heading;
 }
 
 export async function loadKitchenData(groupId: number, today: string): Promise<KitchenData> {
@@ -42,15 +53,11 @@ export async function loadKitchenData(groupId: number, today: string): Promise<K
   ]);
 
   const days: KitchenDay[] = [];
-  if (asap.orders.length > 0) days.push({ key: 'asap', kind: 'asap', date: null, sheet: asap });
-  dates.forEach((date, i) =>
-    days.push({
-      key: date,
-      kind: date === today ? 'today' : date === tomorrow ? 'tomorrow' : 'later',
-      date,
-      sheet: sheets[i],
-    })
-  );
+  if (asap.orders.length > 0) days.push({ key: 'asap', kind: 'asap', date: null, title: dayTitle('asap', null), sheet: asap });
+  dates.forEach((date, i) => {
+    const kind: KitchenDayKind = date === today ? 'today' : date === tomorrow ? 'tomorrow' : 'later';
+    days.push({ key: date, kind, date, title: dayTitle(kind, date), sheet: sheets[i] });
+  });
   return { today, builtAt: new Date().toISOString(), days };
 }
 

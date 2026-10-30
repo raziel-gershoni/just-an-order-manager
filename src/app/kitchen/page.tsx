@@ -1,9 +1,8 @@
 import { cookies } from 'next/headers';
-import { KITCHEN_COOKIE, verifyScreenToken } from '@/lib/kitchen-screen';
+import { KITCHEN_COOKIE, cacheEpoch, verifyScreenToken } from '@/lib/kitchen-screen';
 import { getKitchenData, kitchenStamp } from '@/lib/kitchen-sheet';
-import { KitchenSheets } from '@/components/kitchen/KitchenSheets';
-import { KitchenLive } from '@/components/kitchen/KitchenLive';
-import { t } from '@/lib/i18n';
+import { KitchenScreen } from '@/components/kitchen/KitchenScreen';
+import { KitchenNotice } from '@/components/kitchen/KitchenNotice';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,18 +11,8 @@ export default async function KitchenPage() {
   const screen = token ? await verifyScreenToken(token) : null;
   if (!screen) {
     if (token) console.warn('[kitchen] screen cookie rejected on page load');
-    return (
-      <main className="notice">
-        <h1 className="notice-title">{t(token ? 'kitchen.disconnected_title' : 'kitchen.not_connected_title')}</h1>
-        <p className="notice-body">{t('kitchen.connect_steps')}</p>
-      </main>
-    );
+    return <KitchenNotice title={token ? 'kitchen.disconnected_title' : 'kitchen.not_connected_title'} />;
   }
   const data = await getKitchenData(screen.groupId);
-  return (
-    <>
-      <KitchenSheets data={data} />
-      <KitchenLive stamp={kitchenStamp(data)} labels={{ updated: t('kitchen.updated_at'), offline: t('kitchen.offline') }} />
-    </>
-  );
+  return <KitchenScreen data={data} stamp={kitchenStamp(data)} epoch={cacheEpoch()} renderedAt={new Date().toISOString()} />;
 }
