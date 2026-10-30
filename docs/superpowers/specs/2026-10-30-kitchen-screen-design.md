@@ -57,6 +57,8 @@ view-only, because kids will reach it.
 - **The screen cookie:**
   - It holds a signed token made with the existing `signExportToken`. The purpose is
     `kitchen:<group key version>` and the lifetime is 400 days.
+  - The value is `<version>:<token>`, so the signature is checked first (pure crypto, no database or
+    cache read) and only a validly signed cookie is compared with the group's current version.
   - It is httpOnly, secure and SameSite=Lax.
   - It is re-signed on every successful check, so it never runs out while the screen is in use.
 - **What it can do:** it opens only `/kitchen` and its check endpoint, nothing else in the app.
@@ -99,12 +101,13 @@ view-only, because kids will reach it.
 
 **What the phone does:**
 1. Every 30 seconds, and immediately when the page becomes visible or the network returns, it calls
-   `GET /api/kitchen/state`.
-2. The endpoint checks the cookie and the cached version, and returns the cached copy's build stamp.
-   It is tiny and never touches the database unless the copy is stale.
-3. When the stamp changes, the page calls `router.refresh()` once to re-render the sheet from the
-   cache.
-4. A 401 shows the disconnected screen.
+   `GET /api/kitchen/state?have=<stamp>` with the stamp of the copy it shows.
+2. The endpoint checks the cookie and the cached version and answers from the cached copy. It never
+   touches the database unless the copy is stale. When the stamp is unchanged it returns just the stamp
+   and the deploy epoch; when it differs it also returns the new data as JSON, and the page swaps it
+   into its own state with no page re-request, so a lost connection can never replace the sheets.
+3. A 401 shows the disconnected notice and stops the checks. A failed check keeps the last sheets and
+   shows the offline line. A different epoch (a new deploy) reloads the page once.
 
 **Cost:**
 - About 86,000 small Vercel calls a month, within the free plan.
