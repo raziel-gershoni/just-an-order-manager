@@ -13,6 +13,7 @@ import { Copy, Check, ChevronRight, ChevronLeft, ChefHat, Upload, Trash2, Truck,
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
+import { KitchenScreenCard } from '@/components/settings/KitchenScreenCard';
 
 interface Member { id: number; userId: number; name: string; role: string }
 interface Invite { id: number; inviteCode: string; role: string; status: string }
@@ -359,6 +360,8 @@ export default function SettingsPage() {
           ))}
         </Card>
       </section>
+
+      {canManage && activeGroupId && <KitchenScreenCard groupId={activeGroupId} />}
 
       {/* Invite — owners and managers only. The endpoint refuses a baker or a
           driver, so leaving the form on their screen offered a button that
