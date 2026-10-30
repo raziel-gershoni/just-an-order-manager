@@ -26,6 +26,7 @@ This is the production order system for a real Israeli bakery. Staff take, price
 - **Order again** — any past order (or a customer's last one) opens the order form pre-filled with the same basket, priced from today's catalog.
 - **Order from a message** — send the bot a voice message or a text, get a filled-in order form to check and save (Gemini 3.8 Flash).
 - **Payments & customer balances** — record payments (also ahead of delivery, against the order), auto-charge on delivery, and track running per-customer balances with a debt threshold.
+- **Kitchen screen** — a spare phone in the kitchen shows the print sheet of every coming day (mixing weights, baking count, each bag) and updates itself after any change; view-only. Connect it from Settings → מסך מטבח (a one-time QR code), then Chrome → Add to Home screen.
 - **Deliveries with a driver role** — delivery addresses, per-city routing, and a dedicated driver view.
 - **Automated customer reminders** — scheduled WhatsApp reminders (week-start and Shabbat) and "order ready" notifications via the WhatsApp Business Cloud API.
 - **Recipes** — per-bread recipes and ingredient lists, surfaced to bakers alongside the day's orders.
