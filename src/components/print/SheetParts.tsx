@@ -1,0 +1,180 @@
+import { formatWeekdayShort } from '@/lib/date-utils';
+import type { PrintOrder, PrintRecipeBlock, PrintSheet } from '@/lib/print-sheet';
+
+export const STATUS_STAMP: Record<string, string> = {
+  delivered: 'נמסר',
+  ready: 'מוכן',
+  baking: 'באפייה',
+};
+
+/** Grams stay in the sheet's RTL flow: bare digits sit correctly there, and the
+ *  ״ג״ belongs to the left of the number the way Hebrew reads it. */
+export function grams(g: number): string {
+  return `${Math.round(g).toLocaleString('en-US')}ג`;
+}
+
+/** What goes into the mixer, before anything is shaped. */
+export function MixSection({ sheet, idPrefix = '' }: { sheet: PrintSheet; idPrefix?: string }) {
+  const { recipes, noRecipe, partialRecipe } = sheet;
+  // Weights are a per-bake instruction, so they only belong on a dated sheet.
+  // The active view spans whatever dates happen to be open, and summing those
+  // into one dough describes a mix nobody should ever make. The loaf tally
+  // below still covers the whole view.
+  if (!sheet.date) return null;
+  // No recipes at all means no weigh-out to print — and nothing for the caveat
+  // to qualify. The caveat exists to stop *partial* weights reading as the
+  // whole job, so it only appears alongside weights.
+  if (recipes.length === 0) return null;
+
+  const totalFlour = recipes.reduce((s, r) => s + r.flourGrams, 0);
+
+  return (
+    <section className="mix" aria-labelledby={`${idPrefix}mix-h`}>
+      <div className="section-head">
+        <h2 id={`${idPrefix}mix-h`}>לישה</h2>
+        <span className="stamp">קמח {grams(totalFlour)}</span>
+      </div>
+
+      <div className="recipes">
+        {recipes.map((r) => (
+          <RecipeCard key={r.name} recipe={r} />
+        ))}
+      </div>
+
+      {noRecipe.length > 0 && (
+        <p className="caveat">ללא מתכון — נשקל ידנית: {noRecipe.join(' · ')}</p>
+      )}
+      {partialRecipe.length > 0 && (
+        <p className="caveat">חסר משקל לגודל, הכמות חלקית: {partialRecipe.join(' · ')}</p>
+      )}
+    </section>
+  );
+}
+
+export function RecipeCard({ recipe }: { recipe: PrintRecipeBlock }) {
+  return (
+    <article className="recipe">
+      <header className="recipe-head">
+        <h3>{recipe.name}</h3>
+        <span className="recipe-yield">
+          {recipe.loaves} כיכרות · {grams(recipe.finishedGrams)}
+        </span>
+      </header>
+
+      {recipe.groups.map((g) => (
+        <div key={g.kind} className="kind">
+          {g.label && (
+            <div className="kind-head">
+              <span className="kind-name">{g.label}</span>
+              {/* The sum is the number you set the scale to before you start,
+                  so it leads the group rather than trailing it. */}
+              {g.totalGrams != null && <span className="kind-sum">{grams(g.totalGrams)}</span>}
+            </div>
+          )}
+          <ul className="weights">
+            {g.lines.map((l) => (
+              <li key={l.name} className="weigh">
+                <span className="tick" aria-hidden="true" />
+                <span className="ing">{l.name}</span>
+                {/* The leader is what makes a line weighable at arm's length
+                    from a scale — the eye tracks the dots, not the row. */}
+                <span className="leader" aria-hidden="true" />
+                <span className="pct">{l.pctOfFlour.toFixed(0)}%</span>
+                <span className="gram">{grams(l.grams)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {/* Flour total lives on the קמח group head, next to the flours it sums —
+          repeating it here would print the same number twice in four lines. */}
+      <footer className="recipe-foot">
+        <span>סך בצק {grams(recipe.doughGrams)}</span>
+      </footer>
+    </article>
+  );
+}
+
+export function BakeSection({ sheet, idPrefix = '' }: { sheet: PrintSheet; idPrefix?: string }) {
+  return (
+    <section className="bake" aria-labelledby={`${idPrefix}bake-h`}>
+      <div className="section-head">
+        <h2 id={`${idPrefix}bake-h`}>לאפייה</h2>
+        <span className="stamp">סה״כ {sheet.totalLoaves}</span>
+      </div>
+      <ul className="lines">
+        {sheet.production.map((l) => (
+          <li key={l.label} className="line">
+            <span className="qty">{l.qty}</span>
+            <span className="what">{l.label}</span>
+            <span className="tick" aria-hidden="true" />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function OrderBlock({ order, showDate }: { order: PrintOrder; showDate: boolean }) {
+  const stamp = STATUS_STAMP[order.status];
+  const where = order.isDelivery ? 'משלוח' : 'איסוף';
+  const when = showDate
+    ? order.deliveryDate
+      ? formatWeekdayShort(order.deliveryDate)
+      : 'בהקדם'
+    : null;
+  // Everything except the phone, which has to be bidi-isolated: an LTR number
+  // dropped into an RTL line reorders, and "+972-50-123-4567" prints as
+  // "50-123-4567 972+" — a number nobody can dial.
+  const meta = [when, where, order.address].filter(Boolean).join(' · ');
+
+  return (
+    <article className="order">
+      {/* The stub: id, and the box a pencil ticks when the bag is packed. */}
+      <div className="stub" aria-hidden="true">
+        <span className="no">№</span>
+        <span className="id">{order.id}</span>
+        <span className="box" />
+      </div>
+
+      <div className="body">
+        <div className="who">
+          <h3>{order.customerName}</h3>
+          <span className="money">
+            {/* Unpaid shows what is left to collect, so an order paid partly in
+                advance doesn't send the driver after the whole total again. */}
+            <span className="sum" dir="ltr">₪{(order.paid ? order.total : order.due).toFixed(0)}</span>
+            <span className={order.paid ? 'pay paid' : 'pay owed'}>
+              {order.paid ? 'שולם' : 'לתשלום'}
+            </span>
+          </span>
+        </div>
+
+        <ul className="lines">
+          {order.items.map((l, i) => (
+            <li key={i} className="line">
+              <span className="qty">{l.qty}</span>
+              <span className="what">{l.label}</span>
+              <span className="tick" aria-hidden="true" />
+            </li>
+          ))}
+        </ul>
+
+        {(meta || order.phone) && (
+          <p className="meta">
+            {meta}
+            {meta && order.phone && ' · '}
+            {order.phone && (
+              <span className="phone" dir="ltr">
+                {order.phone}
+              </span>
+            )}
+          </p>
+        )}
+        {order.notes && <p className="note">{order.notes}</p>}
+        {stamp && <span className="status">{stamp}</span>}
+      </div>
+    </article>
+  );
+}
