@@ -61,8 +61,9 @@ export async function disconnectScreens(groupId: number): Promise<void> {
     .where(eq(groups.id, groupId));
 }
 
+/** The cookie value: `<key version>:<signed token>`. The version travels in the clear only so the signature can be checked against it first. */
 export function signScreenToken(groupId: number, version: number): string {
-  return signExportToken(groupId, SCREEN_TOKEN_TTL_SECONDS, purpose(version));
+  return `${version}:${signExportToken(groupId, SCREEN_TOKEN_TTL_SECONDS, purpose(version))}`;
 }
 
 export async function readKeyVersion(groupId: number): Promise<number | null> {
@@ -83,19 +84,26 @@ const cachedKeyVersion = (groupId: number) =>
   })();
 
 /**
- * The screen a cookie belongs to, or null. The group id is read from the token
- * before its signature is checked only to learn which version to check it
- * against; verifyExportToken then rejects anything not signed for exactly that.
+ * The screen a cookie belongs to, or null. The signature is checked first and
+ * is pure crypto: the claimed version picks the purpose it must have been
+ * signed for, and only a cookie that passes that reaches getVersion (the
+ * cached database read), so garbage or forged cookies never cost a lookup.
+ * Then the claimed version must still be the group's current one, which is
+ * what a disconnect changes.
  */
 export async function verifyScreenToken(
-  token: string,
+  value: string,
   getVersion: (groupId: number) => Promise<number | null> = cachedKeyVersion
 ): Promise<{ groupId: number; version: number } | null> {
-  const groupId = Number(token.split('.')[0]);
-  if (!Number.isInteger(groupId) || groupId <= 0) return null;
-  const version = await getVersion(groupId);
-  if (version === null) return null;
-  return verifyExportToken(token, purpose(version)) === groupId ? { groupId, version } : null;
+  const colon = value.indexOf(':');
+  if (colon <= 0) return null;
+  const claimed = value.slice(0, colon);
+  const version = Number(claimed);
+  // Canonical digits only ("00", "0.5", "-1" are not what signScreenToken writes).
+  if (!Number.isSafeInteger(version) || version < 0 || String(version) !== claimed) return null;
+  const groupId = verifyExportToken(value.slice(colon + 1), purpose(version));
+  if (groupId === null) return null;
+  return (await getVersion(groupId)) === version ? { groupId, version } : null;
 }
 
 export function screenCookie(value: string) {
