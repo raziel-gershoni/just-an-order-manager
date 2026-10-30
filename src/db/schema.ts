@@ -123,6 +123,12 @@ export const groups = pgTable('groups', {
   starterWasteFactor: decimal('starter_waste_factor', { precision: 4, scale: 2 })
     .notNull()
     .default('1.50'),
+  // Kitchen screen (src/lib/kitchen-screen.ts). The version is signed into
+  // every paired screen's cookie; bumping it disconnects them all. A pairing
+  // code is stored only as its SHA-256 and cleared when spent.
+  kitchenKeyVersion: integer('kitchen_key_version').notNull().default(0),
+  kitchenPairCodeHash: varchar('kitchen_pair_code_hash', { length: 64 }),
+  kitchenPairExpiresAt: timestamp('kitchen_pair_expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
