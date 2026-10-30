@@ -9,7 +9,7 @@ import {
   breadAdditions,
   orderItemAdditions,
 } from '@/db/schema';
-import { and, asc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import { format, addDays, parseISO, isValid } from 'date-fns';
 import { he } from 'date-fns/locale/he';
 import { todayStr } from './date-utils';
@@ -134,7 +134,8 @@ export function headingFor(date: string | null): string {
 
 export async function buildPrintSheet(
   groupId: number,
-  date: string | null
+  date: string | null,
+  opts: { undatedOnly?: boolean } = {}
 ): Promise<PrintSheet> {
   // A dated sheet keeps delivered orders — printing yesterday is how you check
   // what went out. The active view is the opposite: only what's still open.
@@ -162,7 +163,9 @@ export async function buildPrintSheet(
           )
         : and(
             eq(orders.groupId, groupId),
-            notInArray(orders.status, ['delivered', 'cancelled'])
+            notInArray(orders.status, ['delivered', 'cancelled']),
+            // The kitchen screen's בהקדם group: open orders with no date at all.
+            opts.undatedOnly ? isNull(orders.deliveryDate) : undefined
           )
     )
     // ASAP orders carry no date; on the active sheet they're the most urgent
