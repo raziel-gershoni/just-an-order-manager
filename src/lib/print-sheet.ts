@@ -10,9 +10,10 @@ import {
   orderItemAdditions,
 } from '@/db/schema';
 import { and, asc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
-import { format, addDays, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { he } from 'date-fns/locale/he';
-import { todayStr } from './date-utils';
+import { addDaysStr, todayStr } from './date-utils';
+import { israelDay } from '@/db/israel-day';
 import { formatStaffItemLabel } from './order-display';
 import { calculateOrderTotal, orderPaymentsTotals } from './order-payments';
 import { aggregateRecipesForOrders } from './order-recipe';
@@ -115,7 +116,7 @@ export function resolveRange(raw: string | undefined): {
 }
 
 function shift(days: number): string {
-  return format(addDays(new Date(), days), 'yyyy-MM-dd');
+  return addDaysStr(todayStr(), days);
 }
 
 /** So an explicit date that happens to be today still lights the right tab. */
@@ -171,7 +172,7 @@ export async function buildPrintSheet(
     // ASAP orders carry no date; on the active sheet they're the most urgent
     // thing on it, so they lead rather than sink to the bottom.
     .orderBy(
-      sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) asc nulls first`,
+      sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) asc nulls first`,
       asc(orders.id)
     );
 

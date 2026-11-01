@@ -9,8 +9,8 @@ import {
   orderItemAdditions,
 } from '@/db/schema';
 import { and, asc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
-import { format, subDays } from 'date-fns';
-import { todayStr } from './date-utils';
+import { addDaysStr, israelDateStr, todayStr } from './date-utils';
+import { israelDay } from '@/db/israel-day';
 import { formatStaffItemLabel } from './order-display';
 import { orderPaymentState } from './order-payments';
 import { notifyPendingApproval, notifyUnpaidOrders } from './notifications';
@@ -91,7 +91,7 @@ export async function sendPendingApprovalNudge(groupId: number): Promise<NudgeRe
  * Returns null when there's nothing to chase (no message).
  */
 export async function sendUnpaidNudge(groupId: number): Promise<NudgeResult | null> {
-  const cutoff = format(subDays(new Date(), UNPAID_GRACE_DAYS), 'yyyy-MM-dd');
+  const cutoff = addDaysStr(todayStr(), -UNPAID_GRACE_DAYS);
   const rows = await db
     .select({
       id: orders.id,
@@ -108,13 +108,13 @@ export async function sendUnpaidNudge(groupId: number): Promise<NudgeResult | nu
         eq(orders.paid, false),
         // ASAP orders have no delivery date; fall back to when the order was
         // written so one still ages into the list instead of never qualifying.
-        sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) <= ${cutoff}`
+        sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) <= ${cutoff}`
       )
     )
     // Oldest debt first. Sorting on the raw column would push every ASAP order
     // to the end however long it had been outstanding, so sort on the same
     // fallback the filter and the message use.
-    .orderBy(sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) asc`, asc(orders.id));
+    .orderBy(sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) asc`, asc(orders.id));
 
   if (rows.length === 0) return null;
 
@@ -136,7 +136,7 @@ export async function sendUnpaidNudge(groupId: number): Promise<NudgeResult | nu
     shown.map((o) => ({
       id: o.id,
       customerName: o.customerName,
-      date: o.deliveryDate ?? format(o.createdAt, 'yyyy-MM-dd'),
+      date: o.deliveryDate ?? israelDateStr(o.createdAt),
       owed: o.owed,
     })),
     withTotals.length - shown.length

@@ -1,4 +1,5 @@
 import { db } from '@/db';
+import { israelDay } from '@/db/israel-day';
 import { orders, orderItems, payments } from '@/db/schema';
 import { eq, and, desc, inArray, notInArray, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from './order-pricing';
@@ -605,7 +606,7 @@ export async function settleCoveredOrders(
     // Same date fallback the unpaid nudge uses, so an ASAP order with no
     // delivery date sorts by when it was written instead of last.
     .orderBy(
-      sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) desc`,
+      sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) desc`,
       desc(orders.id)
     );
   if (open.length === 0) return [];
