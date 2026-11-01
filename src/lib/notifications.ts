@@ -1,7 +1,7 @@
 import { getBot } from './bot';
 import { escapeHtml } from './telegram-html';
 import { outboundAllowed, logSuppressed } from './outbound';
-import { InlineKeyboard, InputFile } from 'grammy';
+import { GrammyError, InlineKeyboard, InputFile } from 'grammy';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -419,6 +419,8 @@ export interface WhatsAppForwardTarget {
 // which is at least the visible length, so the limits are never exceeded.
 const TG_TEXT_LIMIT = 4000;
 const TG_CAPTION_LIMIT = 1024;
+/** The "MB" of Telegram's 50 MB file limit and of the size shown to the owner. */
+export const BYTES_PER_MB = 1000 * 1000;
 
 /** Digits stay left-to-right inside Hebrew text only when isolated (U+2066 ... U+2069). */
 const isolate = (s: string) => `\u2066${s}\u2069`;
@@ -452,10 +454,18 @@ function senderLine(sender: InboundItem['sender'], customers: WhatsAppForwardTar
   return `<b>${t('notify.wa_from')}:</b> ${who.join(' ')}`;
 }
 
+/** Hebrew name of a WhatsApp message type; the raw type (logged by the handler) never reaches the owner. */
 function typeLabel(type: string): string {
-  const key = `notify.wa_type.${type}`;
-  const label = t(key);
-  return label === key ? esc(type) : label;
+  for (const key of [`notify.wa_type.${type}`, `notify.wa_media.${type}`]) {
+    const label = t(key);
+    if (label !== key) return label;
+  }
+  return t('notify.wa_type.unknown');
+}
+
+/** What to log of a failed Telegram call: grammY's own error carries the whole request, message text included. */
+function describeSendError(err: unknown): unknown {
+  return err instanceof GrammyError ? { method: err.method, code: err.error_code, description: err.description } : err;
 }
 
 /** The part of the message after the header: an HTML lead line and the raw (long, unescaped) text. */
@@ -467,7 +477,7 @@ function describeContent(content: InboundContent, file: ForwardedFile | null): {
       const kind = t(`notify.wa_media.${content.media}`);
       const lead: string[] = [];
       if (file?.state === 'too_big') {
-        lead.push(`<i>${t('notify.wa_media_too_big').replace('{kind}', kind).replace('{size}', (file.sizeBytes / (1024 * 1024)).toFixed(1))}</i>`);
+        lead.push(`<i>${t('notify.wa_media_too_big').replace('{kind}', kind).replace('{size}', (file.sizeBytes / BYTES_PER_MB).toFixed(1))}</i>`);
       } else if (file?.state === 'unavailable') {
         lead.push(`<i>${t('notify.wa_media_failed').replace('{kind}', kind)}</i>`);
       }
@@ -567,7 +577,7 @@ async function sendForwardedFile(
       case 'sticker': break;
     }
   } catch (err) {
-    console.warn(`[wa-webhook] Telegram refused the ${content.media}, sending it as a document:`, err);
+    console.warn(`[wa-webhook] Telegram refused the ${content.media}, sending it as a document:`, describeSendError(err));
   }
   await api.sendDocument(chatId, input(), opts);
 }
@@ -626,7 +636,7 @@ export async function notifyWhatsAppMessage(
       sent += 1;
     } else {
       failed += 1;
-      console.error(`[wa-webhook] Telegram forward failed to chatId ${jobs[i].chatId}:`, res.reason);
+      console.error(`[wa-webhook] Telegram forward failed to chatId ${jobs[i].chatId}:`, describeSendError(res.reason));
     }
   });
   if (sent === 0 && failed > 0) {

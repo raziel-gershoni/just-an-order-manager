@@ -465,11 +465,13 @@ export const orderDrafts = pgTable(
   ]
 );
 
-// WhatsApp messages already forwarded to Telegram, keyed by Meta's message id.
-// Claimed before the forward so a re-sent webhook is forwarded once.
+// WhatsApp messages forwarded to Telegram, keyed by Meta's message id. Claimed
+// before the forward so a re-sent webhook is forwarded once; forwarded_at is
+// set when the forward is done (NULL = in flight, or the attempt died).
 export const whatsappInbound = pgTable('whatsapp_inbound', {
   messageId: varchar('message_id', { length: 128 }).primaryKey(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  forwardedAt: timestamp('forwarded_at', { withTimezone: true }),
 });
 
 export const payments = pgTable('payments', {

@@ -133,9 +133,12 @@ export async function sendWhatsAppTemplate(
   }
 }
 
-/** A failed media lookup or download; `status` is Meta's HTTP status, null when it never answered. */
+/**
+ * A failed media lookup or download; `status` is Meta's HTTP status, null when
+ * it never answered; `code` is the Graph error code in its body, when it gave one.
+ */
 export class WhatsAppMediaError extends Error {
-  constructor(message: string, readonly status: number | null) {
+  constructor(message: string, readonly status: number | null, readonly code: number | null = null) {
     super(message);
     this.name = 'WhatsAppMediaError';
   }
@@ -148,9 +151,33 @@ export type WhatsAppMedia =
 async function graphGet(url: string, what: string): Promise<Response> {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } });
   if (!res.ok) {
-    throw new WhatsAppMediaError(`${what} HTTP ${res.status}: ${(await res.text()).slice(0, 500)}`, res.status);
+    const body = await res.text();
+    throw new WhatsAppMediaError(`${what} HTTP ${res.status}: ${body.slice(0, 500)}`, res.status, graphErrorCode(body));
   }
   return res;
+}
+
+function graphErrorCode(body: string): number | null {
+  try {
+    const code = Number((JSON.parse(body) as { error?: { code?: unknown } }).error?.code);
+    return Number.isFinite(code) ? code : null;
+  } catch {
+    // Not JSON (the download host answers plain text): no code to read.
+    return null;
+  }
+}
+
+/**
+ * True when a retry of the same request can succeed once something outside the
+ * message is fixed or has passed: Meta unreachable or failing (5xx), rate
+ * limited, or the token rejected or lacking permission (401/403, Graph code 190
+ * for a bad token, 10 and 200-299 for permissions). A 400 or 404 for a missing
+ * or expired media id will never change.
+ */
+export function isRetryableMediaError(err: WhatsAppMediaError): boolean {
+  const { status, code } = err;
+  if (status === null || status >= 500 || status === 429 || status === 401 || status === 403) return true;
+  return code !== null && (code === 190 || code === 10 || (code >= 200 && code <= 299));
 }
 
 /**

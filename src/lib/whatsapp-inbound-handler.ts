@@ -1,26 +1,67 @@
 import { db } from '@/db';
 import { whatsappInbound } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { findCustomersByPhone } from './customer-phones';
 import { publicGroupId } from './public-site';
-import { fetchWhatsAppMedia, WhatsAppMediaError } from './whatsapp';
-import { notifyWhatsAppMessage, type ForwardedFile, type WhatsAppForwardTarget } from './notifications';
+import { fetchWhatsAppMedia, isRetryableMediaError, WhatsAppMediaError } from './whatsapp';
+import { BYTES_PER_MB, notifyWhatsAppMessage, type ForwardedFile, type WhatsAppForwardTarget } from './notifications';
 import { last4, type InboundItem } from './whatsapp-inbound';
 
-// Telegram bots can upload files up to 50 MB.
-const TG_MAX_FILE_BYTES = 50 * 1000 * 1000;
+// Telegram bots can upload files up to 50 MB (counted in MB, as the note to the owner is).
+const TG_MAX_FILE_BYTES = 50 * BYTES_PER_MB;
+
+// An attempt gets 300 s (the route's maxDuration); one unfinished for longer than
+// that is dead and a repeat delivery takes it over.
+const STALE_CLAIM = sql`now() - interval '6 minutes'`;
+
+type Claim = 'claimed' | 'done' | 'in_progress';
 
 /**
- * True when this call is the first to see the message. Meta re-sends a webhook
- * until it gets a 200, so a message can arrive again after it was forwarded.
+ * Meta re-sends a webhook until it gets a 200, so a message can arrive again:
+ * after it was forwarded ('done'), while the first attempt is still working on
+ * it ('in_progress': the caller must NOT answer 200, that attempt may yet
+ * fail), or after the first attempt died without finishing (taken over).
  */
-async function claimMessage(messageId: string): Promise<boolean> {
-  const rows = await db
+async function claimMessage(messageId: string): Promise<Claim> {
+  const inserted = await db
     .insert(whatsappInbound)
     .values({ messageId })
     .onConflictDoNothing()
     .returning({ messageId: whatsappInbound.messageId });
-  return rows.length > 0;
+  if (inserted.length > 0) return 'claimed';
+
+  const takenOver = await db
+    .update(whatsappInbound)
+    .set({ createdAt: sql`now()` })
+    .where(
+      and(
+        eq(whatsappInbound.messageId, messageId),
+        isNull(whatsappInbound.forwardedAt),
+        lt(whatsappInbound.createdAt, STALE_CLAIM)
+      )
+    )
+    .returning({ messageId: whatsappInbound.messageId });
+  if (takenOver.length > 0) {
+    console.warn(`[wa-webhook] ${messageId}: an earlier attempt never finished, forwarding it now`);
+    return 'claimed';
+  }
+
+  const [row] = await db
+    .select({ forwardedAt: whatsappInbound.forwardedAt })
+    .from(whatsappInbound)
+    .where(eq(whatsappInbound.messageId, messageId));
+  // No row: the other attempt failed and released it just now; Meta's next retry gets it.
+  return row?.forwardedAt ? 'done' : 'in_progress';
+}
+
+/** The message is dealt with: a repeat delivery is skipped from now on. */
+async function markForwarded(messageId: string): Promise<void> {
+  try {
+    await db.update(whatsappInbound).set({ forwardedAt: sql`now()` }).where(eq(whatsappInbound.messageId, messageId));
+  } catch (err) {
+    // The message did go out, so this must not fail the request (a retry would send it twice).
+    console.error(`[wa-webhook] could not mark ${messageId} as forwarded, a late retry may send it again:`, err);
+  }
 }
 
 async function releaseClaim(messageId: string): Promise<void> {
@@ -34,9 +75,10 @@ async function releaseClaim(messageId: string): Promise<void> {
 
 /**
  * The file a message carries, fetched once for every recipient. A Meta answer
- * in the 4xx range (the media expired, was deleted) won't change on a retry:
- * the message is forwarded with a note instead. Anything else throws, so the
- * route answers 500 and Meta sends the message again.
+ * that won't change on a retry (the media expired or was deleted) forwards the
+ * message with a note instead. Anything a retry can fix (Meta down, rate
+ * limited, a rejected token) throws, so the route answers 500 and Meta sends
+ * the message again once it is fixed.
  */
 async function loadFile(item: InboundItem): Promise<ForwardedFile | null> {
   if (item.content.kind !== 'media') return null;
@@ -48,9 +90,7 @@ async function loadFile(item: InboundItem): Promise<ForwardedFile | null> {
     );
     return { state: 'too_big', sizeBytes: media.sizeBytes };
   } catch (err) {
-    const permanent =
-      err instanceof WhatsAppMediaError && err.status !== null && err.status >= 400 && err.status < 500 && err.status !== 429;
-    if (!permanent) throw err;
+    if (!(err instanceof WhatsAppMediaError) || isRetryableMediaError(err)) throw err;
     console.error(`[wa-webhook] ${item.messageId}: the ${item.content.media} cannot be fetched, forwarding without it:`, err);
     return { state: 'unavailable' };
   }
@@ -74,9 +114,13 @@ export async function handleInboundMessage(item: InboundItem): Promise<void> {
     console.info(`[wa-webhook] message of type "${content.type}" can't be shown, forwarding a notice`, log);
   }
 
-  if (!(await claimMessage(item.messageId))) {
+  const claim = await claimMessage(item.messageId);
+  if (claim === 'done') {
     console.info('[wa-webhook] already forwarded, skipped', log);
     return;
+  }
+  if (claim === 'in_progress') {
+    throw new Error(`[wa-webhook] ${item.messageId} is still being forwarded by an earlier delivery, asking Meta to retry`);
   }
 
   try {
@@ -92,6 +136,7 @@ export async function handleInboundMessage(item: InboundItem): Promise<void> {
       if (!groupId) {
         // A retry can't help: nothing here knows whom to tell.
         console.error('[wa-webhook] no matching customer and PUBLIC_SITE_GROUP_ID is not set, message not forwarded', log);
+        await markForwarded(item.messageId);
         return;
       }
       targets.push({ groupId, customers: [] });
@@ -100,6 +145,7 @@ export async function handleInboundMessage(item: InboundItem): Promise<void> {
     const file = await loadFile(item);
     const { sent, failed } = await notifyWhatsAppMessage(targets, { sender, content, file });
     console.info('[wa-webhook] forwarded', { ...log, type: content.kind, groups: targets.length, matched: customers.length, sent, failed });
+    await markForwarded(item.messageId);
   } catch (err) {
     await releaseClaim(item.messageId);
     throw err;
