@@ -1,10 +1,16 @@
-import { nextFriday, format, startOfDay, endOfDay, addDays, differenceInCalendarDays } from 'date-fns';
+import { format, startOfDay, addDays } from 'date-fns';
 import { he } from 'date-fns/locale/he';
 import { HDate } from '@hebcal/hdate';
 
-/** Today's delivery-date key as a yyyy-MM-dd string — the app's canonical "today". */
+/**
+ * Today's delivery-date key as a yyyy-MM-dd string — the app's canonical
+ * "today": the bakery's calendar day (Asia/Jerusalem), whatever the server's
+ * clock says. Server code takes its day from here (or israelDateStr for a
+ * stored instant), never from `new Date()`: Vercel runs in UTC, where the
+ * bakery's day has already turned for the first two or three hours of it.
+ */
 export function todayStr(): string {
-  return format(new Date(), 'yyyy-MM-dd');
+  return israelTodayStr();
 }
 
 /**
@@ -23,10 +29,38 @@ export function israelToday(now: Date = new Date()): { year: number; month: numb
   return { year: part('year'), month: part('month'), day: part('day') };
 }
 
+/**
+ * The bakery's calendar day (yyyy-MM-dd) of an instant — the one place a
+ * timestamp turns into an Israel date. A `timestamp` column (no zone) comes
+ * back as a Date parsed as UTC, which is the instant this wants.
+ */
+export function israelDateStr(d: Date): string {
+  const { year, month, day } = israelToday(d);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 /** Today in Israel as yyyy-MM-dd: what a dictated "today" or "Friday" counts from. */
 export function israelTodayStr(now: Date = new Date()): string {
-  const { year, month, day } = israelToday(now);
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return israelDateStr(now);
+}
+
+/**
+ * The instant a yyyy-MM-dd day begins on the bakery's calendar — for a boundary
+ * on a stored timestamp ("since this morning", "this week"), which must not
+ * start at the server's own midnight. Israel's clocks never change at midnight
+ * (they move at 02:00), so the day has exactly one start: UTC midnight less the
+ * zone's offset, +3 in summer or +2 in winter.
+ */
+export function israelMidnight(date: string): Date {
+  const [y, m, d] = date.split('-').map(Number);
+  const utcMidnight = Date.UTC(y, m - 1, d);
+  for (const offsetHours of [3, 2]) {
+    const start = utcMidnight - offsetHours * 60 * 60 * 1000;
+    if (israelDateStr(new Date(start)) === date && israelDateStr(new Date(start - 1)) !== date) {
+      return new Date(start);
+    }
+  }
+  throw new Error(`israelMidnight: no start of day found for ${date}`);
 }
 
 /**
@@ -51,15 +85,7 @@ export function comingFriday(today: string): string {
 
 /** The delivery-date string `days` from today (default 7) — the upcoming-window horizon. */
 export function upcomingHorizonStr(days = 7): string {
-  return format(addDays(new Date(), days), 'yyyy-MM-dd');
-}
-
-export function getNextShabbatDate(): Date {
-  const today = new Date();
-  const day = today.getDay();
-  // If today is Friday, return today; otherwise next Friday
-  if (day === 5) return startOfDay(today);
-  return startOfDay(nextFriday(today));
+  return addDaysStr(todayStr(), days);
 }
 
 export function resolveDeliveryDate(
@@ -68,13 +94,13 @@ export function resolveDeliveryDate(
 ): string | null {
   switch (deliveryType) {
     case 'shabbat':
-      return format(getNextShabbatDate(), 'yyyy-MM-dd');
+      return comingFriday(todayStr());
     case 'specific_date':
       return specificDate || null;
     case 'asap':
       return null;
     case 'weekly':
-      return format(getNextShabbatDate(), 'yyyy-MM-dd');
+      return comingFriday(todayStr());
     default:
       return null;
   }
@@ -84,7 +110,7 @@ export function resolveDeliveryDate(
  * Delivery date for the NEXT occurrence of a recurring order. Recurrence is
  * weekly, so we advance the order's own delivery date by 7 days — robust no
  * matter which day "delivered" is actually clicked. (The creation-time
- * getNextShabbatDate() returns *today* on a Friday, so reusing it would clone a
+ * comingFriday() returns *today* on a Friday, so reusing it would clone a
  * Shabbat order onto the same Friday, and it drops a specific_date entirely.)
  * Falls back to the type-based resolution when the source has no stored date.
  */
@@ -96,10 +122,10 @@ export function nextRecurringDate(
     // Advance one week, keeping the source weekday, but roll forward past today
     // so a late-marked delivery (owner taps "delivered" a week or two late) never
     // clones a next order dated in the past.
-    let next = addDays(new Date(currentDate + 'T00:00:00'), 7);
-    const today = startOfDay(new Date());
-    while (next <= today) next = addDays(next, 7);
-    return format(next, 'yyyy-MM-dd');
+    const today = todayStr();
+    let next = addDaysStr(currentDate, 7);
+    while (next <= today) next = addDaysStr(next, 7);
+    return next;
   }
   return resolveDeliveryDate(deliveryType);
 }
@@ -176,8 +202,9 @@ export function formatDateRelative(dateStr: string, lang: 'en' | 'he'): string {
  * scale here — the oldest debt is the one that most needs a number on it.
  */
 export function daysAgoLabel(dateStr: string): string {
+  const dayMs = 24 * 60 * 60 * 1000;
   return daysAgoFromCount(
-    differenceInCalendarDays(startOfDay(new Date()), startOfDay(new Date(dateStr + 'T00:00:00')))
+    Math.round((Date.parse(todayStr() + 'T00:00:00Z') - Date.parse(dateStr + 'T00:00:00Z')) / dayMs)
   );
 }
 
@@ -225,20 +252,4 @@ export function formatWeekdayShort(dateStr: string): string {
  */
 export function formatHebrewDate(date: Date): string {
   return new HDate(date).renderGematriya(true);
-}
-
-export function getTodayRange() {
-  const today = new Date();
-  return {
-    start: startOfDay(today),
-    end: endOfDay(today),
-  };
-}
-
-export function getWeekRange() {
-  const today = new Date();
-  return {
-    start: startOfDay(today),
-    end: endOfDay(addDays(today, 7)),
-  };
 }

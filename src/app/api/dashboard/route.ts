@@ -2,8 +2,7 @@ import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions, payments } from '@/db/schema';
 import { eq, and, asc, gte, lte, sql, ne, inArray, or, isNull, notInArray } from 'drizzle-orm';
-import { format, addDays } from 'date-fns';
-import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
+import { addDaysStr, todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { formatItemLine } from '@/lib/order-display';
 
 async function enrichOrdersWithItems<T extends { id: number }>(orderRows: T[]) {
@@ -59,7 +58,7 @@ async function enrichOrdersWithItems<T extends { id: number }>(orderRows: T[]) {
 export const GET = withGroup(async (_request, _auth, groupId) => {
   const today = todayStr();
   const weekEnd = upcomingHorizonStr();
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  const tomorrow = addDaysStr(today, 1);
 
   // Today's orders (includes orders with no delivery date that are still active)
   const todayOrderRows = await db

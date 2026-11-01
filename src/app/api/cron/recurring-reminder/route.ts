@@ -8,7 +8,7 @@ import {
   reminderSends,
 } from '@/db/schema';
 import { and, eq, ne, gte, lte, asc, desc } from 'drizzle-orm';
-import { format, addDays } from 'date-fns';
+import { addDaysStr, israelMidnight, todayStr, weekdayIndex } from '@/lib/date-utils';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 import { getNotifiablePhoneRows } from '@/lib/customer-phones';
 import { pickNextTemplate } from '@/lib/reminders';
@@ -16,9 +16,9 @@ import { buildOrderItemsSummary } from '@/lib/order-summary';
 
 export const maxDuration = 60;
 
-/** yyyy-MM-dd `offset` days from now (server time). */
+/** yyyy-MM-dd `offset` days from today on the bakery's calendar. */
 function dayStr(offset: number): string {
-  return format(addDays(new Date(), offset), 'yyyy-MM-dd');
+  return addDaysStr(todayStr(), offset);
 }
 
 /**
@@ -29,9 +29,9 @@ function dayStr(offset: number): string {
  * delivery day is reminded exactly once and no one is reminded the same
  * morning as delivery. Any other weekday is a no-op.
  *
- * QStash fires this at ~10:00 Asia/Jerusalem; at that hour the server-UTC date
- * equals the Jerusalem date, so `new Date()` is the correct "today" (same
- * convention as cron/morning-reminder).
+ * QStash fires this at ~10:00 Asia/Jerusalem. "Today" and the weekday are the
+ * bakery's (todayStr), not the server's, so a manual run or retry after
+ * midnight Israel time still picks the right window.
  */
 function runWindow(weekday: number): { start: string; end: string } | null {
   if (weekday === 0) return { start: dayStr(1), end: dayStr(3) };
@@ -46,7 +46,7 @@ async function handler(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const weekday = new Date().getDay();
+  const weekday = weekdayIndex(todayStr());
   const win = runWindow(weekday);
   if (!win) {
     return NextResponse.json({ ok: true, skipped: 'not a run day', weekday });
@@ -65,7 +65,8 @@ async function handler(request: Request) {
   }
 
   const stats = { sent: 0, failed: 0, errored: 0, skippedOptOut: 0, skippedDup: 0, skippedNoPhone: 0 };
-  const startOfToday = new Date(`${dayStr(0)}T00:00:00`);
+  // sent_at is a stored timestamp, so "today" starts at the bakery's midnight.
+  const startOfToday = israelMidnight(dayStr(0));
 
   for (const group of allGroups) {
     if (!group.enabled) continue;

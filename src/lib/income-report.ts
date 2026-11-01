@@ -1,5 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
+import { israelDay } from '@/db/israel-day';
 import { israelToday } from '@/lib/date-utils';
 import {
   AUTO_CHARGE_SINCE,
@@ -70,7 +71,7 @@ const yearBounds = (year: number) => sql`
 // before delivery started stamping one — the Israel date it was written.
 const deliveredOrders = (groupId: number) => sql`
   select id,
-         coalesce(delivery_date, ((created_at at time zone 'UTC') at time zone 'Asia/Jerusalem')::date) as d
+         coalesce(delivery_date, ${israelDay(sql.raw('created_at'))}) as d
   from orders
   where group_id = ${groupId} and order_status = 'delivered'
 `;
@@ -121,7 +122,7 @@ function ordersQuery(groupId: number, year: number) {
 function metaQuery(groupId: number) {
   return rows(sql`
     select
-      (select min(((created_at at time zone 'UTC') at time zone 'Asia/Jerusalem')::date)::text
+      (select min(${israelDay(sql.raw('created_at'))})::text
          from payments where group_id = ${groupId}) as first_ledger,
       (select min(d)::text from (${deliveredOrders(groupId)}) o) as first_delivery,
       (select name from groups where id = ${groupId}) as group_name

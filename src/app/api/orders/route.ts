@@ -1,5 +1,6 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
+import { israelDay } from '@/db/israel-day';
 import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions, orderStatusEnum } from '@/db/schema';
 import { eq, and, asc, desc, gte, lte, inArray, notInArray, sql } from 'drizzle-orm';
 import { formatItemLine, formatItemLabel, formatStaffItemLabel } from '@/lib/order-display';
@@ -38,7 +39,7 @@ export const GET = withGroup(async (request, _auth, groupId) => {
   const openOnly = active === 'true' || (status != null && status !== 'delivered' && status !== 'cancelled');
   const ordering = openOnly
     ? [asc(orders.deliveryDate), desc(orders.createdAt)]
-    : [sql`coalesce(${orders.deliveryDate}, ${orders.createdAt}::date) desc`, desc(orders.createdAt)];
+    : [sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) desc`, desc(orders.createdAt)];
 
   // Get orders
   const orderRows = await db
