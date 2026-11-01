@@ -534,6 +534,34 @@ const translations: Record<string, string> = {
   'notify.member_joined': 'הצטרף/ה לקבוצה בתור',
   'notify.balance_alert': 'חייב/ת',
 
+  // A customer's WhatsApp message, forwarded to the owner and managers
+  'notify.wa_message': 'הודעה בוואטסאפ',
+  'notify.wa_from': 'מאת',
+  'notify.wa_unknown_number': 'מספר לא ידוע',
+  'notify.wa_open_customer': 'פתח את הלקוח',
+  'notify.wa_reacted': 'הגיב/ה',
+  'notify.wa_location': 'שלח/ה מיקום',
+  'notify.wa_contacts': 'שלח/ה איש קשר',
+  'notify.wa_unsupported': 'הגיעה הודעה שלא ניתן להציג כאן',
+  'notify.wa_type.text': 'הודעת טקסט',
+  'notify.wa_type.location': 'מיקום',
+  'notify.wa_type.contacts': 'איש קשר',
+  'notify.wa_type.button': 'לחיצה על כפתור',
+  'notify.wa_type.interactive': 'תגובה לכפתור או לרשימה',
+  'notify.wa_type.unsupported': 'סוג לא נתמך',
+  'notify.wa_type.order': 'הזמנה מקטלוג',
+  'notify.wa_type.system': 'הודעת מערכת',
+  'notify.wa_type.request_welcome': 'פתיחת שיחה',
+  'notify.wa_type.unknown': 'סוג לא מזוהה',
+  'notify.wa_media.image': 'תמונה',
+  'notify.wa_media.video': 'סרטון',
+  'notify.wa_media.voice': 'הודעה קולית',
+  'notify.wa_media.audio': 'קובץ שמע',
+  'notify.wa_media.document': 'מסמך',
+  'notify.wa_media.sticker': 'מדבקה',
+  'notify.wa_media_too_big': '{kind} — הקובץ גדול מכדי להעביר אותו לכאן ({size} MB)',
+  'notify.wa_media_failed': '{kind} — לא הצלחנו להוריד את הקובץ מוואטסאפ',
+
   // Bot
   'bot.welcome': 'ברוכים הבאים למנהל השאור!',
   'bot.open_manager': 'פתח מנהל',
@@ -822,6 +850,7 @@ const translations: Record<string, string> = {
   'kitchen.disconnect_failed': 'הניתוק נכשל',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ignored (Hebrew only), kept so every t(key, lang) call stays valid
 export function t(key: string, _lang?: Lang): string {
   return translations[key] ?? key;
 }

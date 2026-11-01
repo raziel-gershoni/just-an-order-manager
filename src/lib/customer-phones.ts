@@ -1,5 +1,6 @@
 import { db } from '@/db';
-import { customerPhones } from '@/db/schema';
+import { customerPhones, customers } from '@/db/schema';
+import { normalizePhoneNumber } from './phone-links';
 import { eq, and, asc, sql, type SQL, type AnyColumn } from 'drizzle-orm';
 
 /**
@@ -75,4 +76,46 @@ export function hasNotifiablePhone(customerId: AnyColumn): SQL {
 export async function getNotifiablePhones(customerId: number): Promise<string[]> {
   const rows = await getNotifiablePhoneRows(customerId);
   return rows.map((r) => r.phone);
+}
+
+/**
+ * The active customers who have this number, whatever way it was typed
+ * (050-..., +972 50 ..., with bidi marks): stored numbers are raw, so both
+ * sides are compared normalized. A number can belong to several customers
+ * (a family sharing one phone), in this group or another. Customers the owner
+ * archived (isActive = false) are ignored.
+ *
+ * The SQL only narrows to numbers ending in the same nine digits, which every
+ * spelling of an Israeli number shares; the exact comparison is the
+ * normalization in JS.
+ */
+export async function findCustomersByPhone(
+  phone: string
+): Promise<{ id: number; name: string; groupId: number }[]> {
+  const wanted = normalizePhoneNumber(phone);
+  if (!wanted) return [];
+  const rows = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      groupId: customers.groupId,
+      phone: customerPhones.phone,
+    })
+    .from(customerPhones)
+    .innerJoin(customers, eq(customers.id, customerPhones.customerId))
+    .where(
+      and(
+        eq(customers.isActive, true),
+        sql`regexp_replace(${customerPhones.phone}, '\\D', '', 'g') like ${'%' + wanted.slice(-9)}`
+      )
+    )
+    .orderBy(asc(customers.id));
+  const seen = new Set<number>();
+  const matches: { id: number; name: string; groupId: number }[] = [];
+  for (const r of rows) {
+    if (seen.has(r.id) || normalizePhoneNumber(r.phone) !== wanted) continue;
+    seen.add(r.id);
+    matches.push({ id: r.id, name: r.name, groupId: r.groupId });
+  }
+  return matches;
 }

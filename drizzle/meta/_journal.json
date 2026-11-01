@@ -218,6 +218,13 @@
       "when": 1793351227000,
       "tag": "0030_kitchen_screen",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793530000000,
+      "tag": "0031_whatsapp_inbound",
+      "breakpoints": true
     }
   ]
 }

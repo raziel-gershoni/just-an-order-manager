@@ -1,13 +1,15 @@
 import { getBot } from './bot';
 import { escapeHtml } from './telegram-html';
 import { outboundAllowed, logSuppressed } from './outbound';
-import { InlineKeyboard } from 'grammy';
+import { GrammyError, InlineKeyboard, InputFile } from 'grammy';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { t } from './i18n';
 import { sendWhatsAppTemplate } from './whatsapp';
 import { daysAgoLabel, formatWeekdayShort } from './date-utils';
+import { siteBaseUrl } from './site-url';
+import type { InboundContent, InboundItem, MediaKind } from './whatsapp-inbound';
 
 type Role = 'owner' | 'manager' | 'baker' | 'driver';
 
@@ -390,4 +392,255 @@ export async function sendMorningSummary(
 
     return lines.join('\n');
   });
+}
+
+// ---- A customer's WhatsApp message, forwarded to Telegram ----
+
+/** What became of the file a message carried. */
+export type ForwardedFile =
+  | { state: 'ready'; bytes: Buffer; mimeType: string | null }
+  | { state: 'too_big'; sizeBytes: number }
+  | { state: 'unavailable' };
+
+export interface WhatsAppForward {
+  sender: InboundItem['sender'];
+  content: InboundContent;
+  /** Null for a message without a file. Fetched once, shared by every recipient. */
+  file: ForwardedFile | null;
+}
+
+/** One group to tell, with the customers of that group the sender's number belongs to. */
+export interface WhatsAppForwardTarget {
+  groupId: number;
+  customers: { id: number; name: string }[];
+}
+
+// Telegram: 4096 characters a message, 1024 a caption. HTML length is counted,
+// which is at least the visible length, so the limits are never exceeded.
+const TG_TEXT_LIMIT = 4000;
+const TG_CAPTION_LIMIT = 1024;
+/** The "MB" of Telegram's 50 MB file limit and of the size shown to the owner. */
+export const BYTES_PER_MB = 1000 * 1000;
+
+/** Digits stay left-to-right inside Hebrew text only when isolated (U+2066 ... U+2069). */
+const isolate = (s: string) => `\u2066${s}\u2069`;
+
+/** Escaped chunks of `raw`, none longer than the limit once escaped; the first has its own, smaller room. */
+function splitEscaped(raw: string, firstLimit: number, restLimit: number): string[] {
+  const chunks: string[] = [];
+  let cur = '';
+  let limit = Math.max(firstLimit, 1);
+  for (const ch of Array.from(raw)) {
+    const piece = esc(ch);
+    if (cur.length + piece.length > limit) {
+      chunks.push(cur);
+      cur = '';
+      limit = restLimit;
+    }
+    cur += piece;
+  }
+  if (cur || chunks.length === 0) chunks.push(cur);
+  return chunks;
+}
+
+function senderLine(sender: InboundItem['sender'], customers: WhatsAppForwardTarget['customers']): string {
+  if (customers.length > 0) {
+    return `<b>${t('notify.customer')}:</b> ${customers.map((c) => esc(c.name)).join(' / ')}`;
+  }
+  const who = [
+    sender.name ? esc(sender.name) : null,
+    sender.phone ? isolate(`+${sender.phone}`) : t('notify.wa_unknown_number'),
+  ].filter(Boolean);
+  return `<b>${t('notify.wa_from')}:</b> ${who.join(' ')}`;
+}
+
+/** Hebrew name of a WhatsApp message type; the raw type (logged by the handler) never reaches the owner. */
+function typeLabel(type: string): string {
+  for (const key of [`notify.wa_type.${type}`, `notify.wa_media.${type}`]) {
+    const label = t(key);
+    if (label !== key) return label;
+  }
+  return t('notify.wa_type.unknown');
+}
+
+/** What to log of a failed Telegram call: grammY's own error carries the whole request, message text included. */
+function describeSendError(err: unknown): unknown {
+  return err instanceof GrammyError ? { method: err.method, code: err.error_code, description: err.description } : err;
+}
+
+/** The part of the message after the header: an HTML lead line and the raw (long, unescaped) text. */
+function describeContent(content: InboundContent, file: ForwardedFile | null): { lead: string[]; text: string } {
+  switch (content.kind) {
+    case 'text':
+      return { lead: [], text: content.text };
+    case 'media': {
+      const kind = t(`notify.wa_media.${content.media}`);
+      const lead: string[] = [];
+      if (file?.state === 'too_big') {
+        lead.push(`<i>${t('notify.wa_media_too_big').replace('{kind}', kind).replace('{size}', (file.sizeBytes / BYTES_PER_MB).toFixed(1))}</i>`);
+      } else if (file?.state === 'unavailable') {
+        lead.push(`<i>${t('notify.wa_media_failed').replace('{kind}', kind)}</i>`);
+      }
+      return { lead, text: content.caption ?? '' };
+    }
+    case 'location':
+      return { lead: [t('notify.wa_location')], text: [content.name, content.address].filter(Boolean).join('\n') };
+    case 'contacts':
+      return {
+        lead: [t('notify.wa_contacts')],
+        text: content.lines
+          .map((c) => [c.name, ...c.phones.map(isolate)].filter(Boolean).join(' — '))
+          .join('\n'),
+      };
+    case 'reaction':
+      return { lead: [`${t('notify.wa_reacted')} ${esc(content.emoji)}`], text: '' };
+    case 'reaction_removed':
+      return { lead: [], text: '' };
+    case 'other':
+      return { lead: [`${t('notify.wa_unsupported')} (${typeLabel(content.type)})`], text: '' };
+  }
+}
+
+interface ForwardPlan {
+  /** Text messages, in order; the first carries the button. */
+  parts: string[];
+  /** Caption of the file, when there is one to send. */
+  fileCaption: string | null;
+  keyboard?: InlineKeyboard;
+}
+
+function planForward(msg: WhatsAppForward, target: WhatsAppForwardTarget): ForwardPlan {
+  const head = `<b>💬 ${t('notify.wa_message')}</b>\n${senderLine(msg.sender, target.customers)}`;
+  const { lead, text } = describeContent(msg.content, msg.file);
+  const info = lead.join('\n');
+  const keyboard =
+    target.customers.length === 1
+      ? new InlineKeyboard().webApp(
+          t('notify.wa_open_customer'),
+          `${siteBaseUrl()}/miniapp/customers/${target.customers[0].id}`
+        )
+      : undefined;
+
+  const prefix = (info ? `${head}\n\n${info}` : head) + (text ? (info ? '\n' : '\n\n') : '');
+  const chunks = text ? splitEscaped(text, TG_TEXT_LIMIT - prefix.length, TG_TEXT_LIMIT) : [];
+  const parts = chunks.length ? [prefix + chunks[0], ...chunks.slice(1)] : [prefix];
+
+  if (msg.file?.state === 'ready') {
+    // The header rides on the file itself when it and the caption fit; otherwise
+    // the text goes first and the file keeps just the header.
+    if (parts.length === 1 && parts[0].length <= TG_CAPTION_LIMIT) {
+      return { parts: [], fileCaption: parts[0], keyboard };
+    }
+    return { parts, fileCaption: head, keyboard };
+  }
+  return { parts, fileCaption: null, keyboard };
+}
+
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'video/mp4': 'mp4', 'video/3gpp': '3gp', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3',
+  'audio/aac': 'aac', 'audio/mp4': 'm4a', 'audio/amr': 'amr', 'application/pdf': 'pdf',
+};
+
+function fileName(media: MediaKind, filename: string | null, mimeType: string | null): string {
+  if (filename) return filename;
+  const ext = MIME_EXT[(mimeType ?? '').split(';')[0].trim()] ?? 'bin';
+  return `${media}.${ext}`;
+}
+
+/**
+ * The file itself, as Telegram's matching kind. A sticker goes as a document:
+ * sendSticker takes only the strict 512 px formats and refuses the animated
+ * ones. When Telegram refuses a photo, video or audio (dimensions, codec) the
+ * file is re-sent as a document rather than lost: nobody can open this number
+ * in a WhatsApp app to fetch it from there.
+ */
+async function sendForwardedFile(
+  chatId: string,
+  content: Extract<InboundContent, { kind: 'media' }>,
+  file: Extract<ForwardedFile, { state: 'ready' }>,
+  opts: { caption: string; parse_mode: 'HTML'; reply_markup?: InlineKeyboard }
+): Promise<void> {
+  const api = getBot().api;
+  const name = fileName(content.media, content.filename, file.mimeType ?? content.mimeType);
+  const input = () => new InputFile(file.bytes, name);
+  const mime = (file.mimeType ?? content.mimeType ?? '').toLowerCase();
+  try {
+    switch (content.media) {
+      case 'image': await api.sendPhoto(chatId, input(), opts); return;
+      case 'video': await api.sendVideo(chatId, input(), opts); return;
+      case 'voice':
+        if (mime.startsWith('audio/ogg')) { await api.sendVoice(chatId, input(), opts); return; }
+        await api.sendAudio(chatId, input(), opts); return;
+      case 'audio': await api.sendAudio(chatId, input(), opts); return;
+      case 'document':
+      case 'sticker': break;
+    }
+  } catch (err) {
+    console.warn(`[wa-webhook] Telegram refused the ${content.media}, sending it as a document:`, describeSendError(err));
+  }
+  await api.sendDocument(chatId, input(), opts);
+}
+
+async function deliverForward(chatId: string, msg: WhatsAppForward, plan: ForwardPlan): Promise<void> {
+  const api = getBot().api;
+  let keyboard = plan.keyboard;
+  for (const part of plan.parts) {
+    await api.sendMessage(chatId, part, { parse_mode: 'HTML', reply_markup: keyboard });
+    keyboard = undefined;
+  }
+  if (plan.fileCaption !== null && msg.content.kind === 'media' && msg.file?.state === 'ready') {
+    await sendForwardedFile(chatId, msg.content, msg.file, {
+      caption: plan.fileCaption,
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    });
+  }
+  if (msg.content.kind === 'location') {
+    await api.sendLocation(chatId, msg.content.latitude, msg.content.longitude);
+  }
+}
+
+/**
+ * Forward a customer's WhatsApp message to the owner and managers of each
+ * target group. One recipient failing doesn't stop the others and is logged
+ * like any send; when NOBODY got it this throws, so the caller can release its
+ * dedupe claim and let Meta's retry bring the message back. Partial success
+ * counts as delivered. Nothing is sent (and nothing thrown) when outbound is
+ * disabled or no group has a recipient.
+ */
+export async function notifyWhatsAppMessage(
+  targets: WhatsAppForwardTarget[],
+  msg: WhatsAppForward
+): Promise<{ sent: number; failed: number }> {
+  const jobs: { chatId: string; plan: ForwardPlan }[] = [];
+  for (const target of targets) {
+    const recipients = await getRecipientsByRole(target.groupId, ['manager']);
+    if (recipients.length === 0) {
+      console.warn(`[wa-webhook] group ${target.groupId} has no owner or manager to forward to`);
+    }
+    const plan = planForward(msg, target);
+    for (const r of recipients) jobs.push({ chatId: r.chatId, plan });
+  }
+
+  if (!outboundAllowed()) {
+    logSuppressed(`WhatsApp message forward to ${jobs.length} recipient(s)`);
+    return { sent: 0, failed: 0 };
+  }
+
+  const results = await Promise.allSettled(jobs.map((j) => deliverForward(j.chatId, msg, j.plan)));
+  let sent = 0;
+  let failed = 0;
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') {
+      sent += 1;
+    } else {
+      failed += 1;
+      console.error(`[wa-webhook] Telegram forward failed to chatId ${jobs[i].chatId}:`, describeSendError(res.reason));
+    }
+  });
+  if (sent === 0 && failed > 0) {
+    throw new Error(`[wa-webhook] the forward reached none of ${failed} recipient(s)`);
+  }
+  return { sent, failed };
 }

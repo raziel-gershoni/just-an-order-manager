@@ -13,11 +13,14 @@ const GRAPH_API_VERSION = 'v26.0';
 /**
  * One POST to a Graph send endpoint. A refusal comes back as { ok: false };
  * a network failure throws, since the message may have gone out anyway.
+ * `messageId` is Meta's id for the message (the wamid), which its delivery
+ * status webhooks name; it is null only when the answer wasn't the JSON Meta
+ * documents, which doesn't turn an accepted send into a failure.
  */
 async function postToMeta(
   endpoint: 'messages' | 'marketing_messages',
   body: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; messageId: string | null } | { ok: false; error: string }> {
   const res = await fetch(
     `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_ID}/${endpoint}`,
     {
@@ -29,7 +32,18 @@ async function postToMeta(
       body,
     }
   );
-  return res.ok ? { ok: true } : { ok: false, error: await res.text() };
+  if (!res.ok) return { ok: false, error: await res.text() };
+
+  let text = '';
+  try {
+    text = await res.text();
+    const id = (JSON.parse(text) as { messages?: { id?: unknown }[] }).messages?.[0]?.id;
+    if (typeof id === 'string') return { ok: true, messageId: id };
+    console.warn('WhatsApp accepted the send but returned no message id:', text.slice(0, 300));
+  } catch (err) {
+    console.warn('WhatsApp accepted the send but the answer could not be read:', err, text.slice(0, 300));
+  }
+  return { ok: true, messageId: null };
 }
 
 export async function sendWhatsAppTemplate(
@@ -96,7 +110,7 @@ export async function sendWhatsAppTemplate(
     if (opts.marketing) {
       const mm = await postToMeta('marketing_messages', body);
       if (mm.ok) {
-        console.log('WhatsApp sent (marketing_messages):', normalized, templateName);
+        console.log('WhatsApp sent (marketing_messages):', normalized, templateName, mm.messageId ?? '(no message id)');
         return true;
       }
       // Refused there, so nothing was sent: the business hasn't accepted the
@@ -111,10 +125,78 @@ export async function sendWhatsAppTemplate(
       return false;
     }
 
-    console.log('WhatsApp sent:', normalized, templateName);
+    console.log('WhatsApp sent:', normalized, templateName, res.messageId ?? '(no message id)');
     return true;
   } catch (err) {
     console.error('WhatsApp send error:', err);
     return false;
   }
+}
+
+/**
+ * A failed media lookup or download; `status` is Meta's HTTP status, null when
+ * it never answered; `code` is the Graph error code in its body, when it gave one.
+ */
+export class WhatsAppMediaError extends Error {
+  constructor(message: string, readonly status: number | null, readonly code: number | null = null) {
+    super(message);
+    this.name = 'WhatsAppMediaError';
+  }
+}
+
+export type WhatsAppMedia =
+  | { ok: true; bytes: Buffer; mimeType: string | null }
+  | { ok: false; reason: 'too_big'; sizeBytes: number };
+
+async function graphGet(url: string, what: string): Promise<Response> {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new WhatsAppMediaError(`${what} HTTP ${res.status}: ${body.slice(0, 500)}`, res.status, graphErrorCode(body));
+  }
+  return res;
+}
+
+function graphErrorCode(body: string): number | null {
+  try {
+    const code = Number((JSON.parse(body) as { error?: { code?: unknown } }).error?.code);
+    return Number.isFinite(code) ? code : null;
+  } catch {
+    // Not JSON (the download host answers plain text): no code to read.
+    return null;
+  }
+}
+
+/**
+ * True when a retry of the same request can succeed once something outside the
+ * message is fixed or has passed: Meta unreachable or failing (5xx), rate
+ * limited, or the token rejected or lacking permission (401/403, Graph code 190
+ * for a bad token, 10 and 200-299 for permissions). A 400 or 404 for a missing
+ * or expired media id will never change.
+ */
+export function isRetryableMediaError(err: WhatsAppMediaError): boolean {
+  const { status, code } = err;
+  if (status === null || status >= 500 || status === 429 || status === 401 || status === 403) return true;
+  return code !== null && (code === 190 || code === 10 || (code >= 200 && code <= 299));
+}
+
+/**
+ * A file a customer sent: media id -> { url, mime_type, file_size } -> the
+ * bytes (both calls need the token). A file bigger than `maxBytes` is not
+ * downloaded; Meta's own size is trusted when it gives one.
+ */
+export async function fetchWhatsAppMedia(mediaId: string, maxBytes: number): Promise<WhatsAppMedia> {
+  if (!WHATSAPP_TOKEN) throw new WhatsAppMediaError('WHATSAPP_TOKEN is not set', null);
+  const info = (await (await graphGet(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(mediaId)}`,
+    'media lookup'
+  )).json()) as { url?: string; mime_type?: string; file_size?: number | string };
+  if (!info.url) throw new WhatsAppMediaError('media lookup returned no url', null);
+  const declared = Number(info.file_size);
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    return { ok: false, reason: 'too_big', sizeBytes: declared };
+  }
+  const bytes = Buffer.from(await (await graphGet(info.url, 'media download')).arrayBuffer());
+  if (bytes.length > maxBytes) return { ok: false, reason: 'too_big', sizeBytes: bytes.length };
+  return { ok: true, bytes, mimeType: info.mime_type ?? null };
 }
