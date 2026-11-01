@@ -10,8 +10,8 @@ import {
   groupMembers,
   users,
 } from '@/db/schema';
-import { eq, and, gte, lte, sql } from 'drizzle-orm';
-import { format, subDays } from 'date-fns';
+import { eq, and, gte, lt, sql } from 'drizzle-orm';
+import { addDaysStr, israelMidnight, todayStr } from '@/lib/date-utils';
 import { getBot } from '@/lib/bot';
 import { t } from '@/lib/i18n';
 
@@ -24,8 +24,12 @@ async function handler(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const weekAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+  const today = todayStr();
+  const weekAgo = addDaysStr(today, -7);
+  // The report's window is a span of stored timestamps, so its edges are the
+  // bakery's midnights (not the server's): weekAgo 00:00 up to the end of today.
+  const since = israelMidnight(weekAgo);
+  const until = israelMidnight(addDaysStr(today, 1));
   console.log(`[cron/weekly-summary] starting for ${weekAgo}..${today}`);
 
   let allGroups: { id: number }[];
@@ -47,8 +51,8 @@ async function handler(request: Request) {
           and(
             eq(orders.groupId, group.id),
             eq(orders.status, 'delivered'),
-            gte(orders.updatedAt, new Date(weekAgo)),
-            lte(orders.updatedAt, new Date(today + 'T23:59:59'))
+            gte(orders.updatedAt, since),
+            lt(orders.updatedAt, until)
           )
         );
 
@@ -61,7 +65,7 @@ async function handler(request: Request) {
           and(
             eq(payments.groupId, group.id),
             eq(payments.type, 'charge'),
-            gte(payments.createdAt, new Date(weekAgo))
+            gte(payments.createdAt, since)
           )
         );
 

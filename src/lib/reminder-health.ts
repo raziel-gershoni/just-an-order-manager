@@ -1,7 +1,8 @@
 import { db } from '@/db';
 import { orders, customers, groups, reminderSends } from '@/db/schema';
 import { and, eq, ne, gte, lte, asc, sql } from 'drizzle-orm';
-import { format, subDays } from 'date-fns';
+import { subDays } from 'date-fns';
+import { addDaysStr, todayStr } from '@/lib/date-utils';
 import { hasNotifiablePhone } from '@/lib/customer-phones';
 
 /**
@@ -101,8 +102,8 @@ export async function findMissedRecurringReminders(
         eq(orders.isRecurring, true),
         ne(orders.status, 'cancelled'),
         // Already past — a delivery still ahead of us may yet be reminded.
-        gte(orders.deliveryDate, format(subDays(new Date(), MISSED_WINDOW_DAYS), 'yyyy-MM-dd')),
-        lte(orders.deliveryDate, format(subDays(new Date(), 1), 'yyyy-MM-dd')),
+        gte(orders.deliveryDate, addDaysStr(todayStr(), -MISSED_WINDOW_DAYS)),
+        lte(orders.deliveryDate, addDaysStr(todayStr(), -1)),
         // An opted-out customer is skipped by design, not by failure — and so
         // is one with no number the cron may message (all silenced, or none on
         // WhatsApp). Counting them would raise "the schedule is broken" every
