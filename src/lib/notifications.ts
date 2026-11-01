@@ -4,7 +4,7 @@ import { outboundAllowed, logSuppressed } from './outbound';
 import { GrammyError, InlineKeyboard, InputFile } from 'grammy';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { t } from './i18n';
 import { sendWhatsAppTemplate } from './whatsapp';
 import { daysAgoLabel, formatWeekdayShort } from './date-utils';

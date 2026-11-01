@@ -850,6 +850,7 @@ const translations: Record<string, string> = {
   'kitchen.disconnect_failed': 'הניתוק נכשל',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ignored (Hebrew only), kept so every t(key, lang) call stays valid
 export function t(key: string, _lang?: Lang): string {
   return translations[key] ?? key;
 }
