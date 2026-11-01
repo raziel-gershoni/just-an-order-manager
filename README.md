@@ -29,6 +29,7 @@ This is the production order system for a real Israeli bakery. Staff take, price
 - **Kitchen screen** — a spare phone in the kitchen shows the print sheet of every coming day (mixing weights, baking count, each bag) and updates itself after any change; view-only. Connect it from Settings → מסך מטבח (a one-time QR code), then Chrome → Add to Home screen.
 - **Deliveries with a driver role** — delivery addresses, per-city routing, and a dedicated driver view.
 - **Automated customer reminders** — scheduled WhatsApp reminders (week-start and Shabbat) and "order ready" notifications via the WhatsApp Business Cloud API.
+- **Customer WhatsApp messages in Telegram** — what customers send to the bakery's WhatsApp number (text, photos, voice notes, files, locations) is forwarded to the owner and managers, with the customer's name and a button to open them.
 - **Recipes** — per-bread recipes and ingredient lists, surfaced to bakers alongside the day's orders.
 - **Public SEO site** — a per-bakery marketing page with the live price list, sitemap, robots, Schema.org JSON-LD, and Open Graph / Twitter images.
 - **Multi-tenant & role-based** — groups with owner / manager / baker / driver roles and an invite flow, so each tenant's data and capabilities stay isolated.
