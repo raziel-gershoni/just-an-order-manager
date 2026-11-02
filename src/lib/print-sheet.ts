@@ -9,7 +9,7 @@ import {
   breadAdditions,
   orderItemAdditions,
 } from '@/db/schema';
-import { and, asc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { format, parseISO, isValid } from 'date-fns';
 import { he } from 'date-fns/locale/he';
 import { addDaysStr, todayStr } from './date-utils';
@@ -136,10 +136,14 @@ export function headingFor(date: string | null): string {
 export async function buildPrintSheet(
   groupId: number,
   date: string | null,
-  opts: { undatedOnly?: boolean } = {}
+  opts: { withUndated?: boolean } = {}
 ): Promise<PrintSheet> {
   // A dated sheet keeps delivered orders — printing yesterday is how you check
   // what went out. The active view is the opposite: only what's still open.
+  // `withUndated` (the kitchen screen's today) adds the open orders with no
+  // date, the בהקדם ones, which are today's work; the dashboard counts them
+  // the same way.
+  const open = notInArray(orders.status, ['delivered', 'cancelled']);
   const rows = await db
     .select({
       id: orders.id,
@@ -159,19 +163,18 @@ export async function buildPrintSheet(
       date
         ? and(
             eq(orders.groupId, groupId),
-            eq(orders.deliveryDate, date),
+            opts.withUndated
+              ? or(eq(orders.deliveryDate, date), and(isNull(orders.deliveryDate), open))
+              : eq(orders.deliveryDate, date),
             ne(orders.status, 'cancelled')
           )
-        : and(
-            eq(orders.groupId, groupId),
-            notInArray(orders.status, ['delivered', 'cancelled']),
-            // The kitchen screen's בהקדם group: open orders with no date at all.
-            opts.undatedOnly ? isNull(orders.deliveryDate) : undefined
-          )
+        : and(eq(orders.groupId, groupId), open)
     )
     // ASAP orders carry no date; on the active sheet they're the most urgent
-    // thing on it, so they lead rather than sink to the bottom.
+    // thing on it, so they lead rather than sink to the bottom. On a dated
+    // sheet that takes them in, every one of them comes before the day's own.
     .orderBy(
+      ...(opts.withUndated ? [sql`${orders.deliveryDate} is not null`] : []),
       sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) asc nulls first`,
       asc(orders.id)
     );

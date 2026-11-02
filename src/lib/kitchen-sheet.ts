@@ -11,15 +11,16 @@ import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
 /**
  * What the kitchen screen shows: the print sheet of every coming day, built by
  * buildPrintSheet itself so the screen and a printout can never disagree.
- * בהקדם first, then today (always, even empty, so tomorrow can't pass for
- * today), then every later day that has orders. Past days are left out.
+ * Today first (always, even empty, so tomorrow can't pass for today), holding
+ * the open בהקדם orders too, then every later day that has orders. Past days
+ * are left out.
  */
 
-export type KitchenDayKind = 'asap' | 'today' | 'tomorrow' | 'later';
+export type KitchenDayKind = 'today' | 'tomorrow' | 'later';
 export interface KitchenDay {
   key: string;
   kind: KitchenDayKind;
-  date: string | null;
+  date: string;
   /** The heading, built here because this module can't be imported by the client component that shows it. */
   title: string;
   sheet: PrintSheet;
@@ -30,8 +31,7 @@ export interface KitchenData {
   days: KitchenDay[];
 }
 
-function dayTitle(kind: KitchenDayKind, date: string | null): string {
-  if (kind === 'asap') return t('kitchen.asap');
+function dayTitle(kind: KitchenDayKind, date: string): string {
   const heading = headingFor(date);
   if (kind === 'today') return `${t('kitchen.today')} · ${heading}`;
   if (kind === 'tomorrow') return `${t('kitchen.tomorrow')} · ${heading}`;
@@ -47,16 +47,11 @@ export async function loadKitchenData(groupId: number, today: string): Promise<K
   const dates = [today, ...dated.map((r) => r.date).filter((d): d is string => !!d && d !== today)];
   const tomorrow = addDaysStr(today, 1);
 
-  const [asap, ...sheets] = await Promise.all([
-    buildPrintSheet(groupId, null, { undatedOnly: true }),
-    ...dates.map((d) => buildPrintSheet(groupId, d)),
-  ]);
+  const sheets = await Promise.all(dates.map((d) => buildPrintSheet(groupId, d, { withUndated: d === today })));
 
-  const days: KitchenDay[] = [];
-  if (asap.orders.length > 0) days.push({ key: 'asap', kind: 'asap', date: null, title: dayTitle('asap', null), sheet: asap });
-  dates.forEach((date, i) => {
+  const days = dates.map((date, i): KitchenDay => {
     const kind: KitchenDayKind = date === today ? 'today' : date === tomorrow ? 'tomorrow' : 'later';
-    days.push({ key: date, kind, date, title: dayTitle(kind, date), sheet: sheets[i] });
+    return { key: date, kind, date, title: dayTitle(kind, date), sheet: sheets[i] };
   });
   return { today, builtAt: new Date().toISOString(), days };
 }

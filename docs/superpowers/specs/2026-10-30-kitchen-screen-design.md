@@ -14,8 +14,8 @@ view-only, because kids will reach it.
 - Reuse the print view: each day shows its mixing weights, the baking count and each order's bag,
   exactly as printed (amounts and phones included).
 - One long scroll, grouped by day:
-  - the **בהקדם** (no date) group first, if it has orders;
-  - then **today**;
+  - **today** first, holding the open **בהקדם** (no date) orders too (owner, 2026-11-02:
+    they are today's work, as the dashboard already counts them);
   - then **every later day with orders**.
   - Past days are left out.
 - Nothing on the screen changes anything.
@@ -26,8 +26,10 @@ view-only, because kids will reach it.
 - A day group is `buildPrintSheet(groupId, date)`: the same function as the print view, so the
   printout and the screen can never disagree. That means the dated-sheet rules apply: cancelled
   orders are hidden, and orders delivered that day stay with the **נמסר** stamp.
-- The בהקדם group holds the open orders with no delivery date, with its baking count and bags.
-  It has no mixing weights, which is the print view's own rule for undated sheets.
+- Today is `buildPrintSheet(groupId, today, { withUndated: true })`: the day's orders plus the
+  open orders with no delivery date. The undated ones come first, oldest first, and their bag
+  says **בהקדם**; the mixing weights and baking count cover them. The printed היום sheet still
+  leaves them out (it shows only orders dated that day).
 - **Today** is the Israel date (`israelTodayStr`), so the screen switches at midnight Israel time.
 - **Layout:**
   - the print sheet's look, adapted for a phone: fluid width and larger text;

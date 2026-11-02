@@ -820,7 +820,6 @@ const translations: Record<string, string> = {
   'deliv.pub_free_over': 'חינם מעל',
   // Kitchen screen
   'kitchen.app_name': 'מטבח',
-  'kitchen.asap': 'בהקדם',
   'kitchen.today': 'היום',
   'kitchen.tomorrow': 'מחר',
   'kitchen.no_orders_today': 'אין הזמנות להיום',

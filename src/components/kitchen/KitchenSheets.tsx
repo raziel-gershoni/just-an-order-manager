@@ -24,8 +24,10 @@ function DaySheet({ day }: { day: KitchenDay }) {
           <MixSection sheet={sheet} idPrefix={prefix} />
           <BakeSection sheet={sheet} idPrefix={prefix} />
           <section className="orders" aria-label={day.title}>
+            {/* Every order here is on this day except today's בהקדם ones, so only
+                those say when (an undated order's date reads בהקדם). */}
             {sheet.orders.map((o) => (
-              <OrderBlock key={o.id} order={o} showDate={false} />
+              <OrderBlock key={o.id} order={o} showDate={!o.deliveryDate} />
             ))}
           </section>
         </>
