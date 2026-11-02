@@ -129,7 +129,7 @@ view-only, because kids will reach it.
   groups.
   - It loads the distinct delivery dates from today onwards that have non-cancelled orders, then
     builds `buildPrintSheet` per date.
-  - The undated group comes from a new `undated` mode of the print sheet's own builder. Print
+  - Today's sheet takes the open undated orders through the builder's `withUndated` option. Print
     behaviour stays unchanged.
 - **`src/lib/kitchen-screen.ts`:** pairing (`startPairing`, `claimPairing`), `disconnectScreens`,
   token sign and verify, and the cached reads.
