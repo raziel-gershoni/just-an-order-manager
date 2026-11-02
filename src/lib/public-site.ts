@@ -129,6 +129,7 @@ export function normalizeSections(
 
 // The public site lives at "/" (single group). Purge that path when the owner
 // edits the profile, catalog, badges, or media. (Per-slug paths later.)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- one site today; kept so callers already pass the group
 export function revalidatePublicSite(_groupId: number): void {
   revalidatePath('/');
 }
