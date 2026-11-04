@@ -129,6 +129,12 @@ export const groups = pgTable('groups', {
   kitchenKeyVersion: integer('kitchen_key_version').notNull().default(0),
   kitchenPairCodeHash: varchar('kitchen_pair_code_hash', { length: 64 }),
   kitchenPairExpiresAt: timestamp('kitchen_pair_expires_at', { withTimezone: true }),
+  // Where open orders with no date (בהקדם) appear in every view that shows orders
+  // by day: their own group just before today (false), or part of today (true).
+  // src/lib/asap.ts reads it; the owner flips it in settings.
+  asapInToday: boolean('asap_in_today').notNull().default(false),
+  // Whether the kitchen screen shows each day's mixing weights (לישה).
+  kitchenShowRecipe: boolean('kitchen_show_recipe').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
