@@ -812,6 +812,7 @@ const translations: Record<string, string> = {
   'deliv.today': 'משלוחים היום',
   'deliv.upcoming': 'משלוחים קרובים',
   'deliv.none': 'אין משלוחים',
+  'deliv.load_failed': 'טעינת המשלוחים נכשלה',
   'deliv.collect': 'לגבייה',
   'deliv.mark_delivered': 'נמסר',
   'deliv.deliver_collect': 'מסר ונגבה',

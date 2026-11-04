@@ -130,7 +130,6 @@ are part of today. A second switch shows or hides the mixing weights on the kitc
   fallback goes.
 - **Baker tab:** today comes from the server, not `format(new Date())`. The "היום" button's text
   comes from the strings file.
-- **`/today`:** the dead `'baking'` status branch goes.
 
 ## Shared code (one code path)
 

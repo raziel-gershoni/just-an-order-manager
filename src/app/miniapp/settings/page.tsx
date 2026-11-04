@@ -86,7 +86,7 @@ export default function SettingsPage() {
         setDelivFreeOver(g.group.deliveryFreeOver ?? '');
         setDelivCities(g.group.deliveryCities ?? []);
         setAsapInToday(g.group.asapInToday ?? false);
-        setKitchenShowRecipe(g.group.kitchenShowRecipe ?? false);
+        setKitchenShowRecipe(g.group.kitchenShowRecipe ?? true);
         setMembers(m.members);
         setInvites(i.invites);
       })

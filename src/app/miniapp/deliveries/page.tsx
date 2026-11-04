@@ -44,7 +44,10 @@ export default function DeliveriesPage() {
         setDeliveries(r.deliveries);
         setDisplay({ today: r.today, asapInToday: r.asapInToday });
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[deliveries] load failed:', err);
+        toast.error(t('deliv.load_failed'));
+      })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
