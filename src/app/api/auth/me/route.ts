@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { groups, groupMembers } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 
 export const GET = withAuth(async (_request, auth) => {
   const userGroups = await db
@@ -12,7 +12,9 @@ export const GET = withAuth(async (_request, auth) => {
     })
     .from(groupMembers)
     .innerJoin(groups, eq(groupMembers.groupId, groups.id))
-    .where(eq(groupMembers.userId, auth.dbUser.id));
+    .where(eq(groupMembers.userId, auth.dbUser.id))
+    // The app opens on the first one: the lowest group id, the rule the bot and drafts use.
+    .orderBy(asc(groupMembers.groupId));
 
   return jsonResponse({
     user: auth.dbUser,

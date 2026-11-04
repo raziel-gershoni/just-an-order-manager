@@ -80,7 +80,8 @@ export const GET = withGroup(async (request, _auth, groupId) => {
       .from(orderItems)
       .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
       .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-      .where(inArray(orderItems.orderId, orderIds));
+      .where(inArray(orderItems.orderId, orderIds))
+      .orderBy(asc(orderItems.id));
 
     // Fetch additions for these item ids; group by orderItemId
     const itemIds = allItems.map((i) => i.id);

@@ -21,7 +21,8 @@ async function enrichOrdersWithItems<T extends { id: number }>(orderRows: T[]) {
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(inArray(orderItems.orderId, orderIds));
+    .where(inArray(orderItems.orderId, orderIds))
+    .orderBy(asc(orderItems.id));
 
   const itemIds = allItems.map((i) => i.id);
   const additionLinks = itemIds.length
@@ -127,7 +128,8 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
         lte(orders.deliveryDate, weekEnd),
         ne(orders.status, 'cancelled')
       )
-    );
+    )
+    .orderBy(asc(orders.deliveryDate), asc(orders.id));
 
   const upcomingOrders = await enrichOrdersWithItems(upcomingOrderRows);
 
@@ -148,7 +150,9 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     .innerJoin(customers, eq(payments.customerId, customers.id))
     .where(eq(payments.groupId, groupId))
     .groupBy(payments.customerId, customers.name)
-    .having(sql`SUM(${payments.amount}) < 0`);
+    .having(sql`SUM(${payments.amount}) < 0`)
+    // Biggest debt first.
+    .orderBy(asc(sql`SUM(${payments.amount})`), asc(customers.name), asc(payments.customerId));
 
   const totalPendingLoaves = todayOrders.reduce((s, o) => s + o.totalQuantity, 0);
 

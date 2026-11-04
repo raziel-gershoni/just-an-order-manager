@@ -69,7 +69,8 @@ export const GET = withGroup(async (request, auth, groupId) => {
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(eq(orderItems.orderId, order.id));
+    .where(eq(orderItems.orderId, order.id))
+    .orderBy(asc(orderItems.id));
 
   // Fetch additions per item
   const itemIds = itemRows.map((i) => i.id);
@@ -84,6 +85,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
         .from(orderItemAdditions)
         .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
         .where(inArray(orderItemAdditions.orderItemId, itemIds))
+        .orderBy(asc(breadAdditions.sortOrder))
     : [];
 
   const additionsByItem: Record<number, { id: number; name: string }[]> = {};
@@ -464,7 +466,8 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(eq(orderItems.orderId, id));
+    .where(eq(orderItems.orderId, id))
+    .orderBy(asc(orderItems.id));
 
   const updatedItemIds = updatedItemRows.map((i) => i.id);
   const updatedAdditionLinks = updatedItemIds.length
@@ -477,6 +480,7 @@ export const PATCH = withGroup(async (request, auth, groupId) => {
         .from(orderItemAdditions)
         .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
         .where(inArray(orderItemAdditions.orderItemId, updatedItemIds))
+        .orderBy(asc(breadAdditions.sortOrder))
     : [];
   const updatedAdditionsByItem: Record<number, { id: number; name: string }[]> = {};
   for (const a of updatedAdditionLinks) {

@@ -66,7 +66,9 @@ export async function aggregateRecipesForOrders(orderIds: number[]): Promise<Rec
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(inArray(orderItems.orderId, orderIds));
+    .where(inArray(orderItems.orderId, orderIds))
+    // Bread types come out in menu order.
+    .orderBy(asc(breadTypes.sortOrder), asc(breadTypes.id), asc(orderItems.id));
 
   if (items.length === 0) return { byType: [], unconfigured: [] };
 

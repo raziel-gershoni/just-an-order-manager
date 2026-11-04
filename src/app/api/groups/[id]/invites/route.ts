@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { groupInvites } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod/v4';
 import { INVITE_EXPIRY_DAYS } from '@/lib/constants';
@@ -33,7 +33,9 @@ export const GET = withAuth(async (request, auth) => {
   const invites = await db
     .select()
     .from(groupInvites)
-    .where(eq(groupInvites.groupId, groupId));
+    .where(eq(groupInvites.groupId, groupId))
+    // Oldest first: the settings screen adds a new invite at the bottom.
+    .orderBy(asc(groupInvites.id));
 
   return jsonResponse({ invites });
 });

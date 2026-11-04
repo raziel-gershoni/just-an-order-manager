@@ -1,7 +1,7 @@
 import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 
 function getGroupId(url: string): number {
   const parts = new URL(url).pathname.split('/');
@@ -25,7 +25,8 @@ export const GET = withAuth(async (request, auth) => {
     })
     .from(groupMembers)
     .innerJoin(users, eq(groupMembers.userId, users.id))
-    .where(eq(groupMembers.groupId, groupId));
+    .where(eq(groupMembers.groupId, groupId))
+    .orderBy(asc(groupMembers.id));
 
   return jsonResponse({ members });
 });

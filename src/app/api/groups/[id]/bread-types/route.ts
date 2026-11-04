@@ -133,7 +133,9 @@ export const POST = withAuth(async (request, auth) => {
         eq(breadSizes.isDefault, true),
         eq(breadSizes.isActive, true)
       )
-    );
+    )
+    // The index becomes the new type's size order: keep the sizes' own order.
+    .orderBy(asc(breadSizes.sortOrder), asc(breadSizes.id));
 
   if (sizeDefaults.length > 0) {
     await db.insert(breadTypeSizes).values(
@@ -155,7 +157,8 @@ export const POST = withAuth(async (request, auth) => {
         eq(breadAdditions.isDefault, true),
         eq(breadAdditions.isActive, true)
       )
-    );
+    )
+    .orderBy(asc(breadAdditions.sortOrder), asc(breadAdditions.id));
 
   if (additionDefaults.length > 0) {
     await db.insert(breadTypeAdditions).values(

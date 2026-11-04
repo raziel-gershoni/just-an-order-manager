@@ -197,7 +197,8 @@ export async function createNextRecurringOrder(
       .from(orderItems)
       .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
       .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-      .where(eq(orderItems.orderId, createdOrderId));
+      .where(eq(orderItems.orderId, createdOrderId))
+      .orderBy(asc(orderItems.id));
 
     const notifyItemIds = notifyRows.map((r) => r.itemId);
     const addRows = notifyItemIds.length

@@ -2,7 +2,7 @@ import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
-import { KIND_DISPLAY_ORDER } from '@/lib/recipe';
+import { KIND_DISPLAY_ORDER, type IngredientKind } from '@/lib/recipe';
 import { priceKey } from '@/lib/cost';
 import {
   loadPriceBook,
@@ -48,21 +48,19 @@ export const GET = withGroup(async (request, auth, groupId) => {
   ]);
 
   const inUseKeys = new Set(inUse.map((i) => priceKey(i.name, i.kind)));
+  // Sorted by kind so the screen can render straight down without regrouping.
+  const byKindThenName = (a: { name: string; kind: IngredientKind }, b: { name: string; kind: IngredientKind }) =>
+    KIND_DISPLAY_ORDER.indexOf(a.kind) - KIND_DISPLAY_ORDER.indexOf(b.kind) || a.name.localeCompare(b.name, 'he');
 
   return jsonResponse({
     book,
     prices,
-    // Sorted by kind so the screen can render straight down without regrouping.
-    inUse: [...inUse].sort(
-      (a, b) =>
-        KIND_DISPLAY_ORDER.indexOf(a.kind) - KIND_DISPLAY_ORDER.indexOf(b.kind) ||
-        a.name.localeCompare(b.name, 'he')
-    ),
+    inUse: [...inUse].sort(byKindThenName),
     // A saved price whose ingredient is in no recipe. Free-text ingredient
     // names mean a typo mints a new identity and orphans the old price; showing
     // orphans is how that becomes visible the day it happens rather than six
     // months later.
-    orphans: prices.filter((p) => !inUseKeys.has(priceKey(p.name, p.kind))),
+    orphans: prices.filter((p) => !inUseKeys.has(priceKey(p.name, p.kind))).sort(byKindThenName),
     breads,
   });
 });

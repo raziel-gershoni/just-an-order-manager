@@ -108,7 +108,8 @@ export async function loadIngredientsInUse(groupId: number): Promise<InUseIngred
     .from(breadRecipeIngredients)
     .innerJoin(breadTypes, eq(breadTypes.id, breadRecipeIngredients.breadTypeId))
     .where(eq(breadTypes.groupId, groupId))
-    .orderBy(asc(breadRecipeIngredients.sortOrder));
+    // usedBy lists the breads in menu order (the screen shows the first three).
+    .orderBy(asc(breadTypes.sortOrder), asc(breadTypes.id), asc(breadRecipeIngredients.sortOrder));
 
   const byKey = new Map<string, InUseIngredient>();
   for (const row of rows) {

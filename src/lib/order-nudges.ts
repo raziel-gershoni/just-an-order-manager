@@ -162,7 +162,8 @@ async function loadStaffItems(
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(inArray(orderItems.orderId, orderIds));
+    .where(inArray(orderItems.orderId, orderIds))
+    .orderBy(asc(orderItems.id));
 
   const itemIds = rows.map((r) => r.id);
   const addRows = itemIds.length

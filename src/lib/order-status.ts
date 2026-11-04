@@ -122,7 +122,8 @@ export async function transitionOrderStatus(
         .from(orderItems)
         .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
         .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-        .where(eq(orderItems.orderId, order.id));
+        .where(eq(orderItems.orderId, order.id))
+        .orderBy(asc(orderItems.id));
 
       const itemIds = itemRows.map((i) => i.id);
       const additionLinks = itemIds.length

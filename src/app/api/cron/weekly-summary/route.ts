@@ -10,7 +10,7 @@ import {
   groupMembers,
   users,
 } from '@/db/schema';
-import { eq, and, gte, lt, sql } from 'drizzle-orm';
+import { eq, and, asc, gte, lt, sql } from 'drizzle-orm';
 import { addDaysStr, israelMidnight, todayStr } from '@/lib/date-utils';
 import { getBot } from '@/lib/bot';
 import { t } from '@/lib/i18n';
@@ -83,7 +83,9 @@ async function handler(request: Request) {
         .innerJoin(customers, eq(payments.customerId, customers.id))
         .where(eq(payments.groupId, group.id))
         .groupBy(payments.customerId, customers.name)
-        .having(sql`SUM(${payments.amount}) < 0`);
+        .having(sql`SUM(${payments.amount}) < 0`)
+        // Biggest debt first, as on the home screen.
+        .orderBy(asc(sql`SUM(${payments.amount})`), asc(customers.name), asc(payments.customerId));
 
       const members = await db
         .select({

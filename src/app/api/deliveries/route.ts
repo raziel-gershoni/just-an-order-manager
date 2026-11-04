@@ -41,7 +41,7 @@ export const GET = withGroup(async (_request, auth, groupId) => {
         notInArray(orders.status, ['delivered', 'cancelled'])
       )
     )
-    .orderBy(asc(orders.deliveryDate));
+    .orderBy(asc(orders.deliveryDate), asc(orders.id));
 
   const ids = rows.map((r) => r.id);
 

@@ -103,10 +103,11 @@ async function handler(request: Request) {
             gte(orders.deliveryDate, win.start),
             lte(orders.deliveryDate, win.end)
           )
-        );
+        )
+        .orderBy(asc(orders.deliveryDate), asc(orders.id));
 
       // One reminder per customer per run — a customer with two orders in the
-      // same window is reminded once (the first). Cross-run/retry duplicates are
+      // same window is reminded once, for the soonest. Cross-run/retry duplicates are
       // caught by the reminderSends check below.
       const seen = new Set<number>();
 

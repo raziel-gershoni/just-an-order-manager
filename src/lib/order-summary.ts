@@ -27,7 +27,8 @@ export async function buildOrderItemsSummary(orderId: number): Promise<string> {
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(eq(orderItems.orderId, orderId));
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(asc(orderItems.id));
 
   const itemIds = itemRows.map((i) => i.id);
   const additionLinks = itemIds.length

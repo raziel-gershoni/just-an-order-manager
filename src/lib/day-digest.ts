@@ -45,7 +45,8 @@ async function getOrderItemsSummaries(orderIds: number[]): Promise<ItemsMap> {
     .from(orderItems)
     .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
     .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-    .where(inArray(orderItems.orderId, orderIds));
+    .where(inArray(orderItems.orderId, orderIds))
+    .orderBy(asc(orderItems.id));
 
   const itemIds = allItems.map((i) => i.id);
   const additionLinks = itemIds.length

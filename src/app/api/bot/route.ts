@@ -11,7 +11,7 @@ import {
   orders,
   customers,
 } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { orderPaymentState, recordOrderPayment } from '@/lib/order-payments';
@@ -71,7 +71,9 @@ async function getUserGroups(userId: number) {
     })
     .from(groupMembers)
     .innerJoin(groups, eq(groupMembers.groupId, groups.id))
-    .where(eq(groupMembers.userId, userId));
+    .where(eq(groupMembers.userId, userId))
+    // /today and /week use the first: the lowest group id, the rule drafts use.
+    .orderBy(asc(groupMembers.groupId));
 }
 
 type Lang = 'en' | 'he';

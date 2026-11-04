@@ -30,8 +30,9 @@ const CLOSED = ['delivered', 'cancelled'];
 const byId = <T extends { id: number }>(a: T, b: T) => a.id - b.id;
 
 /**
- * Group orders by delivery date, keeping the input order of the dates (so an
- * API-sorted list stays sorted), each group with its label and loaf total.
+ * Group orders by delivery date, the dates in the list's reading order
+ * (soonest or latest first, whatever order the rows came in), each group with
+ * its label and loaf total. Rows keep their input order within a day.
  *
  * Orders with no date follow the bakery's switch (src/lib/asap.ts), oldest
  * first: with it off they form one בהקדם group just before today (where today
@@ -56,7 +57,9 @@ export function groupByDeliveryDate<T extends DatedOrder>(
     } else if (o.status && CLOSED.includes(o.status)) closedUndated.push(o);
     else openUndated.push(o);
   }
-  const keys = [...dated.keys()];
+  // yyyy-MM-dd strings sort as dates.
+  const keys = [...dated.keys()].sort();
+  if (order === 'latest') keys.reverse();
   // Where today sits, or would sit, in this list's reading order.
   const todayAt = () => {
     const i = keys.indexOf(today);
