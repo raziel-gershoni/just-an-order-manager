@@ -130,7 +130,7 @@ export async function todayDigestText(groupId: number, today: string, lang: Lang
     // parse_mode is HTML: a name, a bread or a note carrying & or < would
     // make Telegram reject the whole digest, and the catch only warns.
     const summary = items.map((i) => `${i.quantity} ${escapeHtml(i.breadTypeName)}`).join(', ');
-    const statusEmoji = o.status === 'ready' ? '✅' : '⏳';
+    const statusEmoji = o.status === 'ready' ? '✅' : o.status === 'baking' ? '🔥' : '⏳';
     const tag = asapInToday && o.deliveryDate === null ? ` · ${t('delivery.asap', lang)}` : '';
     const out = [`${statusEmoji} ${escapeHtml(o.customerName)} — ${summary}${tag}`];
     if (o.notes) out.push(`   💬 ${escapeHtml(o.notes)}`);
