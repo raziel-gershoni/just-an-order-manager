@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
@@ -51,12 +51,10 @@ interface ByType {
 }
 interface BakerData {
   date: string;
+  today: string;
+  asap: { name: string; loaves: number }[];
   byType: ByType[];
   unconfigured: { breadTypeId: number; name: string; reason: 'no_recipe' | 'size_missing_weight' }[];
-}
-
-function todayISO() {
-  return format(new Date(), 'yyyy-MM-dd');
 }
 
 function formatGrams(g: number): string {
@@ -73,7 +71,7 @@ export default function BakerPage() {
   const t = useT();
   const lang = useLang();
 
-  const [date, setDate] = useState<string>(todayISO());
+  const [date, setDate] = useState<string | null>(null);
   const [data, setData] = useState<BakerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -83,7 +81,7 @@ export default function BakerPage() {
     if (!activeGroupId) return;
     setLoading(true);
     setError(false);
-    apiFetch<BakerData>(`/baker?date=${date}`)
+    apiFetch<BakerData>(`/baker${date ? `?date=${date}` : ''}`)
       .then((d) => {
         setData(d);
         setError(false);
@@ -100,10 +98,11 @@ export default function BakerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, date]);
 
-  const dateObj = useMemo(() => parseISO(date), [date]);
+  const shownDate = data?.date ?? data?.today ?? null;
 
   function shiftDate(days: number) {
-    setDate(format(addDays(dateObj, days), 'yyyy-MM-dd'));
+    if (!shownDate) return;
+    setDate(format(addDays(parseISO(shownDate), days), 'yyyy-MM-dd'));
   }
 
   function toggleBreakdown(typeId: number) {
@@ -126,13 +125,15 @@ export default function BakerPage() {
       <Card>
         <div className="space-y-2">
           <div className="flex items-center justify-center gap-2">
-            <span className="text-base font-medium">{formatDateRelative(date, lang)}</span>
-            {date !== todayISO() && (
+            {shownDate && (
+              <span className="text-base font-medium">{formatDateRelative(shownDate, lang)}</span>
+            )}
+            {data && data.date !== data.today && (
               <button
-                onClick={() => setDate(todayISO())}
+                onClick={() => setDate(null)}
                 className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
               >
-                {lang === 'he' ? 'היום' : 'Today'}
+                {t('dash.today')}
               </button>
             )}
           </div>
@@ -142,8 +143,8 @@ export default function BakerPage() {
             </Button>
             <input
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              value={shownDate ?? ''}
+              onChange={(e) => e.target.value && setDate(e.target.value)}
               className="flex-1 bg-transparent text-center font-medium tabular-nums focus:outline-none"
             />
             <Button size="icon" variant="outline" onClick={() => shiftDate(1)}>
@@ -169,6 +170,23 @@ export default function BakerPage() {
               נסה שוב
             </Button>
           </div>
+        </Card>
+      )}
+
+      {!loading && !error && data && data.asap.length > 0 && (
+        <Card className="space-y-2">
+          <div>
+            <div className="font-semibold">{t('delivery.asap')}</div>
+            <div className="text-xs text-muted-foreground">{t('baker.asap_hint')}</div>
+          </div>
+          {data.asap.map((a) => (
+            <div key={a.name} className="text-sm flex justify-between gap-3">
+              <span>{a.name}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {a.loaves} {t('baker.loaves')}
+              </span>
+            </div>
+          ))}
         </Card>
       )}
 
