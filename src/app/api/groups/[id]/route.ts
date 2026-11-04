@@ -32,6 +32,8 @@ const updateGroupSchema = z.object({
   deliveryFreeOver: decimalStr.nullable().optional(),
   deliveryCities: z.array(z.string().min(1).max(255)).max(100).optional(),
   recurringRemindersEnabled: z.boolean().optional(),
+  asapInToday: z.boolean().optional(),
+  kitchenShowRecipe: z.boolean().optional(),
 });
 
 const DELIVERY_KEYS = [
@@ -73,6 +75,9 @@ export const PATCH = withAuth(async (request, auth) => {
   if (parsed.data.recurringRemindersEnabled !== undefined && !canManage) {
     return errorResponse('Only owner or manager can edit reminders', 403);
   }
+  if ((parsed.data.asapInToday !== undefined || parsed.data.kitchenShowRecipe !== undefined) && !canManage) {
+    return errorResponse('Only owner or manager can edit order display', 403);
+  }
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
@@ -82,6 +87,8 @@ export const PATCH = withAuth(async (request, auth) => {
   if (parsed.data.recurringRemindersEnabled !== undefined) {
     updates.recurringRemindersEnabled = parsed.data.recurringRemindersEnabled;
   }
+  if (parsed.data.asapInToday !== undefined) updates.asapInToday = parsed.data.asapInToday;
+  if (parsed.data.kitchenShowRecipe !== undefined) updates.kitchenShowRecipe = parsed.data.kitchenShowRecipe;
   for (const k of DELIVERY_KEYS) {
     if (parsed.data[k] !== undefined) updates[k] = parsed.data[k];
   }

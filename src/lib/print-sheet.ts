@@ -9,11 +9,12 @@ import {
   breadAdditions,
   orderItemAdditions,
 } from '@/db/schema';
-import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import { format, parseISO, isValid } from 'date-fns';
 import { he } from 'date-fns/locale/he';
 import { addDaysStr, todayStr } from './date-utils';
 import { israelDay } from '@/db/israel-day';
+import { todayCondition, undatedFirst } from './asap';
 import { formatStaffItemLabel } from './order-display';
 import { calculateOrderTotal, orderPaymentsTotals } from './order-payments';
 import { aggregateRecipesForOrders } from './order-recipe';
@@ -136,13 +137,14 @@ export function headingFor(date: string | null): string {
 export async function buildPrintSheet(
   groupId: number,
   date: string | null,
-  opts: { withUndated?: boolean } = {}
+  opts: { withUndated?: boolean; undatedOnly?: boolean } = {}
 ): Promise<PrintSheet> {
   // A dated sheet keeps delivered orders — printing yesterday is how you check
   // what went out. The active view is the opposite: only what's still open.
-  // `withUndated` (the kitchen screen's today) adds the open orders with no
-  // date, the בהקדם ones, which are today's work; the dashboard counts them
-  // the same way.
+  // `withUndated` (today, when בהקדם orders count as part of it) adds the open
+  // orders with no date to a dated sheet; `undatedOnly` (date null) is the
+  // separate בהקדם sheet of just those. Which one a screen asks for is the
+  // bakery's switch (src/lib/asap.ts); this builder never reads it.
   const open = notInArray(orders.status, ['delivered', 'cancelled']);
   const rows = await db
     .select({
@@ -163,20 +165,23 @@ export async function buildPrintSheet(
       date
         ? and(
             eq(orders.groupId, groupId),
-            opts.withUndated
-              ? or(eq(orders.deliveryDate, date), and(isNull(orders.deliveryDate), open))
-              : eq(orders.deliveryDate, date),
+            opts.withUndated ? todayCondition(date, true) : eq(orders.deliveryDate, date),
             ne(orders.status, 'cancelled')
           )
-        : and(eq(orders.groupId, groupId), open)
+        : and(eq(orders.groupId, groupId), open, opts.undatedOnly ? isNull(orders.deliveryDate) : undefined)
     )
     // ASAP orders carry no date; on the active sheet they're the most urgent
-    // thing on it, so they lead rather than sink to the bottom. On a dated
-    // sheet that takes them in, every one of them comes before the day's own.
+    // thing on it, so they lead rather than sink to the bottom. On a sheet
+    // that takes them in (or holds only them) they come first, oldest first by
+    // order number; every dated row on a dated sheet shares one date, so the
+    // id order among them is unchanged.
     .orderBy(
-      ...(opts.withUndated ? [sql`${orders.deliveryDate} is not null`] : []),
-      sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) asc nulls first`,
-      asc(orders.id)
+      ...(opts.withUndated || opts.undatedOnly
+        ? [undatedFirst, asc(orders.id)]
+        : [
+            sql`coalesce(${orders.deliveryDate}, ${israelDay(orders.createdAt)}) asc nulls first`,
+            asc(orders.id),
+          ])
     );
 
   if (rows.length === 0) {

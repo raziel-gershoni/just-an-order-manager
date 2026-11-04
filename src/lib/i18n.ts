@@ -166,6 +166,9 @@ const translations: Record<string, string> = {
   'settings.logo_remove': 'הסרה',
   'settings.saved': '!נשמר',
   'settings.save_failed': 'השמירה נכשלה',
+  'settings.asap_title': 'הזמנות בהקדם',
+  'settings.asap_in_today': 'להציג בתוך היום',
+  'settings.asap_hint': 'כבוי: הזמנות בהקדם מופיעות כקבוצה נפרדת לפני היום. דלוק: הן חלק מהיום, כולל בספירת הכיכרות ובמשקלי הלישה.',
   'settings.logo_upload_failed': 'העלאת הלוגו נכשלה',
   'settings.logo_remove_failed': 'הסרת הלוגו נכשלה',
   'settings.invite': 'הזמן חבר',
@@ -393,6 +396,7 @@ const translations: Record<string, string> = {
   'baker.hide_recipe': 'הסתר מתכון',
   'baker.by_size': 'לפי גודל',
   'baker.recipe_block_title': 'מתכון להיום',
+  'baker.asap_hint': 'בלי משקלי לישה: להזמנות בהקדם אין יום אפייה קבוע.',
 
   // Recurring
   'orders.recurring': 'חוזר',
@@ -526,6 +530,7 @@ const translations: Record<string, string> = {
   'notify.notes': 'הערות',
   'notify.loaves': 'כיכרות',
   'notify.total_today': 'סה"כ הזמנות להיום',
+  'notify.total_asap': 'סה"כ בהקדם',
   'notify.morning_summary': 'סיכום אפייה להיום',
   'notify.weekly_summary': 'סיכום שבועי',
   'notify.no_orders_today': 'אין הזמנות להיום',
@@ -807,6 +812,7 @@ const translations: Record<string, string> = {
   'deliv.today': 'משלוחים היום',
   'deliv.upcoming': 'משלוחים קרובים',
   'deliv.none': 'אין משלוחים',
+  'deliv.load_failed': 'טעינת המשלוחים נכשלה',
   'deliv.collect': 'לגבייה',
   'deliv.mark_delivered': 'נמסר',
   'deliv.deliver_collect': 'מסר ונגבה',
@@ -820,6 +826,8 @@ const translations: Record<string, string> = {
   'deliv.pub_free_over': 'חינם מעל',
   // Kitchen screen
   'kitchen.app_name': 'מטבח',
+  'kitchen.show_recipe': 'הצג מתכון',
+  'kitchen.show_recipe_hint': 'משקלי הלישה של כל יום במסך המטבח. ספירת הכיכרות והשקיות מוצגות תמיד.',
   'kitchen.today': 'היום',
   'kitchen.tomorrow': 'מחר',
   'kitchen.no_orders_today': 'אין הזמנות להיום',

@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t as translate } from '@/lib/i18n';
-import { groupByDeliveryDate } from '@/lib/order-grouping';
+import { groupByDeliveryDate, rowItemsLine } from '@/lib/order-grouping';
 import { Plus, ClipboardList, AlertCircle, RotateCw, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { docketWidth } from '@/components/ui/DocketStub';
@@ -39,6 +39,8 @@ export default function OrdersPage() {
   const t = useT();
   const lang = useLang();
   const [orders, setOrders] = useState<Order[]>([]);
+  // The server's day and the bakery's בהקדם switch, which place undated orders.
+  const [display, setDisplay] = useState<{ today: string; asapInToday: boolean }>({ today: '', asapInToday: false });
   const [printUrl, setPrintUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -57,8 +59,11 @@ export default function OrdersPage() {
       params.set('status', 'delivered');
     }
 
-    apiFetch<{ orders: Order[] }>(`/orders?${params}`)
-      .then((d) => setOrders(d.orders))
+    apiFetch<{ orders: Order[]; today: string; asapInToday: boolean }>(`/orders?${params}`)
+      .then((d) => {
+        setOrders(d.orders);
+        setDisplay({ today: d.today, asapInToday: d.asapInToday });
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [activeGroupId, tab, reloadKey]);
@@ -172,7 +177,7 @@ export default function OrdersPage() {
         />
       ) : (
         <Card className="p-0 overflow-hidden">
-          {groupByDeliveryDate(orders, lang).map((group) => (
+          {groupByDeliveryDate(orders, lang, { ...display, order: tab === 'active' ? 'soonest' : 'latest' }).map((group) => (
             <div key={group.key}>
               <DateGroupHeader label={group.label} loaves={group.loaves} />
               {group.items.map((o, idx) => (
@@ -182,7 +187,7 @@ export default function OrdersPage() {
                   idWidth={idW}
                   href={`/miniapp/orders/${o.id}`}
                   primary={o.customerName}
-                  secondary={o.itemsSummary}
+                  secondary={rowItemsLine(o, o.itemsSummary, group.key, lang)}
                   status={o.status}
                   statusLabel={translate(`status.${o.status}`, lang)}
                   paid={o.paid}

@@ -9,22 +9,16 @@ import {
   groupMembers,
   groupInvites,
   orders,
-  orderItems,
   customers,
-  breadTypes,
-  breadSizes,
-  breadAdditions,
-  orderItemAdditions,
 } from '@/db/schema';
-import { eq, and, gte, lte, ne, asc, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { orderPaymentState, recordOrderPayment } from '@/lib/order-payments';
 import { transitionOrderStatus } from '@/lib/order-status';
 import { resolveBotOrderAccess } from '@/lib/telegram-auth';
 import { respondToInvite } from '@/lib/invites';
-import { formatStaffItemLabel } from '@/lib/order-display';
-import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
+import { todayDigestText, weekDigestText } from '@/lib/day-digest';
 import { siteBaseUrl } from '@/lib/site-url';
 import { createDraft, setDraftReply } from '@/lib/order-drafts';
 import { resolveDraftSender, processOrderDraft, reportStaleDrafts, type DraftJob } from '@/lib/order-draft-process';
@@ -296,49 +290,6 @@ function setupHandlers(bot: import('grammy').Bot) {
   });
 
   // /today command
-  // Helper: get items summary for orders
-  async function getOrderItemsSummaries(orderIds: number[]) {
-    if (orderIds.length === 0) return {};
-    const allItems = await db
-      .select({
-        id: orderItems.id,
-        orderId: orderItems.orderId,
-        typeName: breadTypes.name,
-        sizeName: breadSizes.name,
-        weightGrams: breadSizes.weightGrams,
-        quantity: orderItems.quantity,
-      })
-      .from(orderItems)
-      .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
-      .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-      .where(inArray(orderItems.orderId, orderIds));
-
-    const itemIds = allItems.map((i) => i.id);
-    const additionLinks = itemIds.length
-      ? await db
-          .select({ orderItemId: orderItemAdditions.orderItemId, name: breadAdditions.name })
-          .from(orderItemAdditions)
-          .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
-          .where(inArray(orderItemAdditions.orderItemId, itemIds))
-          .orderBy(asc(breadAdditions.sortOrder))
-      : [];
-    const additionsByItem: Record<number, string[]> = {};
-    for (const a of additionLinks) {
-      if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
-      additionsByItem[a.orderItemId].push(a.name);
-    }
-
-    const map: Record<number, { breadTypeName: string; quantity: number }[]> = {};
-    for (const item of allItems) {
-      if (!map[item.orderId]) map[item.orderId] = [];
-      map[item.orderId].push({
-        breadTypeName: formatStaffItemLabel(item.typeName, item.sizeName, item.weightGrams, additionsByItem[item.id] ?? []),
-        quantity: item.quantity,
-      });
-    }
-    return map;
-  }
-
   bot.command('today', async (ctx) => {
     const telegramId = String(ctx.from!.id);
     const [user] = await db
@@ -355,59 +306,8 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
-    const today = todayStr();
-    const groupId = userGroups[0].groupId;
-
-    const todayOrders = await db
-      .select({
-        id: orders.id,
-        status: orders.status,
-        customerName: customers.name,
-        notes: orders.notes,
-      })
-      .from(orders)
-      .innerJoin(customers, eq(orders.customerId, customers.id))
-      .where(
-        and(
-          eq(orders.groupId, groupId),
-          eq(orders.deliveryDate, today),
-          ne(orders.status, 'cancelled')
-        )
-      )
-      .orderBy(asc(customers.name));
-
-    if (todayOrders.length === 0) {
-      await ctx.reply(t('notify.no_orders_today', lang));
-      return;
-    }
-
-    const itemsMap = await getOrderItemsSummaries(todayOrders.map((o) => o.id));
-
-    const lines = [`<b>📋 ${t('notify.morning_summary', lang)}</b>`, ''];
-    let total = 0;
-    for (const o of todayOrders) {
-      const items = itemsMap[o.id] || [];
-      // parse_mode is HTML: a name, a bread or a note carrying & or < would
-      // make Telegram reject the whole digest, and the catch only warns.
-      const summary = items.map((i) => `${i.quantity} ${escapeHtml(i.breadTypeName)}`).join(', ');
-      const qty = items.reduce((s, i) => s + i.quantity, 0);
-      const statusEmoji =
-        o.status === 'ready' ? '✅' : o.status === 'baking' ? '🔥' : '⏳';
-      lines.push(`${statusEmoji} ${escapeHtml(o.customerName)} — ${summary}`);
-      if (o.notes) lines.push(`   💬 ${escapeHtml(o.notes)}`);
-      total += qty;
-    }
-    lines.push('');
-    lines.push(
-      `<b>${t('notify.total_today', lang)}:</b> ${total} ${t('notify.loaves', lang)}`
-    );
-
-    const recipeBlock = await buildRecipeBlockForOrders(todayOrders.map((o) => o.id));
-    if (recipeBlock) {
-      lines.push('', recipeBlock);
-    }
-
-    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+    const text = await todayDigestText(userGroups[0].groupId, todayStr(), lang);
+    await ctx.reply(text ?? t('notify.no_orders_today', lang), text ? { parse_mode: 'HTML' } : undefined);
   });
 
   // /week command
@@ -427,66 +327,8 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
-    const today = todayStr();
-    const weekEnd = upcomingHorizonStr();
-    const groupId = userGroups[0].groupId;
-
-    const weekOrders = await db
-      .select({
-        id: orders.id,
-        deliveryDate: orders.deliveryDate,
-        status: orders.status,
-        customerName: customers.name,
-      })
-      .from(orders)
-      .innerJoin(customers, eq(orders.customerId, customers.id))
-      .where(
-        and(
-          eq(orders.groupId, groupId),
-          gte(orders.deliveryDate, today),
-          lte(orders.deliveryDate, weekEnd),
-          ne(orders.status, 'cancelled')
-        )
-      )
-      .orderBy(asc(orders.deliveryDate), asc(customers.name));
-
-    if (weekOrders.length === 0) {
-      await ctx.reply(t('bot.no_orders', lang));
-      return;
-    }
-
-    const itemsMap = await getOrderItemsSummaries(weekOrders.map((o) => o.id));
-
-    const byDate: Record<string, typeof weekOrders> = {};
-    for (const o of weekOrders) {
-      const d = o.deliveryDate ?? 'ASAP';
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push(o);
-    }
-
-    const lines = [`<b>📅 ${t('notify.weekly_summary', lang)}</b>`, ''];
-    for (const [dateStr, dateOrders] of Object.entries(byDate)) {
-      const total = dateOrders.reduce((s, o) => {
-        const items = itemsMap[o.id] || [];
-        return s + items.reduce((ss, i) => ss + i.quantity, 0);
-      }, 0);
-      lines.push(
-        `<b>${dateStr}</b> (${total} ${t('notify.loaves', lang)})`
-      );
-      for (const o of dateOrders) {
-        const items = itemsMap[o.id] || [];
-        const summary = items.map((i) => `${i.quantity} ${escapeHtml(i.breadTypeName)}`).join(', ');
-        lines.push(`  • ${escapeHtml(o.customerName)} — ${summary}`);
-      }
-      lines.push('');
-    }
-
-    const recipeBlock = await buildRecipeBlockForOrders(weekOrders.map((o) => o.id));
-    if (recipeBlock) {
-      lines.push(recipeBlock);
-    }
-
-    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+    const text = await weekDigestText(userGroups[0].groupId, todayStr(), upcomingHorizonStr(), lang);
+    await ctx.reply(text ?? t('bot.no_orders', lang), text ? { parse_mode: 'HTML' } : undefined);
   });
 
   // /settings command

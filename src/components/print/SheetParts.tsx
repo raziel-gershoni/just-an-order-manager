@@ -1,4 +1,5 @@
 import { formatWeekdayShort } from '@/lib/date-utils';
+import { t } from '@/lib/i18n';
 import type { PrintOrder, PrintRecipeBlock, PrintSheet } from '@/lib/print-sheet';
 
 export const STATUS_STAMP: Record<string, string> = {
@@ -122,7 +123,7 @@ export function OrderBlock({ order, showDate }: { order: PrintOrder; showDate: b
   const when = showDate
     ? order.deliveryDate
       ? formatWeekdayShort(order.deliveryDate)
-      : 'בהקדם'
+      : t('delivery.asap')
     : null;
   // Everything except the phone, which has to be bidi-isolated: an LTR number
   // dropped into an RTL line reorders, and "+972-50-123-4567" prints as

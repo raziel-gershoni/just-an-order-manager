@@ -1,9 +1,10 @@
 import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions, payments } from '@/db/schema';
-import { eq, and, asc, gte, lte, sql, ne, inArray, or, isNull, notInArray } from 'drizzle-orm';
+import { eq, and, asc, gte, lte, sql, ne, inArray } from 'drizzle-orm';
 import { addDaysStr, todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { formatItemLine } from '@/lib/order-display';
+import { getOrderDisplay, todayCondition, openUndated, undatedFirst } from '@/lib/asap';
 
 async function enrichOrdersWithItems<T extends { id: number }>(orderRows: T[]) {
   const orderIds = orderRows.map((o) => o.id);
@@ -60,7 +61,9 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
   const weekEnd = upcomingHorizonStr();
   const tomorrow = addDaysStr(today, 1);
 
-  // Today's orders (includes orders with no delivery date that are still active)
+  const { asapInToday } = await getOrderDisplay(groupId);
+
+  // Today's orders; with the בהקדם switch on, the open undated ones too, first and oldest first
   const todayOrderRows = await db
     .select({
       id: orders.id,
@@ -69,6 +72,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       isRecurring: orders.isRecurring,
       isDelivery: orders.isDelivery,
       notes: orders.notes,
+      deliveryDate: orders.deliveryDate,
       customerName: customers.name,
     })
     .from(orders)
@@ -77,17 +81,32 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       and(
         eq(orders.groupId, groupId),
         ne(orders.status, 'cancelled'),
-        or(
-          eq(orders.deliveryDate, today),
-          and(
-            isNull(orders.deliveryDate),
-            notInArray(orders.status, ['delivered', 'cancelled'])
-          )
-        )
+        todayCondition(today, asapInToday)
       )
-    );
+    )
+    .orderBy(undatedFirst, asc(orders.id));
 
   const todayOrders = await enrichOrdersWithItems(todayOrderRows);
+
+  // With the switch off, the בהקדם orders are their own group above today
+  const asapOrderRows = asapInToday
+    ? []
+    : await db
+        .select({
+          id: orders.id,
+          status: orders.status,
+          paid: orders.paid,
+          isRecurring: orders.isRecurring,
+          isDelivery: orders.isDelivery,
+          notes: orders.notes,
+          deliveryDate: orders.deliveryDate,
+          customerName: customers.name,
+        })
+        .from(orders)
+        .innerJoin(customers, eq(orders.customerId, customers.id))
+        .where(and(eq(orders.groupId, groupId), openUndated()))
+        .orderBy(asc(orders.id));
+  const asapOrders = await enrichOrdersWithItems(asapOrderRows);
 
   // Upcoming orders
   const upcomingOrderRows = await db
@@ -134,7 +153,10 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
   const totalPendingLoaves = todayOrders.reduce((s, o) => s + o.totalQuantity, 0);
 
   return jsonResponse({
+    today,
+    asapInToday,
     todayOrders,
+    asapOrders,
     upcomingOrders,
     pendingCount: pendingResult.count,
     customersWithDebt,

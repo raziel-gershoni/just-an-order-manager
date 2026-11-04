@@ -5,22 +5,28 @@ import { orders } from '@/db/schema';
 import { buildPrintSheet, headingFor, type PrintSheet } from './print-sheet';
 import { t } from './i18n';
 import { addDaysStr, israelTodayStr } from './date-utils';
+import { getOrderDisplay } from './asap';
 import { DATA_TAG } from './cache-tags';
 import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
 
 /**
  * What the kitchen screen shows: the print sheet of every coming day, built by
  * buildPrintSheet itself so the screen and a printout can never disagree.
- * Today first (always, even empty, so tomorrow can't pass for today), holding
- * the open בהקדם orders too, then every later day that has orders. Past days
- * are left out.
+ * Today first (always, even empty, so tomorrow can't pass for today), then
+ * every later day that has orders. Past days are left out.
+ *
+ * Where the open בהקדם orders go follows the bakery's switch
+ * (src/lib/asap.ts): inside today's sheet, first, or a card of their own
+ * before it, with no mixing weights. The recipe switch rides along as
+ * `showRecipe` so the screen can hide the לישה section.
  */
 
-export type KitchenDayKind = 'today' | 'tomorrow' | 'later';
+export type KitchenDayKind = 'asap' | 'today' | 'tomorrow' | 'later';
 export interface KitchenDay {
   key: string;
   kind: KitchenDayKind;
-  date: string;
+  /** Null for the בהקדם card. */
+  date: string | null;
   /** The heading, built here because this module can't be imported by the client component that shows it. */
   title: string;
   sheet: PrintSheet;
@@ -28,10 +34,13 @@ export interface KitchenDay {
 export interface KitchenData {
   today: string;
   builtAt: string;
+  /** Whether the לישה (mixing weights) section is shown on the cards. */
+  showRecipe: boolean;
   days: KitchenDay[];
 }
 
-function dayTitle(kind: KitchenDayKind, date: string): string {
+function dayTitle(kind: KitchenDayKind, date: string | null): string {
+  if (kind === 'asap' || !date) return t('delivery.asap');
   const heading = headingFor(date);
   if (kind === 'today') return `${t('kitchen.today')} · ${heading}`;
   if (kind === 'tomorrow') return `${t('kitchen.tomorrow')} · ${heading}`;
@@ -39,6 +48,8 @@ function dayTitle(kind: KitchenDayKind, date: string): string {
 }
 
 export async function loadKitchenData(groupId: number, today: string): Promise<KitchenData> {
+  // Read on every build, so a flip of the switch shows on the next one.
+  const display = await getOrderDisplay(groupId);
   const dated = await db
     .selectDistinct({ date: orders.deliveryDate })
     .from(orders)
@@ -47,13 +58,19 @@ export async function loadKitchenData(groupId: number, today: string): Promise<K
   const dates = [today, ...dated.map((r) => r.date).filter((d): d is string => !!d && d !== today)];
   const tomorrow = addDaysStr(today, 1);
 
-  const sheets = await Promise.all(dates.map((d) => buildPrintSheet(groupId, d, { withUndated: d === today })));
+  const [asapSheet, ...sheets] = await Promise.all([
+    display.asapInToday ? null : buildPrintSheet(groupId, null, { undatedOnly: true }),
+    ...dates.map((d) => buildPrintSheet(groupId, d, { withUndated: display.asapInToday && d === today })),
+  ]);
 
   const days = dates.map((date, i): KitchenDay => {
     const kind: KitchenDayKind = date === today ? 'today' : date === tomorrow ? 'tomorrow' : 'later';
     return { key: date, kind, date, title: dayTitle(kind, date), sheet: sheets[i] };
   });
-  return { today, builtAt: new Date().toISOString(), days };
+  if (asapSheet && asapSheet.orders.length > 0) {
+    days.unshift({ key: 'asap', kind: 'asap', date: null, title: dayTitle('asap', null), sheet: asapSheet });
+  }
+  return { today, builtAt: new Date().toISOString(), showRecipe: display.kitchenShowRecipe, days };
 }
 
 /** The Israel date is in the key, so the first check after midnight builds the new day. */

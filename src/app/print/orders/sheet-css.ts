@@ -251,5 +251,7 @@ body { background: #EFEBE2; }
   .order { break-inside: avoid; page-break-inside: avoid; }
   .bake { break-inside: avoid; page-break-inside: avoid; }
   .recipe { break-inside: avoid; page-break-inside: avoid; }
+  /* The בהקדם sheet and today's are two sheets: each starts its own page. */
+  .sheet + .sheet { break-before: page; page-break-before: always; }
 }
 `;

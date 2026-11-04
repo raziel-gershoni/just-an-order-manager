@@ -5,7 +5,7 @@ import type { KitchenData, KitchenDay } from '@/lib/kitchen-sheet';
 
 const count = (n: number, one: string, many: string) => (n === 1 ? t(one) : t(many).replace('{n}', String(n)));
 
-function DaySheet({ day }: { day: KitchenDay }) {
+function DaySheet({ day, showRecipe }: { day: KitchenDay; showRecipe: boolean }) {
   const { sheet } = day;
   const prefix = `${day.key}-`;
   return (
@@ -21,11 +21,12 @@ function DaySheet({ day }: { day: KitchenDay }) {
         <p className="empty">{t('kitchen.no_orders_today')}</p>
       ) : (
         <>
-          <MixSection sheet={sheet} idPrefix={prefix} />
+          {showRecipe && <MixSection sheet={sheet} idPrefix={prefix} />}
           <BakeSection sheet={sheet} idPrefix={prefix} />
           <section className="orders" aria-label={day.title}>
-            {/* Every order here is on this day except today's בהקדם ones, so only
-                those say when (an undated order's date reads בהקדם). */}
+            {/* Every order here is on this day except the בהקדם ones (their own card,
+                or first in today), so only those say when (an undated order's date
+                reads בהקדם). */}
             {sheet.orders.map((o) => (
               <OrderBlock key={o.id} order={o} showDate={!o.deliveryDate} />
             ))}
@@ -40,7 +41,7 @@ export function KitchenSheets({ data }: { data: KitchenData }) {
   return (
     <main className="kitchen">
       {data.days.map((day) => (
-        <DaySheet key={day.key} day={day} />
+        <DaySheet key={day.key} day={day} showRecipe={data.showRecipe} />
       ))}
     </main>
   );

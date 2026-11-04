@@ -17,12 +17,14 @@ import { SectionHead } from '@/components/ui/SectionHead';
 import { DocketRow } from '@/components/ui/DocketRow';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
-import { groupByDeliveryDate } from '@/lib/order-grouping';
+import { groupByDeliveryDate, rowItemsLine } from '@/lib/order-grouping';
 import { Plus, Banknote, Wheat, AlertTriangle, Clock, Truck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface DashboardData {
+  today: string;
+  asapInToday: boolean;
   todayOrders: {
     id: number;
     status: string;
@@ -30,10 +32,12 @@ interface DashboardData {
     isRecurring?: boolean;
     isDelivery?: boolean;
     notes: string | null;
+    deliveryDate: string | null;
     customerName: string;
     totalQuantity: number;
     itemsSummary: string;
   }[];
+  asapOrders: DashboardData['todayOrders'];
   upcomingOrders: {
     id: number;
     deliveryDate: string | null;
@@ -192,9 +196,10 @@ export default function Dashboard() {
   }
 
   const todayOrders = data?.todayOrders ?? [];
+  const asapOrders = data?.asapOrders ?? [];
   const upcomingOrders = data?.upcomingOrders ?? [];
-  const schedW = docketWidth([...todayOrders, ...upcomingOrders].map((o) => o.id));
-  const nothingScheduled = todayOrders.length === 0 && upcomingOrders.length === 0;
+  const schedW = docketWidth([...asapOrders, ...todayOrders, ...upcomingOrders].map((o) => o.id));
+  const nothingScheduled = todayOrders.length === 0 && asapOrders.length === 0 && upcomingOrders.length === 0;
   const maxTodayNo = todayOrders.length ? Math.max(...todayOrders.map((o) => o.id)) : 0;
 
   const now = new Date();
@@ -304,12 +309,12 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Today's Orders — hidden entirely when there's nothing today */}
-      {todayOrders.length > 0 && (
+      {/* בהקדם — open orders with no date, their own group while the switch is off */}
+      {asapOrders.length > 0 && (
         <>
-          <SectionHead label={t('dash.today')} />
+          <SectionHead label={t('delivery.asap')} loaves={asapOrders.reduce((s, o) => s + o.totalQuantity, 0)} />
           <section className="mx-4 overflow-hidden rounded-[8px] border border-border bg-card shadow-sm">
-            {todayOrders.map((o, idx) => (
+            {asapOrders.map((o, idx) => (
               <DocketRow
                 key={o.id}
                 id={o.id}
@@ -331,8 +336,35 @@ export default function Dashboard() {
         </>
       )}
 
+      {/* Today's Orders — hidden entirely when there's nothing today */}
+      {todayOrders.length > 0 && (
+        <>
+          <SectionHead label={t('dash.today')} />
+          <section className="mx-4 overflow-hidden rounded-[8px] border border-border bg-card shadow-sm">
+            {todayOrders.map((o, idx) => (
+              <DocketRow
+                key={o.id}
+                id={o.id}
+                idWidth={schedW}
+                href={`/miniapp/orders/${o.id}`}
+                primary={o.customerName}
+                secondary={rowItemsLine(o, o.itemsSummary, data!.today, lang)}
+                status={o.status}
+                statusLabel={translate(`status.${o.status}`, lang)}
+                paid={o.paid}
+                showPay
+                isRecurring={o.isRecurring}
+                isDelivery={o.isDelivery}
+                hasNotes={!!o.notes}
+                first={idx === 0}
+              />
+            ))}
+          </section>
+        </>
+      )}
+
       {/* Upcoming — each delivery date is its own section separator (no per-row date) */}
-      {groupByDeliveryDate(upcomingOrders, lang).map((group) => (
+      {groupByDeliveryDate(upcomingOrders, lang, { today: data?.today ?? '', asapInToday: data?.asapInToday ?? false, order: 'soonest' }).map((group) => (
         <div key={group.key}>
           <SectionHead label={group.label} loaves={group.loaves} />
           <section className="mx-4 overflow-hidden rounded-[8px] border border-border bg-card shadow-sm">

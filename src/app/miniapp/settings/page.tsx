@@ -46,6 +46,10 @@ export default function SettingsPage() {
   const [newCity, setNewCity] = useState('');
   const [savingDeliv, setSavingDeliv] = useState(false);
 
+  // Placement and kitchen switches: null until the group has loaded.
+  const [asapInToday, setAsapInToday] = useState<boolean | null>(null);
+  const [kitchenShowRecipe, setKitchenShowRecipe] = useState<boolean | null>(null);
+
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker' | 'driver'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -64,6 +68,8 @@ export default function SettingsPage() {
           deliveryFee: string;
           deliveryFreeOver: string | null;
           deliveryCities: string[] | null;
+          asapInToday: boolean;
+          kitchenShowRecipe: boolean;
         };
         role: string;
       }>(`/groups/${activeGroupId}`),
@@ -79,6 +85,8 @@ export default function SettingsPage() {
         setDelivFee(g.group.deliveryFee && g.group.deliveryFee !== '0' ? g.group.deliveryFee : '');
         setDelivFreeOver(g.group.deliveryFreeOver ?? '');
         setDelivCities(g.group.deliveryCities ?? []);
+        setAsapInToday(g.group.asapInToday ?? false);
+        setKitchenShowRecipe(g.group.kitchenShowRecipe ?? true);
         setMembers(m.members);
         setInvites(i.invites);
       })
@@ -138,6 +146,19 @@ export default function SettingsPage() {
       toast.error(t('settings.save_failed'));
     }
     setSavingDeliv(false);
+  }
+
+  async function toggleAsap(next: boolean) {
+    if (!activeGroupId) return;
+    const prev = asapInToday;
+    setAsapInToday(next);
+    try {
+      await apiFetch(`/groups/${activeGroupId}`, { method: 'PATCH', body: JSON.stringify({ asapInToday: next }) });
+    } catch (err) {
+      console.error('[settings] asap switch save failed:', err);
+      setAsapInToday(prev);
+      toast.error(t('settings.save_failed'));
+    }
   }
 
   function addCity() {
@@ -361,7 +382,32 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      {canManage && activeGroupId && <KitchenScreenCard groupId={activeGroupId} />}
+      {/* בהקדם placement (owner/manager) */}
+      {canManage && (
+        <section>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+            {t('settings.asap_title')}
+          </h2>
+          <Card className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{t('settings.asap_in_today')}</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={asapInToday === true}
+                disabled={asapInToday === null}
+                onClick={() => toggleAsap(!asapInToday)}
+                className={'relative h-7 w-12 flex-none rounded-full transition-colors ' + (asapInToday ? 'bg-success' : 'bg-muted')}
+              >
+                <span className={'absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-all ' + (asapInToday ? 'start-6' : 'start-1')} />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('settings.asap_hint')}</p>
+          </Card>
+        </section>
+      )}
+
+      {canManage && activeGroupId && <KitchenScreenCard groupId={activeGroupId} initialShowRecipe={kitchenShowRecipe} />}
 
       {/* Invite — owners and managers only. The endpoint refuses a baker or a
           driver, so leaving the form on their screen offered a button that
