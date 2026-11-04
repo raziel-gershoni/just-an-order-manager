@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { groups, orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, orderItemAdditions } from '@/db/schema';
-import { eq, and, asc, ne, inArray } from 'drizzle-orm';
+import { groups } from '@/db/schema';
 import { todayStr } from '@/lib/date-utils';
 import { sendMorningSummary, notifyRemindersStalled } from '@/lib/notifications';
 import { findMissedRecurringReminders } from '@/lib/reminder-health';
-import { formatStaffItemLabel } from '@/lib/order-display';
-import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
+import { morningBake } from '@/lib/day-digest';
 import { sendPendingApprovalNudge, sendUnpaidNudge } from '@/lib/order-nudges';
 
 export const maxDuration = 60;
@@ -113,95 +111,21 @@ async function handler(request: Request) {
 /** Today's bake, grouped by bread type, with the per-type recipe block. */
 async function sendBakingSummary(groupId: number, today: string, stats: Stats) {
   try {
-    const todayOrders = await db
-      .select({
-        id: orders.id,
-        customerName: customers.name,
-      })
-      .from(orders)
-      .innerJoin(customers, eq(orders.customerId, customers.id))
-      .where(
-        and(
-          eq(orders.groupId, groupId),
-          eq(orders.deliveryDate, today),
-          ne(orders.status, 'cancelled'),
-          ne(orders.status, 'delivered')
-        )
-      );
-
-    if (todayOrders.length === 0) {
+    const bake = await morningBake(groupId, today);
+    if (!bake) {
       stats.skipped++;
       return;
     }
 
-    const orderIds = todayOrders.map((o) => o.id);
-    const allItems = await db
-      .select({
-        id: orderItems.id,
-        orderId: orderItems.orderId,
-        breadTypeId: orderItems.breadTypeId,
-        breadTypeName: breadTypes.name,
-        sizeName: breadSizes.name,
-        weightGrams: breadSizes.weightGrams,
-        quantity: orderItems.quantity,
-      })
-      .from(orderItems)
-      .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
-      .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-      .where(inArray(orderItems.orderId, orderIds));
-
-    const itemIds = allItems.map((i) => i.id);
-    const additionLinks = itemIds.length
-      ? await db
-          .select({ orderItemId: orderItemAdditions.orderItemId, name: breadAdditions.name })
-          .from(orderItemAdditions)
-          .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
-          .where(inArray(orderItemAdditions.orderItemId, itemIds))
-          .orderBy(asc(breadAdditions.sortOrder))
-      : [];
-    const additionsByItem: Record<number, string[]> = {};
-    for (const a of additionLinks) {
-      if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
-      additionsByItem[a.orderItemId].push(a.name);
-    }
-
-    const summaryItems: { customerName: string; breadTypeName: string; quantity: number }[] = [];
-    for (const order of todayOrders) {
-      const items = allItems.filter((i) => i.orderId === order.id);
-      for (const item of items) {
-        summaryItems.push({
-          customerName: order.customerName,
-          breadTypeName: formatStaffItemLabel(item.breadTypeName, item.sizeName, item.weightGrams, additionsByItem[item.id] ?? []),
-          quantity: item.quantity,
-        });
-      }
-    }
-
-    // Build per-type recipe block for the baker (Hebrew)
-    let recipeBlock: string | undefined;
-    try {
-      recipeBlock = (await buildRecipeBlockForOrders(todayOrders.map((o) => o.id))) || undefined;
-    } catch (err) {
-      console.error(`[cron/morning-reminder] recipe block failed for group ${groupId}:`, err);
-    }
-
-    if (summaryItems.length > 0) {
-      const { sent: okCount, failed: failCount } = await sendMorningSummary(
-        groupId,
-        summaryItems,
-        recipeBlock
+    const { sent: okCount, failed: failCount } = await sendMorningSummary(groupId, bake);
+    stats.sent++;
+    stats.notified += okCount;
+    stats.notifyFailed += failCount;
+    // sendToRecipients already logs each failed send; surface the group tally too.
+    if (failCount > 0) {
+      console.warn(
+        `[cron/morning-reminder] group ${groupId}: ${failCount} baker notification(s) failed to deliver`
       );
-      stats.sent++;
-      stats.notified += okCount;
-      stats.notifyFailed += failCount;
-      // sendToRecipients already logs each failed send; surface the group tally too.
-      if (failCount > 0) {
-        console.warn(
-          `[cron/morning-reminder] group ${groupId}: ${failCount} baker notification(s) failed to deliver`
-        );
-      }
-    } else {
-      stats.skipped++;
     }
   } catch (err) {
     stats.failed++;

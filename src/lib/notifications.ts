@@ -136,6 +136,8 @@ export async function notifyNewOrder(
       lines.push(
         `<b>${t('notify.delivery_date', lang)}:</b> ${formatWeekdayShort(order.deliveryDate)}`
       );
+    } else {
+      lines.push(`<b>${t('notify.delivery_date', lang)}:</b> ${t('delivery.asap', lang)}`);
     }
     if (order.notes) {
       lines.push(`<b>${t('notify.notes', lang)}:</b> ${esc(order.notes)}`);
@@ -350,44 +352,62 @@ export async function notifyMemberJoined(
 
 export async function sendMorningSummary(
   groupId: number,
-  orders: { customerName: string; breadTypeName: string; quantity: number }[],
-  recipeBlock?: string
+  bake: {
+    today: { customerName: string; breadTypeName: string; quantity: number }[];
+    /** Open בהקדם lines when they are kept apart from today; empty when the switch has them inside today. */
+    asap: { customerName: string; breadTypeName: string; quantity: number }[];
+    recipeBlock?: string;
+  }
 ): Promise<{ sent: number; failed: number }> {
-  if (orders.length === 0) return { sent: 0, failed: 0 };
+  if (bake.today.length === 0 && bake.asap.length === 0) return { sent: 0, failed: 0 };
 
   const recipients = await getRecipientsByRole(groupId, ['baker']);
   return await sendToRecipients(recipients, (lang) => {
     const lines = [`<b>📋 ${t('notify.morning_summary', lang)}</b>`, ''];
 
-    // Group by bread type
-    const byType: Record<string, { customers: string[]; total: number }> = {};
-    for (const o of orders) {
-      if (!byType[o.breadTypeName]) {
-        byType[o.breadTypeName] = { customers: [], total: 0 };
+    // One block per bread type, with who ordered it
+    const typeBlock = (rows: typeof bake.today) => {
+      const byType: Record<string, { customers: string[]; total: number }> = {};
+      for (const o of rows) {
+        if (!byType[o.breadTypeName]) {
+          byType[o.breadTypeName] = { customers: [], total: 0 };
+        }
+        byType[o.breadTypeName].customers.push(
+          `${esc(o.customerName)} (${o.quantity})`
+        );
+        byType[o.breadTypeName].total += o.quantity;
       }
-      byType[o.breadTypeName].customers.push(
-        `${esc(o.customerName)} (${o.quantity})`
-      );
-      byType[o.breadTypeName].total += o.quantity;
-    }
 
-    for (const [type, data] of Object.entries(byType)) {
-      lines.push(
-        `<b>${esc(type)}</b> — ${data.total} ${t('notify.loaves', lang)}`
-      );
-      for (const c of data.customers) {
-        lines.push(`  • ${c}`);
+      for (const [type, data] of Object.entries(byType)) {
+        lines.push(
+          `<b>${esc(type)}</b> — ${data.total} ${t('notify.loaves', lang)}`
+        );
+        for (const c of data.customers) {
+          lines.push(`  • ${c}`);
+        }
+        lines.push('');
       }
+    };
+    const loaves = (rows: typeof bake.today) => rows.reduce((sum, o) => sum + o.quantity, 0);
+
+    if (bake.asap.length > 0) {
+      lines.push(`<b>${t('delivery.asap', lang)}</b>`);
+      typeBlock(bake.asap);
+      lines.push(`<b>${t('notify.total_asap', lang)}:</b> ${loaves(bake.asap)} ${t('notify.loaves', lang)}`);
       lines.push('');
+      lines.push(`<b>${t('dash.today', lang)}</b>`);
     }
 
-    const totalLoaves = orders.reduce((sum, o) => sum + o.quantity, 0);
-    lines.push(
-      `<b>${t('notify.total_today', lang)}:</b> ${totalLoaves} ${t('notify.loaves', lang)}`
-    );
-
-    if (recipeBlock) {
-      lines.push('', recipeBlock);
+    if (bake.today.length === 0) {
+      lines.push(t('notify.no_orders_today', lang));
+    } else {
+      typeBlock(bake.today);
+      lines.push(
+        `<b>${t('notify.total_today', lang)}:</b> ${loaves(bake.today)} ${t('notify.loaves', lang)}`
+      );
+      if (bake.recipeBlock) {
+        lines.push('', bake.recipeBlock);
+      }
     }
 
     return lines.join('\n');
