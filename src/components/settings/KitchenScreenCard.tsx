@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Check } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
@@ -11,13 +11,28 @@ import { Button } from '@/components/ui/Button';
 
 const clock = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' });
 
-export function KitchenScreenCard({ groupId }: { groupId: number }) {
+// initialShowRecipe is null until the settings page has loaded; the switch waits for it.
+export function KitchenScreenCard({ groupId, initialShowRecipe }: { groupId: number; initialShowRecipe: boolean | null }) {
   const { apiFetch } = useApi();
   const toast = useToast();
   const t = useT();
   const [pairing, setPairing] = useState<{ url: string; expiresAt: string } | null>(null);
   const [busy, setBusy] = useState<'connect' | 'disconnect' | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showRecipe, setShowRecipe] = useState<boolean | null>(initialShowRecipe);
+  useEffect(() => setShowRecipe(initialShowRecipe), [initialShowRecipe]);
+
+  async function toggleRecipe(next: boolean) {
+    const prev = showRecipe;
+    setShowRecipe(next);
+    try {
+      await apiFetch(`/groups/${groupId}`, { method: 'PATCH', body: JSON.stringify({ kitchenShowRecipe: next }) });
+    } catch (err) {
+      console.error('[kitchen] recipe switch save failed:', err);
+      setShowRecipe(prev);
+      toast.error(t('settings.save_failed'));
+    }
+  }
 
   async function connect() {
     setBusy('connect');
@@ -62,6 +77,20 @@ export function KitchenScreenCard({ groupId }: { groupId: number }) {
     <section>
       <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">{t('kitchen.settings_title')}</h2>
       <Card>
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-medium">{t('kitchen.show_recipe')}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showRecipe === true}
+            disabled={showRecipe === null}
+            onClick={() => toggleRecipe(!showRecipe)}
+            className={'relative h-7 w-12 flex-none rounded-full transition-colors ' + (showRecipe ? 'bg-success' : 'bg-muted')}
+          >
+            <span className={'absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-all ' + (showRecipe ? 'start-6' : 'start-1')} />
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">{t('kitchen.show_recipe_hint')}</p>
         <p className="text-sm text-muted-foreground mb-3">{t('kitchen.settings_hint')}</p>
         <div className="flex gap-2">
           <Button size="sm" onClick={connect} disabled={busy !== null}>{t('kitchen.connect')}</Button>
