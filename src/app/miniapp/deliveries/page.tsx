@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { groupByDeliveryDate } from '@/lib/order-grouping';
+import { ASAP_GROUP_KEY, groupByDeliveryDate } from '@/lib/order-grouping';
 import { waHref } from '@/lib/phone-links';
 import { buildWazeLink } from '@/lib/delivery';
 import { Banknote, Check, MessageCircle, MessageCircleOff, Navigation, Truck } from 'lucide-react';
@@ -33,12 +33,17 @@ export default function DeliveriesPage() {
   const lang = useLang();
   const toast = useToast();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  // The server's day and the bakery's בהקדם switch, which place undated orders.
+  const [display, setDisplay] = useState<{ today: string; asapInToday: boolean }>({ today: '', asapInToday: false });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
 
   useEffect(() => {
-    apiFetch<{ deliveries: Delivery[] }>('/deliveries')
-      .then((r) => setDeliveries(r.deliveries))
+    apiFetch<{ deliveries: Delivery[]; today: string; asapInToday: boolean }>('/deliveries')
+      .then((r) => {
+        setDeliveries(r.deliveries);
+        setDisplay({ today: r.today, asapInToday: r.asapInToday });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,7 +100,8 @@ export default function DeliveriesPage() {
 
   const groups = groupByDeliveryDate(
     deliveries.map((d) => ({ ...d, totalQuantity: 0 })),
-    lang
+    lang,
+    { ...display, order: 'soonest' }
   );
 
   return (
@@ -129,6 +135,9 @@ export default function DeliveriesPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="font-semibold">{d.customerName}</div>
+                          {d.deliveryDate == null && group.key !== ASAP_GROUP_KEY && (
+                            <div className="text-xs text-muted-foreground">{t('delivery.asap')}</div>
+                          )}
                           {(d.address || d.city) && (
                             <div className="text-sm text-muted-foreground">
                               {[d.address, d.city].filter(Boolean).join(', ')}

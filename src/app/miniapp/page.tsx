@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface DashboardData {
+  today?: string;
   todayOrders: {
     id: number;
     status: string;
@@ -332,7 +333,7 @@ export default function Dashboard() {
       )}
 
       {/* Upcoming — each delivery date is its own section separator (no per-row date) */}
-      {groupByDeliveryDate(upcomingOrders, lang).map((group) => (
+      {groupByDeliveryDate(upcomingOrders, lang, { today: data?.today ?? '', asapInToday: false, order: 'soonest' }).map((group) => (
         <div key={group.key}>
           <SectionHead label={group.label} loaves={group.loaves} />
           <section className="mx-4 overflow-hidden rounded-[8px] border border-border bg-card shadow-sm">

@@ -5,6 +5,8 @@ import { eq, and, inArray, notInArray, asc, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from '@/lib/order-pricing';
 import { orderPaymentsTotals } from '@/lib/order-payments';
 import { normalizePhoneNumber } from '@/lib/phone-links';
+import { todayStr } from '@/lib/date-utils';
+import { getOrderDisplay } from '@/lib/asap';
 
 // Active deliveries (is_delivery, not yet delivered/cancelled) for owner/manager
 // /driver. Returns the navigable address + private notes + the amount to collect
@@ -103,5 +105,6 @@ export const GET = withGroup(async (_request, auth, groupId) => {
     };
   });
 
-  return jsonResponse({ deliveries });
+  const { asapInToday } = await getOrderDisplay(groupId);
+  return jsonResponse({ deliveries, today: todayStr(), asapInToday });
 });

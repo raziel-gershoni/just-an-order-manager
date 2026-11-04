@@ -5,7 +5,8 @@ import { orders, orderItems, customers, breadTypes, breadSizes, breadAdditions, 
 import { eq, and, asc, desc, gte, lte, inArray, notInArray, sql } from 'drizzle-orm';
 import { formatItemLine, formatItemLabel, formatStaffItemLabel } from '@/lib/order-display';
 import { z } from 'zod/v4';
-import { resolveDeliveryDate } from '@/lib/date-utils';
+import { resolveDeliveryDate, todayStr } from '@/lib/date-utils';
+import { getOrderDisplay } from '@/lib/asap';
 import { notifyNewOrder, notifyCustomerWhatsApp } from '@/lib/notifications';
 import { getNotifiablePhones } from '@/lib/customer-phones';
 import { priceOrderForWrite } from '@/lib/order-pricing';
@@ -126,7 +127,9 @@ export const GET = withGroup(async (request, _auth, groupId) => {
     };
   });
 
-  return jsonResponse({ orders: result });
+  // The grouped lists place בהקדם orders by the bakery's switch, against the server's day.
+  const { asapInToday } = await getOrderDisplay(groupId);
+  return jsonResponse({ orders: result, today: todayStr(), asapInToday });
 });
 
 const itemSchema = z.object({

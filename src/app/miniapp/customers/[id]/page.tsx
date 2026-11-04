@@ -20,7 +20,7 @@ import {
   messagingPatch,
   type PhoneMessaging,
 } from '@/components/customers/PhoneMessagingSheet';
-import { groupByDeliveryDate } from '@/lib/order-grouping';
+import { groupByDeliveryDate, rowItemsLine } from '@/lib/order-grouping';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
@@ -68,6 +68,8 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [balance, setBalance] = useState<string>('0');
   const [orders, setOrders] = useState<Order[]>([]);
+  // The server's day and the bakery's בהקדם switch, which place undated orders.
+  const [display, setDisplay] = useState<{ today: string; asapInToday: boolean }>({ today: '', asapInToday: false });
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -97,13 +99,14 @@ export default function CustomerDetailPage() {
     Promise.all([
       apiFetch<{ customer: Customer }>(`/customers/${id}`),
       apiFetch<{ balance: string }>(`/customers/${id}/balance`),
-      apiFetch<{ orders: Order[] }>(`/orders?customerId=${id}`),
+      apiFetch<{ orders: Order[]; today: string; asapInToday: boolean }>(`/orders?customerId=${id}`),
       apiFetch<{ payments: Payment[] }>(`/payments?customerId=${id}`),
     ])
       .then(([c, b, o, p]) => {
         setCustomer(c.customer);
         setBalance(b.balance);
         setOrders(o.orders);
+        setDisplay({ today: o.today, asapInToday: o.asapInToday });
         setPayments(p.payments);
       })
       .catch(() => setError(true))
@@ -656,7 +659,7 @@ export default function CustomerDetailPage() {
             <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>
           ) : (
             <Card className="p-0 overflow-hidden">
-              {groupByDeliveryDate(orders.slice(0, 10), lang).map((group) => (
+              {groupByDeliveryDate(orders.slice(0, 10), lang, { ...display, order: 'latest' }).map((group) => (
                 <div key={group.key}>
                   <DateGroupHeader label={group.label} loaves={group.loaves} />
                   {group.items.map((o, idx) => (
@@ -665,7 +668,7 @@ export default function CustomerDetailPage() {
                       id={o.id}
                       idWidth={ordW}
                       href={`/miniapp/orders/${o.id}`}
-                      primary={o.itemsSummary}
+                      primary={rowItemsLine(o, o.itemsSummary, group.key, lang)}
                       status={o.status}
                       statusLabel={translate(`status.${o.status}`, lang)}
                       paid={o.paid}
