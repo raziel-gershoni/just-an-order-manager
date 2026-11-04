@@ -14,8 +14,8 @@ view-only, because kids will reach it.
 - Reuse the print view: each day shows its mixing weights, the baking count and each order's bag,
   exactly as printed (amounts and phones included).
 - One long scroll, grouped by day:
-  - **today** first, holding the open **בהקדם** (no date) orders too (owner, 2026-11-02:
-    they are today's work, as the dashboard already counts them);
+  - **today** first, with the open **בהקדם** (no date) orders either inside it or as a card of
+    their own just before it, as the bakery's switch says (`2026-11-04-asap-placement-design.md`);
   - then **every later day with orders**.
   - Past days are left out.
 - Nothing on the screen changes anything.
@@ -26,10 +26,13 @@ view-only, because kids will reach it.
 - A day group is `buildPrintSheet(groupId, date)`: the same function as the print view, so the
   printout and the screen can never disagree. That means the dated-sheet rules apply: cancelled
   orders are hidden, and orders delivered that day stay with the **נמסר** stamp.
-- Today is `buildPrintSheet(groupId, today, { withUndated: true })`: the day's orders plus the
-  open orders with no delivery date. The undated ones come first, oldest first, and their bag
-  says **בהקדם**; the mixing weights and baking count cover them. The printed היום sheet still
-  leaves them out (it shows only orders dated that day).
+- Where the open orders with no delivery date go follows the switch in
+  `2026-11-04-asap-placement-design.md`. Inside today (`buildPrintSheet(groupId, today, { withUndated: true })`)
+  they come first, oldest first, and the mixing weights and baking count cover them. Separate,
+  they are a **בהקדם** card before today (`{ undatedOnly: true }`) with the baking count and bags
+  but no mixing weights. Either way their bag says **בהקדם**.
+- **הצג מתכון** (same spec) hides the **לישה** (mixing weights) section on every card; the baking
+  count and the bags stay.
 - **Today** is the Israel date (`israelTodayStr`), so the screen switches at midnight Israel time.
 - **Layout:**
   - the print sheet's look, adapted for a phone: fluid width and larger text;
@@ -129,8 +132,9 @@ view-only, because kids will reach it.
   groups.
   - It loads the distinct delivery dates from today onwards that have non-cancelled orders, then
     builds `buildPrintSheet` per date.
-  - Today's sheet takes the open undated orders through the builder's `withUndated` option. Print
-    behaviour stays unchanged.
+  - It reads the switch (`getOrderDisplay`): inside today the sheet takes the open undated orders
+    through the builder's `withUndated` option; separate, a `kind: 'asap'` card built with
+    `undatedOnly` goes first. `showRecipe` rides along in the returned data.
 - **`src/lib/kitchen-screen.ts`:** pairing (`startPairing`, `claimPairing`), `disconnectScreens`,
   token sign and verify, and the cached reads.
 - **`src/components/print/SheetParts.tsx`:** the `MixSection`, `RecipeCard`, `OrderBlock` and
