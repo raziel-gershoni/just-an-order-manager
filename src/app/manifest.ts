@@ -6,7 +6,10 @@ export const revalidate = 3600;
 // Web app manifest — name/icons/colors for Add-to-Home-Screen and the PWA
 // install surface. Reads the published bakery name; falls back to the brand.
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const site = await getPublicSiteRequest(publicGroupId()).catch(() => null);
+  const site = await getPublicSiteRequest(publicGroupId()).catch((err) => {
+    console.warn('[manifest] reading the public site failed, using default name:', err);
+    return null;
+  });
   const name = site?.profile.displayName ?? 'רזי הלחם';
   const tagline = site?.profile.tagline?.trim();
 

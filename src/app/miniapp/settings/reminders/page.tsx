@@ -11,6 +11,7 @@ import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
+import { LoadError } from '@/components/ui/LoadError';
 import { ReminderLog } from '@/components/ui/ReminderLog';
 import { Plus, Pencil, Trash2, Pause, Play, Repeat } from 'lucide-react';
 
@@ -43,22 +44,37 @@ export default function RemindersPage() {
   // Gate the toggle until its own value has loaded, so a tap made before the
   // GET resolves can't be clobbered by the (stale) response landing after it.
   const [groupLoaded, setGroupLoaded] = useState(false);
+  // A failed read must not pass for "no templates" or for a switch that is OFF.
+  const [templatesFailed, setTemplatesFailed] = useState(false);
+  const [templatesKey, setTemplatesKey] = useState(0);
+  const [groupFailed, setGroupFailed] = useState(false);
+  const [groupKey, setGroupKey] = useState(0);
 
   useEffect(() => {
     apiFetch<{ templates: Template[] }>('/reminder-templates')
       .then((r) => setTemplates(r.templates))
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[reminders] templates load failed:', err);
+        setTemplatesFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templatesKey]);
 
   useEffect(() => {
     if (!activeGroupId) return;
     setGroupLoaded(false);
     apiFetch<{ group: { recurringRemindersEnabled: boolean } }>(`/groups/${activeGroupId}`)
-      .then((r) => setRecurringEnabled(r.group.recurringRemindersEnabled ?? false))
-      .catch(() => {})
-      .finally(() => setGroupLoaded(true));
-  }, [activeGroupId]);
+      .then((r) => {
+        setRecurringEnabled(r.group.recurringRemindersEnabled ?? false);
+        setGroupLoaded(true);
+      })
+      .catch((err) => {
+        console.error('[reminders] recurring switch load failed:', err);
+        setGroupFailed(true);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId, groupKey]);
 
   async function toggleRecurring(next: boolean) {
     if (!activeGroupId) return;
@@ -68,7 +84,8 @@ export default function RemindersPage() {
         method: 'PATCH',
         body: JSON.stringify({ recurringRemindersEnabled: next }),
       });
-    } catch {
+    } catch (err) {
+      console.error('[reminders] recurring switch save failed:', err);
       setRecurringEnabled(!next);
       toast.error(t('reminders.template_save_failed'));
     }
@@ -100,7 +117,8 @@ export default function RemindersPage() {
       }
       toast.success(t('reminders.template_saved'));
       setEditing(null);
-    } catch {
+    } catch (err) {
+      console.error('[reminders] template save failed:', err);
       toast.error(t('reminders.template_save_failed'));
     } finally {
       setSaving(false);
@@ -127,6 +145,7 @@ export default function RemindersPage() {
       setTemplates((prev) => prev.filter((x) => x.id !== tpl.id));
       toast.success(t('reminders.template_deleted'));
     } catch (e) {
+      console.error(`[reminders] delete of template ${tpl.id} failed:`, e);
       // 409 is the real "it has history"; anything else is a request that never
       // landed, and blaming history for a dropped connection sends the owner
       // looking for a problem that isn't there.
@@ -168,6 +187,17 @@ export default function RemindersPage() {
           <ReminderLog />
         ) : (
           <>
+        {groupFailed ? (
+          <Card>
+            <LoadError
+              compact
+              onRetry={() => {
+                setGroupFailed(false);
+                setGroupKey((k) => k + 1);
+              }}
+            />
+          </Card>
+        ) : (
         <Card className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 font-medium text-sm">
@@ -187,8 +217,17 @@ export default function RemindersPage() {
           </div>
           <p className="text-xs text-muted-foreground">{t('reminders.recurring_desc')}</p>
         </Card>
+        )}
         {loading ? (
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
+        ) : templatesFailed ? (
+          <LoadError
+            onRetry={() => {
+              setTemplatesFailed(false);
+              setLoading(true);
+              setTemplatesKey((k) => k + 1);
+            }}
+          />
         ) : (
           OCCASIONS.map((occ) => {
             const rows = templates.filter((tp) => tp.occasion === occ);

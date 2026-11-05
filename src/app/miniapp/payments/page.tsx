@@ -10,7 +10,8 @@ import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
+import { LoadError } from '@/components/ui/LoadError';
 import { Check } from 'lucide-react';
 import { getInitial } from '@/lib/name-utils';
 
@@ -42,6 +43,8 @@ function PaymentsContent() {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   const [customerId, setCustomerId] = useState<number | null>(
@@ -55,11 +58,16 @@ function PaymentsContent() {
   const [customerSearch, setCustomerSearch] = useState('');
 
   useEffect(() => {
+    setLoadFailed(false);
     apiFetch<{ customers: Customer[] }>('/customers')
       .then((d) => setCustomers(d.customers))
-      .catch(() => {})
+      .catch((e) => {
+        console.error('[payments] customers load failed:', e);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   const amountValue = Number(amount);
   const amountValid = Number.isFinite(amountValue) && amountValue > 0;
@@ -80,8 +88,8 @@ function PaymentsContent() {
       });
       toast.success(t('payments.success'));
       router.back();
-    } catch {
-      toast.error(t('payments.failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('payments.failed')));
     } finally {
       setSubmitting(false);
     }
@@ -151,6 +159,14 @@ function PaymentsContent() {
                 {t('form.change')}
               </Button>
             </div>
+          ) : loadFailed ? (
+            <LoadError
+              compact
+              onRetry={() => {
+                setLoading(true);
+                setReloadKey((k) => k + 1);
+              }}
+            />
           ) : (
             <div className="space-y-2">
               <Input
@@ -212,7 +228,7 @@ function PaymentsContent() {
             className="w-full"
             size="lg"
             variant={type === 'charge' ? 'danger' : 'primary'}
-            disabled={!customerId || !amountValid}
+            disabled={!customerId || !amountValid || loadFailed}
             loading={submitting}
             onClick={handleSubmit}
           >

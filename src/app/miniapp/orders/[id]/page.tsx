@@ -17,7 +17,8 @@ import { ORDER_STATUS_REVERSALS } from '@/lib/constants';
 import { useGroup } from '@/hooks/useGroup';
 import { buildWazeLink } from '@/lib/delivery';
 import { groupByKind } from '@/lib/recipe';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatAllocation } from '@/lib/pricing-format';
 import type { Allocation } from '@/lib/pricing';
 import type { NextOccurrenceView } from '@/lib/order-next-change-types';
@@ -122,6 +123,9 @@ export default function OrderDetailPage() {
   const toast = useToast();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  // A load that failed for any reason but a 404: not "order not found".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [updating, setUpdating] = useState(false);
   const [expandedRecipes, setExpandedRecipes] = useState<Set<number>>(new Set());
 
@@ -166,6 +170,8 @@ export default function OrderDetailPage() {
     setShowPrepay(false);
     setBalance(null);
     setAvailable(null);
+    setLoadFailed(false);
+    setLoading(true);
     apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
       .then((d) => {
         setOrder(d.order);
@@ -173,9 +179,16 @@ export default function OrderDetailPage() {
           refreshBalance(d.order.customerId);
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        // A real 404 reads "not found"; anything else is a failed load.
+        if ((err as { status?: number }).status !== 404) {
+          console.error(`[order] load of ${id} failed:`, err);
+          setLoadFailed(true);
+        }
+      })
       .finally(() => setLoading(false));
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, reloadKey]);
 
   /** The customer's balance, and how much of it is free to spend on an order. */
   function refreshBalance(customerId: number) {
@@ -184,7 +197,7 @@ export default function OrderDetailPage() {
         setBalance(Number(b.balance));
         setAvailable(Number(b.available));
       })
-      .catch(() => {});
+      .catch((err) => console.warn(`[order] balance refresh for customer ${customerId} failed:`, err));
   }
 
   async function updateStatus(status: string) {
@@ -208,7 +221,7 @@ export default function OrderDetailPage() {
       // charge is never taken back, so a late answer can only add it.
       apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
         .then((d) => setOrder((p) => (p ? { ...p, charged: p.charged || Boolean(d.order.charged) } : p)))
-        .catch(() => {});
+        .catch((err) => console.warn(`[order] re-check of charge for ${id} failed:`, err));
     }
   }
 
@@ -237,8 +250,9 @@ export default function OrderDetailPage() {
     try {
       await updateStatus(status);
       toast.success(t('orders.updated'));
-    } catch {
+    } catch (err) {
       // error toast already shown in updateStatus; optimistic state not applied
+      console.error(`[order] status change to ${status} on ${id} failed:`, err);
     } finally {
       setUpdating(false);
     }
@@ -256,15 +270,17 @@ export default function OrderDetailPage() {
       try {
         fresh = (await apiFetch<{ order: OrderDetail }>(`/orders/${id}`)).order;
         setOrder(fresh);
-      } catch {
+      } catch (err) {
         // Couldn't re-check: fall through to the card, which asks.
+        console.warn(`[order] re-check before delivering ${id} failed:`, err);
       }
       if (fresh?.paid && fresh.status === 'ready') {
         try {
           await updateStatus('delivered');
           toast.success(t('orders.updated'));
-        } catch {
+        } catch (err) {
           // updateStatus already said it failed
+          console.error(`[order] delivering prepaid ${id} failed:`, err);
         }
         setUpdating(false);
         return;
@@ -309,8 +325,8 @@ export default function OrderDetailPage() {
       else if (outcome === 'short') toast.error(t('orders.credit_short'));
       else if (outcome === 'undone') toast.success(t('orders.payment_undone'));
       else toast.success(action === 'unpaid' ? t('orders.charge_recorded') : t('orders.payment_recorded'));
-    } catch {
-      toast.error(t('orders.update_failed'));
+    } catch (err) {
+      toast.error(friendlyError(err, t('orders.update_failed')));
     } finally {
       setSubmittingPay(false);
     }
@@ -330,8 +346,8 @@ export default function OrderDetailPage() {
       });
       setOrder((prev) => (prev ? { ...prev, isRecurring: false } : prev));
       toast.success(t('orders.recurring_stopped'));
-    } catch {
-      toast.error(t('orders.update_failed'));
+    } catch (err) {
+      toast.error(friendlyError(err, t('orders.update_failed')));
     } finally {
       setStoppingRecurring(false);
     }
@@ -374,11 +390,12 @@ export default function OrderDetailPage() {
         toast.error(t('orders.skip_next_failed').replace('{date}', date));
       }
     } catch (e) {
+      console.warn(`[order] skip of ${id} failed:`, e);
       if ((e as { status?: number }).status === 409) {
         toast.error(t('orders.skip_too_late'));
         apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
           .then((d) => setOrder(d.order))
-          .catch(() => {});
+          .catch((err) => console.warn(`[order] re-read of ${id} after skip 409 failed:`, err));
       } else {
         toast.error(t('orders.update_failed'));
       }
@@ -400,12 +417,13 @@ export default function OrderDetailPage() {
       setOrder((prev) => (prev ? { ...prev, nextOccurrence } : prev));
       toast.success(t('orders.next_change_discarded'));
     } catch (e) {
+      console.warn(`[order] next-change discard on ${id} failed:`, e);
       if ((e as { status?: number }).status === 409) {
         toast.error(t('orders.next_change_too_late'));
         // Someone else delivered or stopped it meanwhile: show what is true now.
         apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
           .then((d) => setOrder(d.order))
-          .catch(() => {});
+          .catch((err) => console.warn(`[order] re-read of ${id} after next-change 409 failed:`, err));
       } else {
         toast.error(t('orders.update_failed'));
       }
@@ -432,6 +450,7 @@ export default function OrderDetailPage() {
       if (res.outcome === 'already') toast.error(t('orders.prepay_already'));
       else toast.success(t('orders.prepay_recorded'));
     } catch (e) {
+      console.warn(`[order] prepay on ${id} failed:`, e);
       if ((e as { status?: number }).status === 409) {
         toast.error(t('orders.prepay_too_late'));
         apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
@@ -439,7 +458,7 @@ export default function OrderDetailPage() {
             setOrder(d.order);
             refreshBalance(d.order.customerId);
           })
-          .catch(() => {});
+          .catch((err) => console.warn(`[order] re-read of ${id} after prepay 409 failed:`, err));
       } else {
         toast.error(t('orders.update_failed'));
       }
@@ -459,6 +478,7 @@ export default function OrderDetailPage() {
       refreshBalance(order.customerId);
       toast.success(t('orders.prepay_undone'));
     } catch (e) {
+      console.warn(`[order] undo prepay on ${id} failed:`, e);
       if ((e as { status?: number }).status === 409) {
         toast.error(t('orders.prepay_too_late'));
         apiFetch<{ order: OrderDetail }>(`/orders/${id}`)
@@ -466,7 +486,7 @@ export default function OrderDetailPage() {
             setOrder(d.order);
             refreshBalance(d.order.customerId);
           })
-          .catch(() => {});
+          .catch((err) => console.warn(`[order] re-read of ${id} after undo-prepay 409 failed:`, err));
       } else {
         toast.error(t('orders.update_failed'));
       }
@@ -503,8 +523,8 @@ export default function OrderDetailPage() {
           ...(dropPlannedBasket ? { dropNextChange: ['basket'] } : {}),
         }),
       });
-    } catch {
-      toast.error(t('orders.update_failed'));
+    } catch (err) {
+      toast.error(friendlyError(err, t('orders.update_failed')));
       setSavingPrice(false);
       return;
     }
@@ -522,8 +542,8 @@ export default function OrderDetailPage() {
       setOrder(fresh);
       setShowPriceEdit(false);
       setPriceInput('');
-    } catch {
-      toast.error(t('orders.reload_failed'));
+    } catch (err) {
+      toast.error(friendlyError(err, t('orders.reload_failed')));
     } finally {
       setSavingPrice(false);
     }
@@ -543,6 +563,14 @@ export default function OrderDetailPage() {
   }
 
   if (!order) {
+    if (loadFailed) {
+      return (
+        <>
+          <PageHeader title={t('orders.order_num')} />
+          <LoadError onRetry={() => setReloadKey((k) => k + 1)} />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title={t('orders.order_num')} />

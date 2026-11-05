@@ -64,8 +64,12 @@ export default function OrdersPage() {
         setOrders(d.orders);
         setDisplay({ today: d.today, asapInToday: d.asapInToday });
       })
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error(`[orders] list load (${tab}) failed:`, err);
+        setError(true);
+      })
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, tab, reloadKey]);
 
   // Minted up front so the button is a plain link rather than a click that has
@@ -76,7 +80,10 @@ export default function OrdersPage() {
     if (!activeGroupId || !canPrint) return;
     apiFetch<{ url: string }>('/print/token?d=today')
       .then((r) => setPrintUrl(r.url))
-      .catch(() => setPrintUrl(null));
+      .catch((err) => {
+        console.warn('[orders] print token failed, hiding print link:', err);
+        setPrintUrl(null);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, canPrint]);
 

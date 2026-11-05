@@ -10,7 +10,10 @@ export async function brandIconResponse(size: {
   width: number;
   height: number;
 }): Promise<Response> {
-  const site = await getPublicSiteRequest(publicGroupId()).catch(() => null);
+  const site = await getPublicSiteRequest(publicGroupId()).catch((err) => {
+    console.warn('[brand-icon] reading the public site failed:', err);
+    return null;
+  });
   const logoUrl = site?.profile.logoUrl;
 
   if (logoUrl) {
@@ -24,8 +27,9 @@ export async function brandIconResponse(size: {
           },
         });
       }
-    } catch {
-      // fall through to the generated mark
+      console.warn(`[brand-icon] logo fetch answered ${res.status}; using the generated mark`);
+    } catch (err) {
+      console.warn('[brand-icon] fetching the logo failed; using the generated mark:', err);
     }
   }
 

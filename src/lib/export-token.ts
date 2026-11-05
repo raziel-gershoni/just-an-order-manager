@@ -43,7 +43,8 @@ export function verifyExportToken(token: string, purpose?: string): number | nul
     const a = Buffer.from(sig, 'hex');
     const b = Buffer.from(expected, 'hex');
     ok = a.length === b.length && timingSafeEqual(a, b);
-  } catch {
+  } catch (err) {
+    console.warn('[export-token] signature compare threw, rejecting token:', err);
     return null;
   }
   if (!ok) return null;

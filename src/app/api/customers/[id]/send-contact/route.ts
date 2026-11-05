@@ -38,7 +38,10 @@ export const POST = withGroup(async (request, auth, groupId) => {
     .orderBy(asc(customerPhones.sortOrder));
   if (phones.length === 0) return errorResponse('Customer has no phone numbers', 400);
 
-  const body = await request.json().catch(() => ({}));
+  const body = await request.json().catch((err) => {
+    console.warn(`[send-contact] request body unreadable for customer ${id}, sending to all phones:`, err);
+    return {};
+  });
   const phoneId = typeof body?.phoneId === 'number' ? body.phoneId : undefined;
   const targets = phoneId ? phones.filter((p) => p.id === phoneId) : phones;
   if (targets.length === 0) return errorResponse('Phone not found', 404);

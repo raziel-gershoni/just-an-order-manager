@@ -91,7 +91,11 @@ export default function DeliveriesPage() {
       // this one does not send them to a customer card they cannot open.
       if (alreadyRecorded) toast.error(t('deliv.payment_already'));
       else toast.success(collect ? t('deliv.collected_done') : t('deliv.delivered_done'));
-    } catch {
+    } catch (e) {
+      console.error(
+        `[deliveries] completing order ${d.id} failed (collect=${collect}, delivered=${deliveredRef.current.has(d.id)}):`,
+        e
+      );
       // Name the step that failed: "delivered but the payment did not record"
       // is a different problem, and a different retry, from "nothing happened".
       toast.error(

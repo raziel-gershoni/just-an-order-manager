@@ -72,7 +72,8 @@ type RemoteSchedule = { scheduleId: string; destination: string; cron: string };
 function destinationPath(destination: string): string | null {
   try {
     return new URL(destination).pathname.replace(/\/+$/, '');
-  } catch {
+  } catch (err) {
+    console.warn(`[schedules] unparseable destination ${destination}:`, err);
     return null;
   }
 }

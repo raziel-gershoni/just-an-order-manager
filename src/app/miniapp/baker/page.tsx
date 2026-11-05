@@ -86,7 +86,8 @@ export default function BakerPage() {
         setData(d);
         setError(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[baker] load failed:', err);
         setData(null);
         setError(true);
       })

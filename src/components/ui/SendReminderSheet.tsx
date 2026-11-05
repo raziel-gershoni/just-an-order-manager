@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
+import { LoadError } from '@/components/ui/LoadError';
 import { Upload, X, ImageOff, Loader2 } from 'lucide-react';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 
@@ -46,11 +47,23 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [mediaId, setMediaId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  // A failed library read must not look like an empty library.
+  const [mediaFailed, setMediaFailed] = useState(false);
 
+  // The failed flag clears only on success, so a retry never flashes an empty library.
+  function loadAssets() {
+    return apiFetch<{ assets: MediaAsset[] }>('/media')
+      .then((r) => {
+        setAssets(r.assets);
+        setMediaFailed(false);
+      })
+      .catch((err) => {
+        console.warn('[send-reminder] media library load failed:', err);
+        setMediaFailed(true);
+      });
+  }
   useEffect(() => {
-    apiFetch<{ assets: MediaAsset[] }>('/media')
-      .then((r) => setAssets(r.assets))
-      .catch(() => {});
+    void loadAssets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -68,7 +81,8 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
       const { asset } = await apiUpload<{ asset: MediaAsset }>('/media', fd);
       setAssets((p) => [...p, asset]);
       setMediaId(asset.id);
-    } catch {
+    } catch (err) {
+      console.error('[send-reminder] header image upload failed:', err);
       toast.error(t('site.save_failed'));
     } finally {
       setUploading(false);
@@ -80,7 +94,8 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
     if (mediaId === a.id) setMediaId(null);
     try {
       await apiFetch(`/media/${a.id}`, { method: 'DELETE' });
-    } catch {
+    } catch (err) {
+      console.error(`[send-reminder] deleting media ${a.id} failed:`, err);
       toast.error(t('site.save_failed'));
     }
   }
@@ -107,6 +122,7 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
       onSent?.();
       onClose();
     } catch (e) {
+      console.error('[send-reminder] send failed:', e);
       toast.error(e instanceof Error ? e.message : t('reminders.no_active_for_occasion'));
     } finally {
       setSending(false);
@@ -151,6 +167,9 @@ export function SendReminderSheet({ count, customerIds, phoneId, onClose, onSent
               {t('reminders.image_optional')}
             </span>
           </div>
+          {mediaFailed && (
+            <LoadError compact onRetry={loadAssets} />
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
             {/* none */}
             <button

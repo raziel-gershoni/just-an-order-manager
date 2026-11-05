@@ -80,7 +80,8 @@ export const DELETE = withAuth(async (request, auth) => {
     await db.delete(breadTypeAdditions).where(eq(breadTypeAdditions.breadAdditionId, id));
     try {
       await db.delete(breadAdditions).where(eq(breadAdditions.id, id));
-    } catch {
+    } catch (err) {
+      console.error(`[bread-additions] hard delete of addition ${id} failed (answered 409 in-use):`, err);
       revalidatePublicSite(authz.groupId);
       return errorResponse(
         'Cannot delete: addition is used in existing orders. Disable it instead.',

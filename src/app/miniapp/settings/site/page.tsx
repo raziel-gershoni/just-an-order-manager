@@ -15,6 +15,7 @@ import { MediaLibrary } from '@/components/site-editor/MediaLibrary';
 import type { SectionConfig } from '@/db/schema';
 import { Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { siteBaseUrl } from '@/lib/site-url';
+import { LoadError } from '@/components/ui/LoadError';
 import { openExternal } from '@/lib/phone-links';
 
 interface SiteProfile {
@@ -79,6 +80,8 @@ export default function SiteEditorPage() {
   const [sections, setSections] = useState<SectionConfig[]>([]);
   const [galleryCount, setGalleryCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const SECTION_LABELS: Record<string, string> = {
@@ -150,7 +153,8 @@ export default function SiteEditorPage() {
     try {
       const { profile } = await apiFetch<{ profile: SiteProfile }>('/site-profile');
       return profile;
-    } catch {
+    } catch (err) {
+      console.warn('[site] re-read of the profile after a failed save failed:', err);
       return null; // offline; the toast has already said the change did not land
     }
   }
@@ -163,7 +167,8 @@ export default function SiteEditorPage() {
         method: 'PATCH',
         body: JSON.stringify({ heroImageId: id }),
       });
-    } catch {
+    } catch (err) {
+      console.error('[site] hero image save failed:', err);
       toast.error(t('site.save_failed'));
       if (heroWrite.current !== write) return;
       const profile = await reread();
@@ -179,7 +184,8 @@ export default function SiteEditorPage() {
         method: 'PATCH',
         body: JSON.stringify({ sections: next }),
       });
-    } catch {
+    } catch (err) {
+      console.error('[site] sections save failed:', err);
       toast.error(t('site.save_failed'));
       if (sectionsWrite.current !== write) return;
       const profile = await reread();
@@ -192,10 +198,13 @@ export default function SiteEditorPage() {
   useEffect(() => {
     apiFetch<{ profile: SiteProfile }>('/site-profile')
       .then((r) => hydrate(r.profile))
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[site] profile load failed:', err);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadKey]);
 
   async function save() {
     setSaving(true);
@@ -223,7 +232,8 @@ export default function SiteEditorPage() {
       });
       hydrate(profile);
       toast.success(t('site.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[site] save failed:', err);
       toast.error(t('site.save_failed'));
     } finally {
       setSaving(false);
@@ -239,7 +249,8 @@ export default function SiteEditorPage() {
         body: JSON.stringify({ isPublished: next }),
       });
       toast.success(next ? t('site.published_on') : t('site.published_off'));
-    } catch {
+    } catch (err) {
+      console.error('[site] publish toggle failed:', err);
       setPublished(!next);
       toast.error(t('site.save_failed'));
     }
@@ -262,6 +273,14 @@ export default function SiteEditorPage() {
         <div className="p-5">
           <div className="h-40 rounded-xl bg-muted animate-pulse" />
         </div>
+      ) : loadFailed ? (
+        <LoadError
+          onRetry={() => {
+            setLoadFailed(false);
+            setLoading(true);
+            setReloadKey((k) => k + 1);
+          }}
+        />
       ) : (
         <div className="space-y-4 p-5">
           {/* Publish + open */}

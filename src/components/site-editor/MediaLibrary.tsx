@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
+import { LoadError } from '@/components/ui/LoadError';
 import { Star, Images, Trash2, Upload } from 'lucide-react';
 
 export interface MediaAsset {
@@ -52,6 +53,8 @@ export function MediaLibrary({
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<number[]>([]);
+  // A failed read must not look like a library with no photos.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // Which photo is the hero right now, not which one was when the button was
   // tapped: remove() reads this after its DELETE comes back, and the owner may
@@ -65,10 +68,20 @@ export function MediaLibrary({
     onGalleryCount?.(assets.filter((a) => a.showInGallery).length);
   }, [assets, onGalleryCount]);
 
+  // The failed flag clears only on success, so a retry never flashes "no photos yet".
+  function loadAssets() {
+    return apiFetch<{ assets: MediaAsset[] }>('/media')
+      .then((r) => {
+        setAssets(r.assets);
+        setLoadFailed(false);
+      })
+      .catch((err) => {
+        console.error('[media-library] load failed:', err);
+        setLoadFailed(true);
+      });
+  }
   useEffect(() => {
-    apiFetch<{ assets: MediaAsset[] }>('/media')
-      .then((r) => setAssets(r.assets))
-      .catch(() => {});
+    void loadAssets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -85,7 +98,8 @@ export function MediaLibrary({
       fd.append('height', String(height));
       const { asset } = await apiUpload<{ asset: MediaAsset }>('/media', fd);
       setAssets((p) => [...p, asset]);
-    } catch {
+    } catch (err) {
+      console.error('[media-library] upload failed:', err);
       toast.error(t('site.save_failed'));
     } finally {
       setUploading(false);
@@ -100,8 +114,10 @@ export function MediaLibrary({
         method: 'PATCH',
         body: JSON.stringify({ showInGallery: next }),
       });
-    } catch {
+    } catch (err) {
+      console.error(`[media-library] gallery toggle for ${a.id} failed:`, err);
       setAssets((p) => p.map((x) => (x.id === a.id ? { ...x, showInGallery: !next } : x)));
+      toast.error(t('site.save_failed'));
     }
   }
 
@@ -116,7 +132,8 @@ export function MediaLibrary({
     setDeleting((p) => [...p, a.id]);
     try {
       await apiFetch(`/media/${a.id}`, { method: 'DELETE' });
-    } catch {
+    } catch (err) {
+      console.error(`[media-library] delete of ${a.id} failed:`, err);
       toast.error(t('site.save_failed'));
       return;
     } finally {
@@ -142,7 +159,9 @@ export function MediaLibrary({
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPick} />
       </div>
 
-      {assets.length === 0 ? (
+      {loadFailed ? (
+        <LoadError compact onRetry={loadAssets} />
+      ) : assets.length === 0 ? (
         <p className="py-6 text-center text-xs italic text-muted-foreground">{t('site.media_empty')}</p>
       ) : (<>
         {/* The two buttons under each tile carry only a title attribute, which a

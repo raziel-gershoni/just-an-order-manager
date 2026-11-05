@@ -27,7 +27,10 @@ export const POST = withGroup(async (request, auth, groupId) => {
   const membership = auth.memberships.find((m) => m.groupId === groupId);
   if (!ownerOnly(membership?.role)) return errorResponse('Forbidden', 403);
 
-  const form = await request.formData().catch(() => null);
+  const form = await request.formData().catch((err) => {
+    console.warn(`[media] formData parse failed for group ${groupId}:`, err);
+    return null;
+  });
   const file = form?.get('file');
   if (!(file instanceof File)) return errorResponse('No file');
   if (!file.type.startsWith('image/')) return errorResponse('Not an image');

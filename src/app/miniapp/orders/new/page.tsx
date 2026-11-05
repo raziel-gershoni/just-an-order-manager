@@ -383,6 +383,7 @@ function OrderFormContent() {
         toast.error(t('orders.load_failed'));
       })
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-suggest delivery when the selected customer's city changes (create mode).
@@ -496,8 +497,8 @@ function OrderFormContent() {
       updateItem(idx, { breadSizeId: size.id });
       cancelAddSize();
       toast.success(t('form.size_added'));
-    } catch {
-      toast.error(t('form.size_add_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('form.size_add_failed')));
     } finally {
       setAddingSize(false);
     }

@@ -99,7 +99,8 @@ export default function ReportsPage() {
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } catch {
+    } catch (err) {
+      console.error('[reports] download failed:', err);
       toast.error(t('reports.download_failed'));
     } finally {
       setDownloading(false);

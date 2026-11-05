@@ -18,8 +18,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .where(eq(bakeryProfile.groupId, publicGroupId()))
       .limit(1);
     lastModified = row?.updatedAt ?? undefined;
-  } catch {
-    // ignore — omit lastModified
+  } catch (err) {
+    console.warn('[sitemap] reading bakery profile updated_at failed, omitting lastModified:', err);
   }
 
   return [{ url: `${base}/`, lastModified, changeFrequency: 'weekly', priority: 1 }];

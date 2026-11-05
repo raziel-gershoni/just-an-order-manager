@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
+import { useToast } from '@/hooks/useToast';
+import { LoadError } from '@/components/ui/LoadError';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Check, X } from 'lucide-react';
@@ -36,12 +38,16 @@ function fmt(sentAt: string): string {
 export function ReminderLog() {
   const { apiFetch } = useApi();
   const t = useT();
+  const toast = useToast();
   const [rows, setRows] = useState<SendRow[]>([]);
   const [occasion, setOccasion] = useState<Occasion | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed read must not pass for "no sends yet".
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   // Monotonic request generation — bumped on every filter change so a response
   // from a superseded filter or an in-flight load-more is dropped instead of
   // clobbering the current list (out-of-order network responses).
@@ -59,22 +65,25 @@ export function ReminderLog() {
   useEffect(() => {
     const gen = ++genRef.current; // invalidate anything still in flight
     setLoading(true);
+    setLoadFailed(false);
     query(0)
       .then((r) => {
         if (gen !== genRef.current) return; // a newer filter won
         setRows(r.sends);
         setHasMore(r.hasMore);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[reminder-log] load failed:', err);
         if (gen !== genRef.current) return;
         setRows([]);
         setHasMore(false);
+        setLoadFailed(true);
       })
       .finally(() => {
         if (gen === genRef.current) setLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [occasion, status]);
+  }, [occasion, status, reloadKey]);
 
   async function loadMore() {
     const gen = genRef.current; // tied to the current filter generation
@@ -84,8 +93,9 @@ export function ReminderLog() {
       if (gen !== genRef.current) return; // filter changed mid-request — drop it
       setRows((prev) => [...prev, ...r.sends]);
       setHasMore(r.hasMore);
-    } catch {
-      /* leave what we have */
+    } catch (err) {
+      console.error('[reminder-log] load more failed:', err);
+      toast.error(t('load.failed'));
     } finally {
       setLoadingMore(false);
     }
@@ -124,6 +134,8 @@ export function ReminderLog() {
 
       {loading ? (
         <div className="h-40 rounded-xl bg-muted animate-pulse" />
+      ) : loadFailed ? (
+        <LoadError onRetry={() => setReloadKey((k) => k + 1)} />
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('reminders.log_empty')}</p>
       ) : (

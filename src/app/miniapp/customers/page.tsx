@@ -141,7 +141,10 @@ export default function CustomersPage() {
         setMeId(d.meId);
         setCustomers(sortCustomers(d.customers, d.meId));
       })
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error('[customers] list load failed:', err);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }
 
@@ -158,7 +161,10 @@ export default function CustomersPage() {
         setMembers(d.members);
         setMembersState('ready');
       })
-      .catch(() => setMembersState('failed'));
+      .catch((err) => {
+        console.error('[customers] members load failed:', err);
+        setMembersState('failed');
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
@@ -197,7 +203,8 @@ export default function CustomersPage() {
     try {
       await navigator.clipboard.writeText(phone);
       toast.success(t('customers.phone_copied'));
-    } catch {
+    } catch (e) {
+      console.warn('[customers] clipboard copy failed:', e);
       toast.error(t('customers.copy_failed'));
     }
   }
@@ -256,8 +263,8 @@ export default function CustomersPage() {
       setNewName('');
       setShowAdd(false);
       toast.success(t('customers.saved'));
-    } catch {
-      toast.error(t('customers.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
     } finally {
       setAdding(false);
     }

@@ -13,6 +13,7 @@ import { Copy, Check, ChevronRight, ChevronLeft, ChefHat, Upload, Trash2, Truck,
 import { ControlCenterTabs } from '@/components/ui/ControlCenterTabs';
 import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
+import { LoadError } from '@/components/ui/LoadError';
 import { KitchenScreenCard } from '@/components/settings/KitchenScreenCard';
 
 interface Member { id: number; userId: number; name: string; role: string }
@@ -27,6 +28,8 @@ export default function SettingsPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [groupName, setGroupName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -90,9 +93,13 @@ export default function SettingsPage() {
         setMembers(m.members);
         setInvites(i.invites);
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[settings] load failed:', err);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, [activeGroupId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupId, reloadKey]);
 
   async function onPickLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -107,7 +114,8 @@ export default function SettingsPage() {
         fd
       );
       setLogoUrl(url);
-    } catch {
+    } catch (err) {
+      console.error('[settings] logo upload failed:', err);
       toast.error(t('settings.logo_upload_failed'));
     }
     setUploadingLogo(false);
@@ -119,7 +127,8 @@ export default function SettingsPage() {
     setLogoUrl(null);
     try {
       await apiFetch(`/groups/${activeGroupId}/logo`, { method: 'DELETE' });
-    } catch {
+    } catch (err) {
+      console.error('[settings] logo removal failed:', err);
       // The delete didn't take — roll back the optimistic clear so the UI
       // stops diverging from the server.
       setLogoUrl(prev);
@@ -142,7 +151,8 @@ export default function SettingsPage() {
         }),
       });
       toast.success(t('settings.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[settings] delivery save failed:', err);
       toast.error(t('settings.save_failed'));
     }
     setSavingDeliv(false);
@@ -200,6 +210,21 @@ export default function SettingsPage() {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <>
+        <ControlCenterTabs />
+        <LoadError
+          onRetry={() => {
+            setLoadFailed(false);
+            setLoading(true);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <ControlCenterTabs />
@@ -227,7 +252,8 @@ export default function SettingsPage() {
                     body: JSON.stringify({ name: groupName.trim() }),
                   });
                   toast.success(t('settings.saved'));
-                } catch {
+                } catch (err) {
+                  console.error('[settings] group name save failed:', err);
                   toast.error(t('settings.save_failed'));
                 }
                 setSavingName(false);

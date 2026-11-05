@@ -87,7 +87,8 @@ export const DELETE = withAuth(async (request, auth) => {
     await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadSizeId, sizeId));
     try {
       await db.delete(breadSizes).where(eq(breadSizes.id, sizeId));
-    } catch {
+    } catch (err) {
+      console.error(`[bread-sizes] hard delete of size ${sizeId} failed (answered 409 in-use):`, err);
       revalidatePublicSite(authz.groupId);
       return errorResponse(
         'Cannot delete: size is used in existing orders. Disable it instead.',

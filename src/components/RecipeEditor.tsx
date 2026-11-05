@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { LoadError } from '@/components/ui/LoadError';
 import { Plus, Trash2, Pencil, Calculator, Copy } from 'lucide-react';
 import { groupByKind, scaleRecipe, type IngredientKind } from '@/lib/recipe';
 import { costScaledRecipe, type PriceBook } from '@/lib/cost';
@@ -107,6 +108,10 @@ export function RecipeEditor({
 
   const [recipe, setRecipe] = useState<FetchedRecipe | null>(null);
   const [loading, setLoading] = useState(true);
+  // A failed read must not pass for "no recipe yet": that state offers to create
+  // one, which would replace the real recipe.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const loadedGroupRecipes = useRef(false);
 
   const [editing, setEditing] = useState(false);
@@ -149,24 +154,29 @@ export function RecipeEditor({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadFailed(false);
     apiFetch<{ recipe: FetchedRecipe | null }>(`/bread-types/${breadTypeId}/recipe`)
       .then((res) => {
         if (cancelled) return;
         setRecipe(res.recipe);
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error(`[recipe] load of bread type ${breadTypeId} failed:`, err);
+        if (!cancelled) setLoadFailed(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [breadTypeId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [breadTypeId, reloadKey]);
 
   // Every recipe in the group plus every ingredient name — only the copy
   // sources (shown when this bread has none) and the name autocomplete (shown
   // while editing) need it, so it no longer loads on every sheet open.
-  const needsGroupRecipes = !loading && (!recipe || editing);
+  const needsGroupRecipes = !loading && !loadFailed && (!recipe || editing);
   useEffect(() => {
     if (!needsGroupRecipes || loadedGroupRecipes.current) return;
     // Latched before the request so a re-render can't start a second one, and
@@ -182,12 +192,14 @@ export function RecipeEditor({
         // A bread is never its own copy source.
         setSources(res.recipes.filter((r) => r.breadTypeId !== breadTypeId));
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('[recipe] group recipes load failed:', err);
         loadedGroupRecipes.current = false;
       });
     return () => {
       if (!landed) loadedGroupRecipes.current = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsGroupRecipes, breadTypeId]);
 
   useEffect(() => {
@@ -197,10 +209,11 @@ export function RecipeEditor({
       .then((res) => {
         if (!cancelled) setBook(res.book);
       })
-      .catch(() => {});
+      .catch((err) => console.warn('[recipe] price book load failed:', err));
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBaker, recipe]);
 
   function startCreate() {
@@ -352,6 +365,7 @@ export function RecipeEditor({
         }),
       });
     } catch (e) {
+      console.error(`[recipe] save for bread type ${breadTypeId} failed:`, e);
       toast.error(e instanceof Error ? e.message : t('settings.recipe_save_failed'));
       setSaving(false);
       return;
@@ -365,7 +379,8 @@ export function RecipeEditor({
         `/bread-types/${breadTypeId}/recipe`
       );
       setRecipe(fresh.recipe);
-    } catch {
+    } catch (err) {
+      console.error(`[recipe] reload after save for bread type ${breadTypeId} failed:`, err);
       // Stay open, showing the rows that were just saved. Closing would put the
       // PRE-save recipe back on the card — and the next edit would seed from it
       // and write the old ingredient list back over what the database accepted.
@@ -385,7 +400,8 @@ export function RecipeEditor({
       await apiFetch(`/bread-types/${breadTypeId}/recipe`, { method: 'DELETE' });
       setRecipe(null);
       setEditing(false);
-    } catch {
+    } catch (err) {
+      console.error(`[recipe] delete for bread type ${breadTypeId} failed:`, err);
       toast.error(t('settings.recipe_save_failed'));
     }
   }
@@ -395,6 +411,15 @@ export function RecipeEditor({
       <div className="border-t border-border pt-3">
         <div className="text-sm font-medium text-muted-foreground mb-2">{t('settings.recipe')}</div>
         <div className="h-16 rounded-md bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="border-t border-border pt-3">
+        <div className="text-sm font-medium text-muted-foreground mb-2">{t('settings.recipe')}</div>
+        <LoadError compact onRetry={() => setReloadKey((k) => k + 1)} />
       </div>
     );
   }

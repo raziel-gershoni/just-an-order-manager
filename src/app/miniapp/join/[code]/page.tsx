@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { LoadError } from '@/components/ui/LoadError';
+import { friendlyError } from '@/lib/utils';
 
 interface InviteInfo { groupName: string; role: string; status: string }
 
@@ -20,13 +22,26 @@ export default function JoinPage() {
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    setLoadFailed(false);
     apiFetch<{ invite: InviteInfo }>(`/invites/${code}`)
       .then((d) => setInvite(d.invite))
-      .catch(() => {})
+      .catch((e) => {
+        // A wrong or deleted code is a 404 and reads as an invalid invite; anything else is a failed load.
+        if ((e as { status?: number }).status === 404) {
+          console.warn(`[join] invite ${code} not found`);
+          return;
+        }
+        console.error(`[join] loading invite ${code} failed:`, e);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, [code]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, attempt]);
 
   async function respond(action: 'accept' | 'decline') {
     setActing(true);
@@ -36,8 +51,8 @@ export default function JoinPage() {
         body: JSON.stringify({ action }),
       });
       router.push('/miniapp');
-    } catch {
-      toast.error(t('join.failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('join.failed')));
     } finally {
       setActing(false);
     }
@@ -57,6 +72,15 @@ export default function JoinPage() {
             <div className="flex-1 h-11 rounded-lg bg-muted animate-pulse" />
           </div>
         </div>
+      </>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <>
+        <PageHeader title={t('join.title')} />
+        <LoadError onRetry={() => setAttempt((n) => n + 1)} />
       </>
     );
   }

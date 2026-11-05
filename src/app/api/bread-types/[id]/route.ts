@@ -102,7 +102,8 @@ export const DELETE = withAuth(async (request, auth) => {
     await db.delete(breadTypeSizes).where(eq(breadTypeSizes.breadTypeId, breadTypeId));
     try {
       await db.delete(breadTypes).where(eq(breadTypes.id, breadTypeId));
-    } catch {
+    } catch (err) {
+      console.error(`[bread-types] hard delete of type ${breadTypeId} failed (answered 409 in-use):`, err);
       // An order placed in the gap between the check and here: the type is
       // unlinked but still listed, which is the 409 the owner asked for.
       revalidatePublicSite(breadType.groupId);

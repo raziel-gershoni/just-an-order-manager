@@ -24,7 +24,7 @@ import { groupByDeliveryDate, rowItemsLine } from '@/lib/order-grouping';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { docketWidth } from '@/components/ui/DocketStub';
 import { t as translate } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
+import { cn, friendlyError } from '@/lib/utils';
 import { Plus, Banknote, Pencil, Repeat, Trash2, Check, X, MessageCircle, MessageCircleOff, Copy, UserPlus, Send, Navigation, CopyPlus, ChevronLeft } from 'lucide-react';
 import { formatWeekdayShort } from '@/lib/date-utils';
 import { MANUAL_REMINDERS_ENABLED } from '@/lib/features';
@@ -109,7 +109,10 @@ export default function CustomerDetailPage() {
         setDisplay({ today: o.today, asapInToday: o.asapInToday });
         setPayments(p.payments);
       })
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error(`[customer] load of ${id} failed:`, err);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }
 
@@ -128,9 +131,10 @@ export default function CustomerDetailPage() {
   async function copyPhone(phone: string) {
     try {
       await navigator.clipboard.writeText(phone);
-      toast.success('המספר הועתק');
-    } catch {
-      toast.error('ההעתקה נכשלה');
+      toast.success(t('customers.phone_copied'));
+    } catch (e) {
+      console.warn('[customer] clipboard copy failed:', e);
+      toast.error(t('customers.copy_failed'));
     }
   }
 
@@ -142,8 +146,8 @@ export default function CustomerDetailPage() {
         body: JSON.stringify(phoneId ? { phoneId } : {}),
       });
       toast.success('נשלח לצ׳אט — הקישו על הכרטיס כדי לשמור');
-    } catch {
-      toast.error('שליחת איש הקשר נכשלה');
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.send_contact_failed')));
     } finally {
       setSendingContact(false);
     }
@@ -156,8 +160,8 @@ export default function CustomerDetailPage() {
         body: JSON.stringify({ reminderOptOut: next }),
       });
       setCustomer((prev) => (prev ? { ...prev, reminderOptOut: next } : prev));
-    } catch {
-      toast.error(t('customers.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
     }
   }
 
@@ -179,9 +183,9 @@ export default function CustomerDetailPage() {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
-    } catch {
+    } catch (e) {
       apply({ notify: before.notify, hasWhatsapp: before.hasWhatsapp });
-      toast.error(t('customers.save_failed'));
+      toast.error(friendlyError(e, t('customers.save_failed')));
     }
   }
 
@@ -218,8 +222,8 @@ export default function CustomerDetailPage() {
       setCustomer((prev) => prev ? { ...prev, ...updated } : prev);
       setEditing(false);
       toast.success(t('customers.saved'));
-    } catch {
-      toast.error(t('customers.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
     } finally {
       setSaving(false);
     }
@@ -236,8 +240,8 @@ export default function CustomerDetailPage() {
       setNewPhoneValue('');
       setNewPhoneName('');
       setShowAddPhone(false);
-    } catch {
-      toast.error(t('customers.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
     }
   }
 
@@ -256,8 +260,8 @@ export default function CustomerDetailPage() {
         phones: prev.phones.map((p) => p.id === phoneId ? phone : p),
       } : prev);
       setEditingPhoneId(null);
-    } catch {
-      toast.error(t('customers.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('customers.save_failed')));
     }
   }
 
@@ -272,7 +276,8 @@ export default function CustomerDetailPage() {
     } catch (e) {
       // A number that has been reminded is locked, not broken — say which.
       const refused = (e as { status?: number })?.status === 409;
-      toast.error(refused ? t('customers.phone_has_history') : t('customers.save_failed'));
+      if (refused) console.warn('[customer] delete phone refused:', e);
+      toast.error(refused ? t('customers.phone_has_history') : friendlyError(e, t('customers.save_failed')));
     }
   }
 

@@ -75,7 +75,7 @@ export default function Dashboard() {
     if (!canManage) return;
     apiFetch<{ deliveries: unknown[] }>('/deliveries')
       .then((r) => setDeliveryCount(r.deliveries.length))
-      .catch(() => {});
+      .catch((err) => console.warn('[dashboard] deliveries count failed:', err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage]);
   const t = useT();
@@ -98,7 +98,10 @@ export default function Dashboard() {
     setError(false);
     apiFetch<DashboardData>('/dashboard')
       .then(setData)
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error('[dashboard] load failed:', err);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }
 
@@ -118,7 +121,8 @@ export default function Dashboard() {
       setActiveGroupId(group.id);
       setActiveGroupRole('owner'); // the creator owns the bakery
       toast.success(t('dash.bakery_created'));
-    } catch {
+    } catch (err) {
+      console.error('[onboarding] creating the bakery failed:', err);
       toast.error(t('dash.bakery_create_failed'));
     } finally {
       setCreating(false);

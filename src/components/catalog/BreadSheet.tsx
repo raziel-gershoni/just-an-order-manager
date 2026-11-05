@@ -6,6 +6,8 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
+import { LoadError } from '@/components/ui/LoadError';
+import { friendlyError } from '@/lib/utils';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 import { DetailsSection } from './sections/DetailsSection';
 import { RecipeSection } from './sections/RecipeSection';
@@ -34,6 +36,8 @@ export function BreadSheet({
   groupId,
   isBaker,
   assets,
+  assetsFailed,
+  onRetryAssets,
   tiers,
   onClose,
   onNameSaved,
@@ -47,6 +51,8 @@ export function BreadSheet({
   groupId: number;
   isBaker: boolean;
   assets: MediaAsset[];
+  assetsFailed?: boolean;
+  onRetryAssets?: () => void | Promise<unknown>;
   tiers: Tier[];
   onClose: () => void;
   onNameSaved: (name: string) => void;
@@ -68,6 +74,8 @@ export function BreadSheet({
     imageId: null,
   });
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   // Only פרטים starts open. The complaint about this sheet was its length:
   // name, badges, an image picker, the whole recipe editor, size chips, tier
@@ -122,7 +130,11 @@ export function BreadSheet({
           imageId: breadType.imageId,
         });
       })
-      .catch((e: Error) => toast.error(e.message))
+      .catch((e: Error) => {
+        console.error(`[bread-sheet] type ${typeId} detail failed to load:`, e);
+        // The sheet shows LoadError; the raw (often English) message stays in the log.
+        if (!cancelled) setLoadFailed(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -130,7 +142,7 @@ export function BreadSheet({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId, typeId]);
+  }, [groupId, typeId, attempt]);
 
   const dirtyLabels: Record<SectionKey, string> = {
     details: t('catalog.section_details'),
@@ -155,8 +167,8 @@ export function BreadSheet({
     try {
       await apiFetch(`/bread-types/${typeId}?hard=true`, { method: 'DELETE' });
       onDeleted();
-    } catch {
-      toast.error(t('settings.delete_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.delete_failed')));
     }
   }
 
@@ -186,6 +198,14 @@ export function BreadSheet({
             <div className="h-12 animate-pulse rounded-lg bg-muted" />
             <div className="h-12 animate-pulse rounded-lg bg-muted" />
           </>
+        ) : loadFailed ? (
+          <LoadError
+            onRetry={() => {
+              setLoadFailed(false);
+              setLoading(true);
+              setAttempt((n) => n + 1);
+            }}
+          />
         ) : (
           <>
             <DetailsSection
@@ -251,6 +271,8 @@ export function BreadSheet({
                 typeId={typeId}
                 branding={branding}
                 assets={assets}
+                assetsFailed={assetsFailed}
+                onRetryAssets={onRetryAssets}
                 open={open === 'branding'}
                 onToggle={toggle('branding')}
                 onDirtyChange={markDirty.branding}

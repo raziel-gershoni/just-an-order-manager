@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { BadgePicker } from '@/components/site-editor/BadgePicker';
+import { LoadError } from '@/components/ui/LoadError';
 import { ImagePicker } from '@/components/site-editor/ImagePicker';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 import { friendlyError } from '@/lib/utils';
@@ -41,6 +42,8 @@ export function BrandingSection({
   typeId,
   branding,
   assets,
+  assetsFailed = false,
+  onRetryAssets,
   open,
   onToggle,
   onDirtyChange,
@@ -49,6 +52,8 @@ export function BrandingSection({
   typeId: number;
   branding: Branding;
   assets: MediaAsset[];
+  assetsFailed?: boolean;
+  onRetryAssets?: () => void | Promise<unknown>;
   open: boolean;
   onToggle: () => void;
   onDirtyChange: (dirty: boolean) => void;
@@ -107,14 +112,18 @@ export function BrandingSection({
       saving={saving}
       onSave={save}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">{t('site.type_image')}</span>
-        <ImagePicker
-          value={draft.imageId}
-          assets={assets}
-          onChange={(imageId) => setDraft((d) => ({ ...d, imageId }))}
-        />
-      </div>
+      {assetsFailed && onRetryAssets ? (
+        <LoadError compact onRetry={onRetryAssets} />
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-muted-foreground">{t('site.type_image')}</span>
+          <ImagePicker
+            value={draft.imageId}
+            assets={assets}
+            onChange={(imageId) => setDraft((d) => ({ ...d, imageId }))}
+          />
+        </div>
+      )}
       <BadgePicker
         badgeType={draft.badgeType}
         badgeLabel={draft.badgeLabel}

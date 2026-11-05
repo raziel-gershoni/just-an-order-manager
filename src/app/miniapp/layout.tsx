@@ -8,6 +8,7 @@ import { GroupCtx, type GroupRole } from '@/hooks/useGroup';
 import { ToastCtx, type Toast } from '@/hooks/useToast';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { LoadingSplash } from '@/components/ui/LoadingSplash';
+import { LoadError } from '@/components/ui/LoadError';
 import { LangCtx } from '@/hooks/useLang';
 import { useKeyboardTracking } from '@/hooks/useKeyboardTracking';
 import { t, type Lang } from '@/lib/i18n';
@@ -20,6 +21,8 @@ function AppProviders({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>('he');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [authResolved, setAuthResolved] = useState(false);
+  const [authFailed, setAuthFailed] = useState(false);
+  const [authAttempt, setAuthAttempt] = useState(0);
   const { initDataRaw, ready } = useTelegram();
   useKeyboardTracking();
 
@@ -52,7 +55,10 @@ function AppProviders({ children }: { children: ReactNode }) {
     }
 
     fetch('/api/auth/me', { headers })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`/api/auth/me answered ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (data.user?.language) {
           setLang(data.user.language);
@@ -62,9 +68,12 @@ function AppProviders({ children }: { children: ReactNode }) {
           setActiveGroupRole(data.groups[0].role ?? null);
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[auth] /api/auth/me failed on app start:', err);
+        setAuthFailed(true);
+      })
       .finally(() => setAuthResolved(true));
-  }, [ready, initDataRaw]);
+  }, [ready, initDataRaw, authAttempt]);
 
   const dir = 'rtl';
   // Dark "back-office" theme: owner/manager in the settings/catalog area. Bakers stay light.
@@ -97,6 +106,14 @@ function AppProviders({ children }: { children: ReactNode }) {
             />
             {!authResolved ? (
               <LoadingSplash />
+            ) : authFailed ? (
+              <LoadError
+                onRetry={() => {
+                  setAuthFailed(false);
+                  setAuthResolved(false);
+                  setAuthAttempt((n) => n + 1);
+                }}
+              />
             ) : (
               <>
                 <div className="pb-20 animate-fade-in">

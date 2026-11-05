@@ -20,6 +20,7 @@ import { BreadSheet } from '@/components/catalog/BreadSheet';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 import { effectivePrice } from '@/lib/pricing';
 import { friendlyError } from '@/lib/utils';
+import { LoadError } from '@/components/ui/LoadError';
 import type { Tier } from '@/components/catalog/types';
 
 interface BreadSize {
@@ -105,8 +106,8 @@ export default function CatalogPage() {
         a.remove();
         URL.revokeObjectURL(url);
       }, 1500);
-    } catch {
-      toast.error(t('catalog.export_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.export_failed')));
     } finally {
       setExporting(false);
     }
@@ -117,7 +118,8 @@ export default function CatalogPage() {
       const json = await fetchExportJson();
       try {
         await navigator.clipboard.writeText(json);
-      } catch {
+      } catch (clipErr) {
+        console.warn('[catalog] clipboard API failed, using execCommand fallback:', clipErr);
         const ta = document.createElement('textarea');
         ta.value = json;
         ta.style.position = 'fixed';
@@ -128,8 +130,8 @@ export default function CatalogPage() {
         ta.remove();
       }
       toast.success(t('catalog.copied'));
-    } catch {
-      toast.error(t('catalog.export_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.export_failed')));
     } finally {
       setExporting(false);
     }
@@ -173,8 +175,8 @@ export default function CatalogPage() {
         ),
         tier,
       ]);
-    } catch {
-      toast.error(t('catalog.tier_save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.tier_save_failed')));
     }
   }
 
@@ -182,8 +184,8 @@ export default function CatalogPage() {
     try {
       await apiFetch(`/bread-size-tiers/${id}`, { method: 'DELETE' });
       setTiers((prev) => prev.filter((x) => x.id !== id));
-    } catch {
-      toast.error(t('catalog.tier_save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.tier_save_failed')));
     }
   }
 
@@ -209,11 +211,22 @@ export default function CatalogPage() {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
 
   // Media library (for image pickers) — owner/manager only.
-  useEffect(() => {
+  const [assetsFailed, setAssetsFailed] = useState(false);
+  // Failed flags clear only on success, so a retry never shows the empty picker or deals.
+  function loadAssets() {
     if (!activeGroupId || isBaker) return;
-    apiFetch<{ assets: MediaAsset[] }>('/media')
-      .then((r) => setAssets(r.assets))
-      .catch(() => {});
+    return apiFetch<{ assets: MediaAsset[] }>('/media')
+      .then((r) => {
+        setAssets(r.assets);
+        setAssetsFailed(false);
+      })
+      .catch((e) => {
+        console.warn('[catalog] media library load failed:', e);
+        setAssetsFailed(true);
+      });
+  }
+  useEffect(() => {
+    loadAssets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, isBaker]);
 
@@ -221,12 +234,17 @@ export default function CatalogPage() {
     if (!activeGroupId || isBaker) return;
     apiFetch<{ book: { pricePerKg: Record<string, number> } }>('/ingredient-prices?scope=book')
       .then((r) => setPricedCount(Object.keys(r.book.pricePerKg).length))
-      .catch(() => {});
+      .catch((e) => console.warn('[catalog] price book count failed:', e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, isBaker]);
 
-  useEffect(() => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [tiersFailed, setTiersFailed] = useState(false);
+
+  function loadCatalog() {
     if (!activeGroupId) return;
+    setLoadFailed(false);
+    setLoading(true);
     Promise.all([
       apiFetch<{ breadTypes: BreadType[] }>(`/groups/${activeGroupId}/bread-types`),
       apiFetch<{ sizes: BreadSize[] }>(`/groups/${activeGroupId}/bread-sizes`),
@@ -239,15 +257,33 @@ export default function CatalogPage() {
         setAdditions(additionsResp.additions);
         setAdditionsSurcharge(String(Number(groupResp.group.additionsSurcharge ?? 0)));
       })
-      .catch(() => {})
+      .catch((e) => {
+        console.error('[catalog] load failed:', e);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
+  }
+
+  function loadTiers() {
+    if (!activeGroupId || isBaker) return;
+    return apiFetch<{ tiers: Tier[] }>('/bread-size-tiers')
+      .then((r) => {
+        setTiers(r.tiers);
+        setTiersFailed(false);
+      })
+      .catch((e) => {
+        console.error('[catalog] tiers load failed:', e);
+        setTiersFailed(true);
+      });
+  }
+
+  useEffect(() => {
+    loadCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
   useEffect(() => {
-    if (!activeGroupId || isBaker) return;
-    apiFetch<{ tiers: Tier[] }>('/bread-size-tiers')
-      .then((r) => setTiers(r.tiers))
-      .catch(() => {});
+    loadTiers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId, isBaker]);
 
@@ -266,8 +302,8 @@ export default function CatalogPage() {
       });
       setAdditionsSurcharge(String(Number(v)));
       toast.success(t('settings.additions_surcharge_saved'));
-    } catch {
-      toast.error(t('catalog.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     } finally {
       setSavingSurcharge(false);
     }
@@ -374,8 +410,8 @@ export default function CatalogPage() {
       // The endpoint drops the junction rows with it, so no bread offers it now.
       syncEnabledSize(id, null);
       setEditingSizeId(null);
-    } catch {
-      toast.error(t('settings.delete_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.delete_failed')));
     }
   }
 
@@ -392,8 +428,8 @@ export default function CatalogPage() {
         method: 'PUT',
         body: JSON.stringify({ orderedIds: next.map((s) => s.id) }),
       });
-    } catch {
-      toast.error(t('settings.reorder_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.reorder_failed')));
     } finally {
       setSavingSizeOrder(false);
     }
@@ -469,8 +505,8 @@ export default function CatalogPage() {
       await apiFetch(`/bread-additions/${id}?hard=true`, { method: 'DELETE' });
       setAdditions((prev) => prev.filter((a) => a.id !== id));
       setEditingAdditionId(null);
-    } catch {
-      toast.error(t('settings.delete_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.delete_failed')));
     }
   }
 
@@ -487,8 +523,8 @@ export default function CatalogPage() {
         method: 'PUT',
         body: JSON.stringify({ orderedIds: next.map((a) => a.id) }),
       });
-    } catch {
-      toast.error(t('settings.reorder_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.reorder_failed')));
     } finally {
       setSavingAdditionOrder(false);
     }
@@ -513,8 +549,8 @@ export default function CatalogPage() {
         method: 'PUT',
         body: JSON.stringify({ orderedIds: next.map((bt) => bt.id) }),
       });
-    } catch {
-      toast.error(t('settings.reorder_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('settings.reorder_failed')));
     } finally {
       setSavingTypeOrder(false);
     }
@@ -533,8 +569,8 @@ export default function CatalogPage() {
       setExpandedTypeId(breadType.id);
       setNewTypeName('');
       setShowAddType(false);
-    } catch {
-      toast.error(t('catalog.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     } finally {
       setAddingType(false);
     }
@@ -547,8 +583,8 @@ export default function CatalogPage() {
         ...(!isActive && { body: JSON.stringify({ isActive: true }) }),
       });
       setBreadTypes((prev) => prev.map((bt) => (bt.id === id ? { ...bt, isActive: !isActive } : bt)));
-    } catch {
-      toast.error(t('catalog.save_failed'));
+    } catch (e) {
+      toast.error(friendlyError(e, t('catalog.save_failed')));
     }
   }
 
@@ -559,6 +595,19 @@ export default function CatalogPage() {
         <div className="p-5 space-y-4">
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
           <div className="h-48 rounded-xl bg-muted animate-pulse" />
+        </div>
+      </>
+    );
+  }
+
+  // A failed read must not pass for an empty catalog or absent deals: nothing
+  // here may be edited (and saved over) until the data has actually loaded.
+  if (loadFailed || tiersFailed) {
+    return (
+      <>
+        <ControlCenterTabs />
+        <div className="p-5">
+          <LoadError onRetry={() => Promise.all([loadFailed && loadCatalog(), tiersFailed && loadTiers()])} />
         </div>
       </>
     );
@@ -1144,6 +1193,8 @@ export default function CatalogPage() {
           groupId={activeGroupId}
           isBaker={isBaker}
           assets={assets}
+          assetsFailed={assetsFailed}
+          onRetryAssets={loadAssets}
           tiers={tiers}
           onClose={() => setExpandedTypeId(null)}
           onNameSaved={(name) =>

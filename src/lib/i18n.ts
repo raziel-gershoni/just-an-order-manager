@@ -135,12 +135,17 @@ const translations: Record<string, string> = {
   'customers.no_whatsapp_copy': 'אין וואטסאפ — העתקת המספר',
   'customers.phone_copied': 'המספר הועתק',
   'customers.copy_failed': 'ההעתקה נכשלה',
+  'customers.send_contact_failed': 'שליחת איש הקשר נכשלה',
 
   // Render-error boundary (src/app/miniapp/error.tsx)
   'error.title': 'משהו השתבש',
   'error.body': 'המסך לא הצליח להיטען',
   'error.retry': 'נסו שוב',
   'error.reload': 'רענון מלא',
+
+  // A screen or list whose data did not load (src/components/ui/LoadError.tsx)
+  'load.failed': 'הטעינה נכשלה',
+  'load.failed_hint': 'בדקו את החיבור ונסו שוב.',
 
   // Payments
   'payments.title': 'רשום תשלום',
