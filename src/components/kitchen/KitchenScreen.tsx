@@ -95,9 +95,18 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
   return (
     <>
       <KitchenSheets data={data} />
-      <footer className={offline ? 'live live-off' : 'live'} role="status" aria-live="polite">
-        {t(offline ? 'kitchen.offline' : 'kitchen.updated_at').replace('{time}', time)}
-      </footer>
+      <div className="dock">
+        {/* Past days are not on the sheets, so an order left open on one would otherwise vanish. */}
+        {data.overdue > 0 && (
+          <p className="overdue" role="alert">
+            <strong>{data.overdue === 1 ? t('kitchen.overdue_one') : t('kitchen.overdue_many').replace('{n}', String(data.overdue))}</strong>{' '}
+            <span>{t('kitchen.overdue_action')}</span>
+          </p>
+        )}
+        <footer className={offline ? 'live live-off' : 'live'} role="status" aria-live="polite">
+          {t(offline ? 'kitchen.offline' : 'kitchen.updated_at').replace('{time}', time)}
+        </footer>
+      </div>
     </>
   );
 }

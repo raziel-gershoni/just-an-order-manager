@@ -34,7 +34,7 @@ body {
 }
 
 /* ---- the days ---- */
-.kitchen { width: 100%; max-width: 760px; margin: 0 auto; padding-bottom: 88px; font-size: 18px; }
+.kitchen { width: 100%; max-width: 760px; margin: 0 auto; font-size: 18px; }
 .kitchen .sheet {
   max-width: none; margin: 0 0 28px; padding: 0 0 14px;
   background: var(--paper); box-shadow: none;
@@ -92,9 +92,12 @@ body {
 .kitchen .note { font-size: 17px; margin-top: 6px; }
 .kitchen .status { font-size: 13px; padding: 2px 8px; margin-top: 8px; }
 
-/* ---- freshness line ---- */
+/* ---- pinned to the bottom: the overdue reminder over the freshness line ---- */
+/* Sticky in the flow rather than fixed, so however many lines the dock grows to,
+   the last card can still scroll clear of it. The body is a full-height flex
+   column, so on a short day the dock still sits at the bottom. */
+.dock { position: sticky; bottom: 0; z-index: 3; margin-top: auto; }
 .live {
-  position: fixed; inset-inline: 0; bottom: 0; z-index: 3;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: var(--paper); border-top: 1.5px solid var(--rule);
   font-size: 15px; font-weight: 600; color: var(--ink-soft); text-align: center;
@@ -105,6 +108,15 @@ body {
   color: var(--flag); border-top: 3px solid var(--flag);
   outline: 2px solid var(--flag); outline-offset: -8px; font-weight: 800;
 }
+/* The same boxed red as the offline line: something to act on in the app. */
+.overdue {
+  margin: 0; padding: 16px 20px;
+  background: var(--paper); color: var(--flag); border-top: 3px solid var(--flag);
+  outline: 2px solid var(--flag); outline-offset: -8px;
+  font-size: 18px; line-height: 1.35; text-align: center; text-wrap: balance;
+}
+.overdue strong { display: block; font-size: 20px; font-weight: 800; }
+.overdue span { display: block; font-weight: 600; }
 
 /* ---- not connected / disconnected / pairing ---- */
 .notice {
