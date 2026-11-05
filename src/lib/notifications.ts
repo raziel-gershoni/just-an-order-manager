@@ -170,11 +170,13 @@ export async function notifyPendingApproval(
     keyboard.text(`${t('notify.approve')} · #${o.id} ${shortName(o.customerName)}`, `order_status:${o.id}:confirmed`);
   });
 
+  // The title counts every one, not just those that fit: the kitchen screen shows the same total.
+  const total = pending.length + more;
   return sendToRecipients(recipients, (lang) => {
     const title =
-      pending.length === 1
+      total === 1
         ? t('notify.pending_one', lang)
-        : `${pending.length} ${t('notify.pending_many', lang)}`;
+        : `${total} ${t('notify.pending_many', lang)}`;
     const lines = [`<b>⏳ ${title}</b>`, RULE];
     for (const o of pending) {
       const when = o.deliveryDate ? formatWeekdayShort(o.deliveryDate) : t('delivery.asap', lang);
@@ -186,6 +188,35 @@ export async function notifyPendingApproval(
     if (more > 0) lines.push(``, `<i>${t('notify.and_more', lang)} ${more}</i>`);
     return lines.join('\n');
   }, keyboard);
+}
+
+/**
+ * Daily nudge: orders whose day has passed but that are still open. The same
+ * people as the approval nudge, and deliberately without buttons: the fix
+ * differs per order (deliver, cancel or move the date), only a `ready` order
+ * can be delivered in one step, and delivering creates the charge and can
+ * message the customer, days late.
+ */
+export async function notifyOverdueOrders(
+  groupId: number,
+  overdue: { id: number; customerName: string; deliveryDate: string | null; status: string }[],
+  more: number
+): Promise<{ sent: number; failed: number }> {
+  const recipients = await getRecipientsByRole(groupId, ['baker']);
+  const total = overdue.length + more;
+
+  return sendToRecipients(recipients, (lang) => {
+    const title =
+      total === 1 ? t('notify.overdue_one', lang) : t('notify.overdue_many', lang).replace('{n}', String(total));
+    const lines = [`<b>⏰ ${title}</b>`, RULE];
+    for (const o of overdue) {
+      const when = o.deliveryDate ? formatWeekdayShort(o.deliveryDate) : t('delivery.asap', lang);
+      lines.push(`<b>#${o.id} ${esc(o.customerName)}</b> — ${when} · ${t(`status.${o.status}`, lang)}`);
+    }
+    if (more > 0) lines.push(``, `<i>${t('notify.and_more', lang)} ${more}</i>`);
+    lines.push(``, `<i>${t('notify.open_orders_tab', lang)}</i>`);
+    return lines.join('\n');
+  });
 }
 
 /**
@@ -207,11 +238,13 @@ export async function notifyUnpaidOrders(
     );
   });
 
+  // The title counts every one, not just those that fit.
+  const total = unpaid.length + more;
   return sendToRecipients(recipients, (lang) => {
     const title =
-      unpaid.length === 1
+      total === 1
         ? t('notify.unpaid_one', lang)
-        : `${unpaid.length} ${t('notify.unpaid_many', lang)}`;
+        : `${total} ${t('notify.unpaid_many', lang)}`;
     const lines = [`<b>💰 ${title}</b>`, RULE];
     for (const o of unpaid) {
       lines.push(

@@ -1,11 +1,12 @@
 import { unstable_cache } from 'next/cache';
-import { and, asc, eq, gte, lt, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, ne, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { orders } from '@/db/schema';
 import { buildPrintSheet, headingFor, type PrintSheet } from './print-sheet';
 import { t } from './i18n';
 import { addDaysStr, israelTodayStr } from './date-utils';
 import { getOrderDisplay } from './asap';
+import { awaitingApproval, overdue } from './order-attention';
 import { DATA_TAG } from './cache-tags';
 import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
 
@@ -14,7 +15,8 @@ import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
  * buildPrintSheet itself so the screen and a printout can never disagree.
  * Today first (always, even empty, so tomorrow can't pass for today), then
  * every later day that has orders. Past days are left out; open orders still
- * on one are only counted (`overdue`), so the screen can point to the app.
+ * on one are only counted (`overdue`), and so are the orders nobody approved
+ * yet (`awaitingApproval`), so the screen can point to the app.
  *
  * Where the open בהקדם orders go follows the bakery's switch
  * (src/lib/asap.ts): inside today's sheet, first, or a card of their own
@@ -38,8 +40,9 @@ export interface KitchenData {
   /** Whether the לישה (mixing weights) section is shown on the cards. */
   showRecipe: boolean;
   days: KitchenDay[];
-  /** Orders dated before today that are not delivered or cancelled. The Orders tab lists them first. */
+  /** Counts only, by the rules the Telegram nudges use (src/lib/order-attention.ts). The Orders tab lists them. */
   overdue: number;
+  awaitingApproval: number;
 }
 
 function dayTitle(kind: KitchenDayKind, date: string | null): string {
@@ -50,12 +53,15 @@ function dayTitle(kind: KitchenDayKind, date: string | null): string {
   return heading;
 }
 
-async function countOverdue(groupId: number, today: string): Promise<number> {
+async function countAttention(groupId: number, today: string): Promise<{ overdue: number; awaitingApproval: number }> {
   const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
+    .select({
+      overdue: sql<number>`count(*) filter (where ${overdue(today)})::int`,
+      awaitingApproval: sql<number>`count(*) filter (where ${awaitingApproval(today)})::int`,
+    })
     .from(orders)
-    .where(and(eq(orders.groupId, groupId), lt(orders.deliveryDate, today), notInArray(orders.status, ['delivered', 'cancelled'])));
-  return row?.n ?? 0;
+    .where(eq(orders.groupId, groupId));
+  return { overdue: row?.overdue ?? 0, awaitingApproval: row?.awaitingApproval ?? 0 };
 }
 
 export async function loadKitchenData(groupId: number, today: string): Promise<KitchenData> {
@@ -69,8 +75,8 @@ export async function loadKitchenData(groupId: number, today: string): Promise<K
   const dates = [today, ...dated.map((r) => r.date).filter((d): d is string => !!d && d !== today)];
   const tomorrow = addDaysStr(today, 1);
 
-  const [overdue, asapSheet, ...sheets] = await Promise.all([
-    countOverdue(groupId, today),
+  const [attention, asapSheet, ...sheets] = await Promise.all([
+    countAttention(groupId, today),
     display.asapInToday ? null : buildPrintSheet(groupId, null, { undatedOnly: true }),
     ...dates.map((d) => buildPrintSheet(groupId, d, { withUndated: display.asapInToday && d === today })),
   ]);
@@ -82,7 +88,7 @@ export async function loadKitchenData(groupId: number, today: string): Promise<K
   if (asapSheet && asapSheet.orders.length > 0) {
     days.unshift({ key: 'asap', kind: 'asap', date: null, title: dayTitle('asap', null), sheet: asapSheet });
   }
-  return { today, builtAt: new Date().toISOString(), showRecipe: display.kitchenShowRecipe, days, overdue };
+  return { today, builtAt: new Date().toISOString(), showRecipe: display.kitchenShowRecipe, days, ...attention };
 }
 
 /** The Israel date is in the key, so the first check after midnight builds the new day. */

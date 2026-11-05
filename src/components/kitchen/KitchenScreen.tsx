@@ -96,11 +96,23 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
     <>
       <KitchenSheets data={data} />
       <div className="dock">
-        {/* Past days are not on the sheets, so an order left open on one would otherwise vanish. */}
-        {data.overdue > 0 && (
-          <p className="overdue" role="alert">
-            <strong>{data.overdue === 1 ? t('kitchen.overdue_one') : t('kitchen.overdue_many').replace('{n}', String(data.overdue))}</strong>{' '}
-            <span>{t('kitchen.overdue_action')}</span>
+        {/* Counts only: past days are not on the sheets, so an order left open on one would
+            otherwise vanish, and approving happens in the app (or the Telegram nudge). */}
+        {(data.overdue > 0 || data.awaitingApproval > 0) && (
+          <p className="attention" role="status">
+            {data.overdue > 0 && (
+              <strong>
+                {data.overdue === 1 ? t('notify.overdue_one') : t('notify.overdue_many').replace('{n}', String(data.overdue))}
+              </strong>
+            )}{' '}
+            {data.awaitingApproval > 0 && (
+              <strong>
+                {data.awaitingApproval === 1
+                  ? t('notify.pending_one')
+                  : `${data.awaitingApproval} ${t('notify.pending_many')}`}
+              </strong>
+            )}{' '}
+            <span>{t('notify.open_orders_tab')}</span>
           </p>
         )}
         <footer className={offline ? 'live live-off' : 'live'} role="status" aria-live="polite">

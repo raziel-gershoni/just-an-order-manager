@@ -8,26 +8,27 @@ import {
   breadAdditions,
   orderItemAdditions,
 } from '@/db/schema';
-import { and, asc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { addDaysStr, israelDateStr, todayStr } from './date-utils';
 import { israelDay } from '@/db/israel-day';
 import { formatStaffItemLabel } from './order-display';
 import { orderPaymentState } from './order-payments';
-import { notifyPendingApproval, notifyUnpaidOrders } from './notifications';
+import { notifyOverdueOrders, notifyPendingApproval, notifyUnpaidOrders } from './notifications';
+import { awaitingApproval, overdue } from './order-attention';
 
 /**
- * The daily "something is still waiting on you" nudges. Both look for orders
+ * The daily "something is still waiting on you" nudges. Each looks for orders
  * that stalled in a state only a person can clear — never approved, never
- * settled — and put the action itself in the chat as an inline button, so
- * clearing the backlog costs one tap rather than a trip into the app.
+ * settled, never delivered — and, where one tap can clear it, puts the action
+ * itself in the chat as an inline button rather than a trip into the app.
  *
  * Data gathering lives here; the Telegram wording lives in `notifications`.
  * Callers (the morning cron) own scheduling and per-group error handling.
  */
 
-// Each order in a nudge carries its own button, so the list is capped well
-// under Telegram's keyboard and message-length limits. The overflow is counted
-// and reported in the message, never dropped in silence.
+// The list is capped well under Telegram's message-length limit, and under its
+// keyboard limit where each order carries a button. The overflow is counted and
+// reported in the message, never dropped in silence.
 const MAX_NUDGE_ORDERS = 10;
 
 // A delivery gets a week to settle before it's chased — the bakery runs tabs,
@@ -57,16 +58,7 @@ export async function sendPendingApprovalNudge(groupId: number): Promise<NudgeRe
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .where(
-      and(
-        eq(orders.groupId, groupId),
-        eq(orders.status, 'pending'),
-        // ASAP orders carry no delivery date, and "as soon as possible" is
-        // always still ahead of us — those are the ones most worth chasing,
-        // so a plain `deliveryDate >= today` (which drops NULLs) won't do.
-        or(isNull(orders.deliveryDate), gte(orders.deliveryDate, today))
-      )
-    )
+    .where(and(eq(orders.groupId, groupId), awaitingApproval(today)))
     // Postgres sorts NULLs last on ASC, which would bury the ASAP orders at the
     // bottom of a list sorted by urgency. They belong at the top.
     .orderBy(sql`${orders.deliveryDate} asc nulls first`, asc(orders.id));
@@ -81,6 +73,31 @@ export async function sendPendingApprovalNudge(groupId: number): Promise<NudgeRe
     shown.map((o) => ({ ...o, items: itemsByOrder[o.id] ?? [] })),
     rows.length - shown.length
   );
+  return { total: rows.length, shown: shown.length, sent, failed };
+}
+
+/**
+ * Orders whose day has passed but that were never marked delivered or
+ * cancelled. No day view shows a past day, so this is where they surface.
+ * Oldest first, as in the Orders tab. Returns null when there are none.
+ */
+export async function sendOverdueNudge(groupId: number): Promise<NudgeResult | null> {
+  const rows = await db
+    .select({
+      id: orders.id,
+      customerName: customers.name,
+      deliveryDate: orders.deliveryDate,
+      status: orders.status,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .where(and(eq(orders.groupId, groupId), overdue(todayStr())))
+    .orderBy(asc(orders.deliveryDate), asc(orders.id));
+
+  if (rows.length === 0) return null;
+
+  const shown = rows.slice(0, MAX_NUDGE_ORDERS);
+  const { sent, failed } = await notifyOverdueOrders(groupId, shown, rows.length - shown.length);
   return { total: rows.length, shown: shown.length, sent, failed };
 }
 

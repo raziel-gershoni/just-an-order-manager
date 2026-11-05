@@ -5,7 +5,7 @@ import { todayStr } from '@/lib/date-utils';
 import { sendMorningSummary, notifyRemindersStalled } from '@/lib/notifications';
 import { findMissedRecurringReminders } from '@/lib/reminder-health';
 import { morningBake } from '@/lib/day-digest';
-import { sendPendingApprovalNudge, sendUnpaidNudge } from '@/lib/order-nudges';
+import { sendOverdueNudge, sendPendingApprovalNudge, sendUnpaidNudge } from '@/lib/order-nudges';
 
 export const maxDuration = 60;
 
@@ -18,6 +18,7 @@ interface Stats {
   notified: number;
   notifyFailed: number;
   approvalNudges: number;
+  overdueNudges: number;
   unpaidNudges: number;
   /** Groups warned that the recurring reminder has stopped running. */
   stalledWarnings: number;
@@ -51,6 +52,7 @@ async function handler(request: Request) {
     notified: 0,
     notifyFailed: 0,
     approvalNudges: 0,
+    overdueNudges: 0,
     unpaidNudges: 0,
     stalledWarnings: 0,
     nudgeFailed: 0,
@@ -61,8 +63,8 @@ async function handler(request: Request) {
 
     // The nudges are deliberately independent of the baking summary — a group
     // with nothing in the oven today can still have orders nobody approved or
-    // settled — and independent of each other, so one bad query can't mute the
-    // rest of the morning.
+    // settled or delivered — and independent of each other, so one bad query
+    // can't mute the rest of the morning.
     try {
       const result = await sendPendingApprovalNudge(group.id);
       if (result) {
@@ -73,6 +75,18 @@ async function handler(request: Request) {
     } catch (err) {
       stats.nudgeFailed++;
       console.error(`[cron/morning-reminder] approval nudge failed for group ${group.id}:`, err);
+    }
+
+    try {
+      const result = await sendOverdueNudge(group.id);
+      if (result) {
+        stats.overdueNudges++;
+        stats.notified += result.sent;
+        stats.notifyFailed += result.failed;
+      }
+    } catch (err) {
+      stats.nudgeFailed++;
+      console.error(`[cron/morning-reminder] overdue nudge failed for group ${group.id}:`, err);
     }
 
     try {

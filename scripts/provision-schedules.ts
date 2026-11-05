@@ -45,7 +45,7 @@ const SCHEDULES = [
     id: 'razei-morning-reminder',
     path: '/api/cron/morning-reminder',
     cron: 'CRON_TZ=Asia/Jerusalem 0 6 * * *',
-    what: 'baking summary + approval/unpaid nudges',
+    what: 'baking summary + approval/overdue/unpaid nudges',
   },
   {
     id: 'razei-recurring-reminder',
