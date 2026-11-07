@@ -287,6 +287,19 @@ export async function notifyRemindersStalled(
   });
 }
 
+/** The warning the morning cron sends once the stored Shabbat times run short (src/lib/shabbat-times.ts). */
+export function shabbatStaleText(lang: 'en' | 'he', through: string | null): string {
+  const reach = through
+    ? t('notify.shabbat_stale_until', lang).replace('{date}', formatWeekdayShort(through))
+    : t('notify.shabbat_stale_none', lang);
+  return [`<b>⚠️ ${t('notify.shabbat_stale', lang)}</b>`, RULE, reach, ``, `<i>${t('notify.shabbat_stale_hint', lang)}</i>`].join('\n');
+}
+
+export async function notifyShabbatTimesStale(groupId: number, through: string | null): Promise<{ sent: number; failed: number }> {
+  const recipients = await getRecipientsByRole(groupId, ['manager']);
+  return sendToRecipients(recipients, (lang) => shabbatStaleText(lang, through));
+}
+
 export async function notifyOrderReady(
   groupId: number,
   orderId: number,

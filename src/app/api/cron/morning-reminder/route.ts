@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { groups } from '@/db/schema';
 import { todayStr } from '@/lib/date-utils';
-import { sendMorningSummary, notifyRemindersStalled } from '@/lib/notifications';
+import { sendMorningSummary, notifyRemindersStalled, notifyShabbatTimesStale } from '@/lib/notifications';
 import { findMissedRecurringReminders } from '@/lib/reminder-health';
+import { refreshShabbatTimes, shabbatCoverageGap } from '@/lib/shabbat-times';
 import { morningBake } from '@/lib/day-digest';
 import { sendOverdueNudge, sendPendingApprovalNudge, sendUnpaidNudge } from '@/lib/order-nudges';
 
@@ -22,6 +23,11 @@ interface Stats {
   unpaidNudges: number;
   /** Groups warned that the recurring reminder has stopped running. */
   stalledWarnings: number;
+  /** Groups whose Shabbat times were refreshed from famcal, or whose refresh failed (the old times stay). */
+  shabbatRefreshed: number;
+  shabbatFailed: number;
+  /** Groups warned that the stored Shabbat times run short. */
+  shabbatWarnings: number;
   nudgeFailed: number;
 }
 
@@ -55,6 +61,9 @@ async function handler(request: Request) {
     overdueNudges: 0,
     unpaidNudges: 0,
     stalledWarnings: 0,
+    shabbatRefreshed: 0,
+    shabbatFailed: 0,
+    shabbatWarnings: 0,
     nudgeFailed: 0,
   };
 
@@ -115,6 +124,27 @@ async function handler(request: Request) {
     } catch (err) {
       stats.nudgeFailed++;
       console.error(`[cron/morning-reminder] reminder health check failed for group ${group.id}:`, err);
+    }
+
+    // Shabbat mode's times (src/lib/shabbat-times.ts): refreshed from famcal every
+    // morning; a failure keeps the stored ones, and the owner hears only once
+    // what is stored reaches less than a week and a day ahead.
+    try {
+      const result = await refreshShabbatTimes(group.id, today);
+      if (result === 'refreshed') stats.shabbatRefreshed++;
+      if (result === 'failed') stats.shabbatFailed++;
+      if (result !== 'off') {
+        const gap = await shabbatCoverageGap(group.id, today);
+        if (gap) {
+          const sent = await notifyShabbatTimesStale(group.id, gap.through);
+          stats.shabbatWarnings++;
+          stats.notified += sent.sent;
+          stats.notifyFailed += sent.failed;
+        }
+      }
+    } catch (err) {
+      stats.nudgeFailed++;
+      console.error(`[cron/morning-reminder] Shabbat times check failed for group ${group.id}:`, err);
     }
   }
 
