@@ -16,6 +16,7 @@ import {
   uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core';
+import type { StoredShabbatTimes } from '../lib/shabbat-view';
 
 // Ordered list controlling section order + visibility on the public site.
 export type SectionConfig = { key: string; visible: boolean };
@@ -135,6 +136,11 @@ export const groups = pgTable('groups', {
   asapInToday: boolean('asap_in_today').notNull().default(false),
   // Whether the kitchen screen shows each day's mixing weights (לישה).
   kitchenShowRecipe: boolean('kitchen_show_recipe').notNull().default(true),
+  // Kitchen screen Shabbat mode (src/lib/shabbat-times.ts): a famcal city slug,
+  // null while the mode is off, and the community whose zmanim and end time it
+  // shows. The times themselves live in shabbat_times.
+  shabbatCity: varchar('shabbat_city', { length: 64 }),
+  shabbatCommunity: varchar('shabbat_community', { length: 16 }).notNull().default('sephardi'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -478,6 +484,16 @@ export const whatsappInbound = pgTable('whatsapp_inbound', {
   messageId: varchar('message_id', { length: 128 }).primaryKey(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   forwardedAt: timestamp('forwarded_at', { withTimezone: true }),
+});
+
+// The Shabbat and Yom Tov times fetched from famcal for the kitchen screen, one
+// row per bakery (src/lib/shabbat-times.ts). Its own table because GET
+// /api/groups/:id sends the whole groups row to the mini app. The reader uses
+// a row only when its city and community still match the groups row.
+export const shabbatTimes = pgTable('shabbat_times', {
+  groupId: integer('group_id').primaryKey().references(() => groups.id),
+  data: jsonb('data').$type<StoredShabbatTimes>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const payments = pgTable('payments', {
