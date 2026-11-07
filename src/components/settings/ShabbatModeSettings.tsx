@@ -133,6 +133,8 @@ export function ShabbatModeSettings({ groupId }: { groupId: number }) {
   const [pendingOn, setPendingOn] = useState(false);
   // The community picked before any city is: it rides along with the first save.
   const [localCommunity, setLocalCommunity] = useState<Community | null>(null);
+  // The choice being saved, shown while famcal answers; a failure drops it and the controls go back.
+  const [inFlight, setInFlight] = useState<{ city: string; community: Community } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -151,6 +153,7 @@ export function ShabbatModeSettings({ groupId }: { groupId: number }) {
 
   async function save(city: string | null, community: Community) {
     setSaving(true);
+    if (city !== null) setInFlight({ city, community });
     try {
       const next = await apiFetch<ShabbatSettings>(`/groups/${groupId}/shabbat`, { method: 'PUT', body: JSON.stringify({ city, community }) });
       setSettings(next);
@@ -162,6 +165,7 @@ export function ShabbatModeSettings({ groupId }: { groupId: number }) {
       toast.error(status === 503 ? t('kitchen.shabbat_no_key') : status === 502 ? t('kitchen.shabbat_famcal_failed') : t('settings.save_failed'));
     } finally {
       setSaving(false);
+      setInFlight(null);
     }
   }
 
@@ -174,7 +178,7 @@ export function ShabbatModeSettings({ groupId }: { groupId: number }) {
     );
   }
 
-  const shown = localCommunity ? { ...settings, community: localCommunity } : settings;
+  const shown = inFlight ? { ...settings, ...inFlight } : localCommunity ? { ...settings, community: localCommunity } : settings;
   return (
     <ShabbatModeForm
       settings={shown}

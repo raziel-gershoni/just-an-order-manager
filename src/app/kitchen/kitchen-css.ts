@@ -202,5 +202,6 @@ body {
   .shabbat .window .t { font-size: 32px; }
   .shabbat .next li { padding: 6px 2px; }
   .shabbat .next li:nth-child(4) { display: none; }
+  .shabbat .next li:nth-child(3) { border-bottom: 0; }
 }
 `;
