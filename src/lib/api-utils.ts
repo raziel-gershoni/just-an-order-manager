@@ -8,6 +8,19 @@ export function errorResponse(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
 
+/**
+ * For a route under /api/groups/:id/<thing> wrapped in withGroup: refuses a path
+ * id other than the X-Group-Id group, and anyone but an owner or a manager.
+ * Null when the request may go on.
+ */
+export function refuseUnlessManager(request: Request, auth: AuthContext, groupId: number): Response | null {
+  const pathId = Number(new URL(request.url).pathname.split('/').at(-2));
+  if (pathId !== groupId) return errorResponse('Group mismatch', 400);
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
+  if (role !== 'owner' && role !== 'manager') return errorResponse('Forbidden', 403);
+  return null;
+}
+
 type AuthenticatedHandler = (
   request: Request,
   auth: AuthContext

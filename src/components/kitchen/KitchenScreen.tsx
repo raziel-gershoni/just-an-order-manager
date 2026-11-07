@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KitchenSheets } from './KitchenSheets';
 import { KitchenNotice } from './KitchenNotice';
+import { ShabbatScreen } from './ShabbatScreen';
 import { useKeepAwake } from '@/hooks/useKeepAwake';
 import { t } from '@/lib/i18n';
+import { nextChangeIn, shabbatViewAt } from '@/lib/shabbat-view';
 // Type-only: the client bundle must never pull in kitchen-sheet (it reaches the database).
 import type { KitchenData } from '@/lib/kitchen-sheet';
 
@@ -36,9 +38,31 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
   const [offline, setOffline] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
   const stampRef = useRef(stamp);
+  // Starts from the server's render time so hydration matches, then follows the phone's clock.
+  const [now, setNow] = useState(() => Date.parse(renderedAt));
 
   // A disconnected screen has nothing left to show, so it may sleep again.
   useKeepAwake(!disconnected);
+
+  // The same element while the data is the same, so the clock below (a re-render
+  // at least once a minute while the Shabbat mode is on) never re-renders the sheets.
+  const sheets = useMemo(() => <KitchenSheets data={data} />, [data]);
+
+  // The Shabbat view follows the phone's clock: look again at the next start,
+  // end, sunset or listed time (src/lib/shabbat-view.ts), at least once a minute.
+  // Polling (below) is unchanged on Shabbat.
+  const blocks = data.shabbat?.blocks;
+  useEffect(() => {
+    if (!blocks) return;
+    let timer = 0;
+    const tick = () => {
+      const current = Date.now();
+      setNow(current);
+      timer = window.setTimeout(tick, nextChangeIn(blocks, current));
+    };
+    tick();
+    return () => window.clearTimeout(timer);
+  }, [blocks]);
 
   useEffect(() => {
     let stopped = false;
@@ -91,10 +115,12 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
   }, [epoch]);
 
   if (disconnected) return <KitchenNotice title="kitchen.disconnected_title" />;
+  const shabbat = data.shabbat ? shabbatViewAt(data.shabbat.blocks, now) : null;
+  if (data.shabbat && shabbat) return <ShabbatScreen view={shabbat} credits={data.shabbat.credits} />;
   const time = clock.format(lastOk);
   return (
     <>
-      <KitchenSheets data={data} />
+      {sheets}
       <div className="dock">
         {/* Counts only: past days are not on the sheets, so an order left open on one would
             otherwise vanish, and approving happens in the app (or the Telegram nudge). */}

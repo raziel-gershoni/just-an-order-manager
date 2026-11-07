@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/useToast';
 import { useT } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ShabbatModeSettings } from './ShabbatModeSettings';
 
 const clock = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jerusalem' });
 
@@ -91,6 +92,7 @@ export function KitchenScreenCard({ groupId, initialShowRecipe }: { groupId: num
           </button>
         </div>
         <p className="text-xs text-muted-foreground mb-4">{t('kitchen.show_recipe_hint')}</p>
+        <ShabbatModeSettings groupId={groupId} />
         <p className="text-sm text-muted-foreground mb-3">{t('kitchen.settings_hint')}</p>
         <div className="flex gap-2">
           <Button size="sm" onClick={connect} disabled={busy !== null}>{t('kitchen.connect')}</Button>

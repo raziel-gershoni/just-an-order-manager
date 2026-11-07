@@ -9,6 +9,8 @@ import { getOrderDisplay } from './asap';
 import { awaitingApproval, overdue } from './order-attention';
 import { DATA_TAG } from './cache-tags';
 import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
+import { kitchenShabbat, readShabbatTimes } from './shabbat-times';
+import type { KitchenShabbat } from './shabbat-view';
 
 /**
  * What the kitchen screen shows: the print sheet of every coming day, built by
@@ -21,7 +23,9 @@ import { cacheEpoch, SAFETY_REVALIDATE_SECONDS } from './kitchen-screen';
  * Where the open בהקדם orders go follows the bakery's switch
  * (src/lib/asap.ts): inside today's sheet, first, or a card of their own
  * before it, with no mixing weights. The recipe switch rides along as
- * `showRecipe` so the screen can hide the לישה section.
+ * `showRecipe` so the screen can hide the לישה section. The coming Shabbat and
+ * Yom Tov stretches ride along too (`shabbat`); the screen picks the active
+ * one by its own clock.
  */
 
 export type KitchenDayKind = 'asap' | 'today' | 'tomorrow' | 'later';
@@ -43,6 +47,8 @@ export interface KitchenData {
   /** Counts only, by the rules the Telegram nudges use (src/lib/order-attention.ts). The Orders tab lists them. */
   overdue: number;
   awaitingApproval: number;
+  /** Shabbat mode's coming stretches (src/lib/shabbat-times.ts); null while the mode is off. The screen picks the active one by its own clock. */
+  shabbat: KitchenShabbat | null;
 }
 
 function dayTitle(kind: KitchenDayKind, date: string | null): string {
@@ -67,6 +73,7 @@ async function countAttention(groupId: number, today: string): Promise<{ overdue
 export async function loadKitchenData(groupId: number, today: string): Promise<KitchenData> {
   // Read on every build, so a flip of the switch shows on the next one.
   const display = await getOrderDisplay(groupId);
+  const shabbatTimes = await readShabbatTimes(groupId);
   const dated = await db
     .selectDistinct({ date: orders.deliveryDate })
     .from(orders)
@@ -88,7 +95,7 @@ export async function loadKitchenData(groupId: number, today: string): Promise<K
   if (asapSheet && asapSheet.orders.length > 0) {
     days.unshift({ key: 'asap', kind: 'asap', date: null, title: dayTitle('asap', null), sheet: asapSheet });
   }
-  return { today, builtAt: new Date().toISOString(), showRecipe: display.kitchenShowRecipe, days, ...attention };
+  return { today, builtAt: new Date().toISOString(), showRecipe: display.kitchenShowRecipe, days, ...attention, shabbat: kitchenShabbat(shabbatTimes, today) };
 }
 
 /** The Israel date is in the key, so the first check after midnight builds the new day. */

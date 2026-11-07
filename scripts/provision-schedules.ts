@@ -54,6 +54,12 @@ const SCHEDULES = [
     what: 'recurring-order reminders (no-ops except Sun/Wed)',
   },
   {
+    id: 'razei-shabbat-refresh',
+    path: '/api/cron/shabbat-refresh',
+    cron: 'CRON_TZ=Asia/Jerusalem 30 5 * * *',
+    what: 'kitchen screen Shabbat times from famcal (+ a warning when they run short)',
+  },
+  {
     id: 'razei-weekly-summary',
     path: '/api/cron/weekly-summary',
     cron: 'CRON_TZ=Asia/Jerusalem 0 21 * * 6',
