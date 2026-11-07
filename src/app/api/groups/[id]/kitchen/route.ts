@@ -1,16 +1,8 @@
-import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
-import type { AuthContext } from '@/lib/telegram-auth';
+import { withGroup, jsonResponse, errorResponse, refuseUnlessManager as refuse } from '@/lib/api-utils';
 import { disconnectScreens, startPairing } from '@/lib/kitchen-screen';
 
 // Pairing and disconnecting the kitchen screen: owners and managers only, the
 // same people who may print the sheet it shows.
-function refuse(request: Request, auth: AuthContext, groupId: number): Response | null {
-  const pathId = Number(new URL(request.url).pathname.split('/').at(-2));
-  if (pathId !== groupId) return errorResponse('Group mismatch', 400);
-  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
-  if (role !== 'owner' && role !== 'manager') return errorResponse('Forbidden', 403);
-  return null;
-}
 
 export const POST = withGroup(async (request, auth, groupId) => {
   const refused = refuse(request, auth, groupId);

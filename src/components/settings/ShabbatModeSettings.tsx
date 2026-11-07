@@ -60,6 +60,7 @@ export function ShabbatModeForm({
   settings,
   pendingOn,
   saving,
+  fetching,
   onToggle,
   onCity,
   onCommunity,
@@ -67,6 +68,8 @@ export function ShabbatModeForm({
   settings: ShabbatSettings;
   pendingOn: boolean;
   saving: boolean;
+  /** A city is being fetched from famcal (turning the mode off asks nothing of famcal). */
+  fetching: boolean;
   onToggle: (next: boolean) => void;
   onCity: (slug: string) => void;
   onCommunity: (c: Community) => void;
@@ -102,7 +105,7 @@ export function ShabbatModeForm({
               ))}
             </select>
           </label>
-          {saving && <p className="text-xs text-muted-foreground">{t('kitchen.shabbat_saving')}</p>}
+          {fetching && <p className="text-xs text-muted-foreground">{t('kitchen.shabbat_saving')}</p>}
           {next && (
             <div className="flex flex-col gap-0.5">
               {next.occasion && <p className="text-sm font-medium">{next.occasion}</p>}
@@ -161,8 +164,17 @@ export function ShabbatModeSettings({ groupId }: { groupId: number }) {
       setLocalCommunity(null);
     } catch (err) {
       console.error('[shabbat] save failed:', err);
-      const status = (err as { status?: number }).status;
-      toast.error(status === 503 ? t('kitchen.shabbat_no_key') : status === 502 ? t('kitchen.shabbat_famcal_failed') : t('settings.save_failed'));
+      // The route names famcal's failures (src/app/api/groups/[id]/shabbat/route.ts).
+      const code = err instanceof Error ? err.message : '';
+      toast.error(
+        code === 'famcal_no_key'
+          ? t('kitchen.shabbat_no_key')
+          : code === 'famcal_key_refused'
+            ? t('kitchen.shabbat_key_refused')
+            : code === 'famcal_failed'
+              ? t('kitchen.shabbat_famcal_failed')
+              : t('settings.save_failed')
+      );
     } finally {
       setSaving(false);
       setInFlight(null);
@@ -184,6 +196,7 @@ export function ShabbatModeSettings({ groupId }: { groupId: number }) {
       settings={shown}
       pendingOn={pendingOn}
       saving={saving}
+      fetching={inFlight !== null}
       onToggle={(on) => {
         if (on) {
           if (settings.suggestedCity) void save(settings.suggestedCity, shown.community);

@@ -16,7 +16,7 @@ export function ShabbatScreen({ view, credits }: { view: ShabbatView; credits: S
   const long = block.greeting === 'shabbat_chag' || block.greeting === 'yom_kippur';
   const [backBefore, backAfter] = t('kitchen.shabbat_back').split('{time}');
   return (
-    <main className="shabbat" role="status">
+    <main className="shabbat">
       <section className="hero">
         <svg className="candles" viewBox="0 0 200 170" aria-hidden="true">
           <defs>

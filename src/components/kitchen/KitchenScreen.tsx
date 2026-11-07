@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KitchenSheets } from './KitchenSheets';
 import { KitchenNotice } from './KitchenNotice';
 import { ShabbatScreen } from './ShabbatScreen';
@@ -43,6 +43,10 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
 
   // A disconnected screen has nothing left to show, so it may sleep again.
   useKeepAwake(!disconnected);
+
+  // The same element while the data is the same, so the clock below (a re-render
+  // at least once a minute while the Shabbat mode is on) never re-renders the sheets.
+  const sheets = useMemo(() => <KitchenSheets data={data} />, [data]);
 
   // The Shabbat view follows the phone's clock: look again at the next start,
   // end, sunset or listed time (src/lib/shabbat-view.ts), at least once a minute.
@@ -116,7 +120,7 @@ export function KitchenScreen({ data: initial, stamp, epoch, renderedAt }: { dat
   const time = clock.format(lastOk);
   return (
     <>
-      <KitchenSheets data={data} />
+      {sheets}
       <div className="dock">
         {/* Counts only: past days are not on the sheets, so an order left open on one would
             otherwise vanish, and approving happens in the app (or the Telegram nudge). */}

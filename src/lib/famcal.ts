@@ -22,7 +22,7 @@ export function isCommunity(value: unknown): value is Community {
   return typeof value === 'string' && (COMMUNITIES as readonly string[]).includes(value);
 }
 
-/** `code` is famcal's error code (UNKNOWN_CITY, INVALID_KEY, RATE_LIMITED, …), or NO_KEY / BAD_ANSWER / HTTP_<status> of ours. */
+/** `code` is famcal's error code (UNKNOWN_CITY, INVALID_KEY, RATE_LIMITED, …), or NO_KEY / NETWORK / BAD_ANSWER / HTTP_<status> of ours. */
 export class FamcalError extends Error {
   constructor(readonly code: string, readonly status: number | null, message: string) {
     super(message);
@@ -79,39 +79,47 @@ async function famcalGet<T>(path: 'shabbat' | 'day', params: Record<string, stri
     throw new FamcalError('NO_KEY', null, 'FAMCAL_API_KEY is not set');
   }
   const url = `${FAMCAL_API}/${path}?${new URLSearchParams({ ...params, lang: 'he' })}`;
-  return pRetry(
-    async () => {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` }, cache: 'no-store' });
-      if (!res.ok) {
-        const code = await errorCode(res);
-        const err = new FamcalError(code, res.status, `famcal /${path} answered ${res.status} ${code}`);
-        if (res.status === 429 || res.status >= 500) throw err; // retried; logged by onFailedAttempt
-        console.error(`[famcal] /${path} refused: ${res.status} ${code}`);
-        throw new AbortError(err);
+  try {
+    return await pRetry(
+      async () => {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` }, cache: 'no-store' });
+        if (!res.ok) {
+          const code = await errorCode(res);
+          const err = new FamcalError(code, res.status, `famcal /${path} answered ${res.status} ${code}`);
+          if (res.status === 429 || res.status >= 500) throw err; // retried; logged by onFailedAttempt
+          console.error(`[famcal] /${path} refused: ${res.status} ${code}`);
+          throw new AbortError(err);
+        }
+        let body: unknown;
+        try {
+          body = await res.json();
+        } catch (cause) {
+          console.error(`[famcal] /${path} answered with a body that is not JSON:`, cause);
+          throw new AbortError(new FamcalError('BAD_ANSWER', res.status, `famcal /${path} answered with a body that is not JSON`));
+        }
+        const parsed = schema.safeParse(body);
+        if (!parsed.success) {
+          console.error(`[famcal] /${path} answered in a shape we don't know:`, parsed.error.message);
+          throw new AbortError(new FamcalError('BAD_ANSWER', res.status, `famcal /${path} answered in an unknown shape`));
+        }
+        return parsed.data;
+      },
+      {
+        retries: 3,
+        factor: 2,
+        minTimeout: 1000,
+        randomize: true,
+        onFailedAttempt: ({ error, attemptNumber, retriesLeft }) =>
+          console.warn(`[famcal] /${path} attempt ${attemptNumber} failed (${retriesLeft} retries left): ${error.message}`),
       }
-      let body: unknown;
-      try {
-        body = await res.json();
-      } catch (cause) {
-        console.error(`[famcal] /${path} answered with a body that is not JSON:`, cause);
-        throw new AbortError(new FamcalError('BAD_ANSWER', res.status, `famcal /${path} answered with a body that is not JSON`));
-      }
-      const parsed = schema.safeParse(body);
-      if (!parsed.success) {
-        console.error(`[famcal] /${path} answered in a shape we don't know:`, parsed.error.message);
-        throw new AbortError(new FamcalError('BAD_ANSWER', res.status, `famcal /${path} answered in an unknown shape`));
-      }
-      return parsed.data;
-    },
-    {
-      retries: 3,
-      factor: 2,
-      minTimeout: 1000,
-      randomize: true,
-      onFailedAttempt: ({ error, attemptNumber, retriesLeft }) =>
-        console.warn(`[famcal] /${path} attempt ${attemptNumber} failed (${retriesLeft} retries left): ${error.message}`),
-    }
-  );
+    );
+  } catch (err) {
+    if (err instanceof FamcalError) throw err;
+    // A network failure (DNS, refused, reset, TLS) that outlasted the retries is
+    // still famcal not answering, so callers can say so rather than "save failed".
+    console.error(`[famcal] /${path} could not be reached after the retries:`, err);
+    throw new FamcalError('NETWORK', null, `famcal /${path} could not be reached: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /** Every Shabbat and Yom Tov stretch whose eve is from `from` to `to` (yyyy-MM-dd at the place), plus one under way on `from`. */

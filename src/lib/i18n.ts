@@ -887,6 +887,7 @@ const translations: Record<string, string> = {
   'kitchen.shabbat_preview_time': '{label}: {day}, {time}',
   'kitchen.shabbat_famcal_failed': 'famcal לא ענה, ולכן שום דבר לא נשמר. נסו שוב בעוד דקה.',
   'kitchen.shabbat_no_key': 'חסר מפתח famcal בשרת (FAMCAL_API_KEY), ולכן שום דבר לא נשמר.',
+  'kitchen.shabbat_key_refused': 'famcal לא מקבל את המפתח (FAMCAL_API_KEY), ולכן שום דבר לא נשמר. צריך ליצור מפתח חדש ב־famcal.',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ignored (Hebrew only), kept so every t(key, lang) call stays valid

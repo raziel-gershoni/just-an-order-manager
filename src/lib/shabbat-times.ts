@@ -51,18 +51,24 @@ export async function readShabbatTimes(groupId: number): Promise<StoredShabbatTi
 
 /** Turns the mode on, or changes city or community, or (city null) turns it off. Fetches first: a famcal failure throws FamcalError and nothing is written. */
 export async function saveShabbatSetting(groupId: number, city: string | null, community: Community, today: string = todayStr()): Promise<void> {
+  // Each path is one statement, so the times and the setting can never part: a
+  // failure leaves both as they were, and a refresh racing this save either
+  // lands first and is overwritten, or finds the new setting and writes nothing.
   if (city === null) {
-    await db.delete(shabbatTimes).where(eq(shabbatTimes.groupId, groupId));
-    await db.update(groups).set({ shabbatCity: null, shabbatCommunity: community }).where(eq(groups.id, groupId));
+    await db.execute(sql`
+      with cleared as (delete from shabbat_times where group_id = ${groupId})
+      update groups set shabbat_city = null, shabbat_community = ${community} where id = ${groupId}`);
     console.log(`[shabbat] mode turned off for group ${groupId}`);
     return;
   }
   const data = await fetchShabbatTimes(city, community, today);
-  await db
-    .insert(shabbatTimes)
-    .values({ groupId, data })
-    .onConflictDoUpdate({ target: shabbatTimes.groupId, set: { data, updatedAt: new Date() } });
-  await db.update(groups).set({ shabbatCity: city, shabbatCommunity: community }).where(eq(groups.id, groupId));
+  await db.execute(sql`
+    with saved as (
+      insert into shabbat_times (group_id, data, updated_at)
+      values (${groupId}, ${JSON.stringify(data)}::jsonb, now())
+      on conflict (group_id) do update set data = excluded.data, updated_at = excluded.updated_at
+    )
+    update groups set shabbat_city = ${city}, shabbat_community = ${community} where id = ${groupId}`);
   console.log(`[shabbat] group ${groupId} set to ${city}/${community}: ${data.blocks.length} stretches through ${data.through}`);
 }
 
@@ -81,11 +87,15 @@ export async function refreshShabbatTimes(groupId: number, today: string = today
     console.error(`[shabbat] refreshing the times failed for group ${groupId}; the stored ones stay:`, err);
     return 'failed';
   }
+  // Lands only while the setting is still the one fetched for: the select finds
+  // no row once it changed, and the update's own check reads the stored row as
+  // it is when the write happens, so a save committed meanwhile is never overwritten.
   const res = await db.execute(sql`
     insert into shabbat_times (group_id, data, updated_at)
     select ${groupId}, ${JSON.stringify(data)}::jsonb, now()
     from groups where id = ${groupId} and shabbat_city = ${city} and shabbat_community = ${community}
     on conflict (group_id) do update set data = excluded.data, updated_at = excluded.updated_at
+      where shabbat_times.data->>'city' = ${city} and shabbat_times.data->>'community' = ${community}
     returning group_id`);
   const rows = (res as unknown as { rows?: unknown[] }).rows ?? [];
   if (rows.length === 0) {

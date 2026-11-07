@@ -196,7 +196,12 @@ body {
 .shabbat .credits p { margin: 0 0 2px; }
 @media (prefers-reduced-motion: reduce) { .shabbat .flame { animation: none; } }
 @media (max-height: 700px) {
-  .shabbat .candles { width: 110px; }
+  .shabbat { padding-top: 14px; }
+  .shabbat .candles { width: 104px; margin-bottom: 2px; }
+  .shabbat .window { margin-top: 14px; }
+  .shabbat .next { margin-top: 12px; }
+  .shabbat .foot { padding-top: 10px; }
+  .shabbat .credits { font-size: 8.5px; margin-top: 6px; }
   .shabbat .greeting { font-size: 42px; }
   .shabbat .greeting.long { font-size: 34px; }
   .shabbat .window .t { font-size: 32px; }
