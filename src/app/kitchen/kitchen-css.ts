@@ -14,6 +14,12 @@ export const KITCHEN_CSS = `
   --paper: #fff;
   --stub: #FAF8F4;
   --on-stamp: #FBF8F2;
+  --wax: #FBF7EE;
+  --wax-edge: #D9CFBD;
+  --metal: #8C8374;
+  --flame: #F2A43A;
+  --flame-core: #FFF3C9;
+  --glow: rgba(242, 164, 58, .22);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,6 +32,12 @@ export const KITCHEN_CSS = `
     --stamp: #C9ABF2;
     --flag: #FF9480;
     --on-stamp: #1A1226;
+    --wax: #EDE4D3;
+    --wax-edge: #9A8F7C;
+    --metal: #7A7163;
+    --flame: #F5AE45;
+    --flame-core: #FFF6D6;
+    --glow: rgba(245, 174, 69, .30);
   }
 }
 body {
@@ -134,4 +146,61 @@ body {
   background: var(--stamp); color: var(--on-stamp);
 }
 .pair-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+/* ---- Shabbat view: candle lighting to the end of the stretch, in place of the orders ---- */
+.shabbat {
+  flex: 1; min-height: 100dvh; width: 100%; max-width: 560px; margin: 0 auto;
+  display: flex; flex-direction: column;
+  padding: 20px 18px calc(12px + env(safe-area-inset-bottom));
+}
+.shabbat .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding-top: 4px; }
+.shabbat .candles { width: 150px; height: auto; display: block; margin-bottom: 6px; overflow: visible; }
+.shabbat .flame { transform-box: fill-box; transform-origin: 50% 92%; animation: flicker 3.1s ease-in-out infinite alternate; }
+.shabbat .flame.b { animation-duration: 2.6s; animation-delay: -1.2s; }
+@keyframes flicker {
+  0% { transform: scale(1, 1) skewX(0); }
+  30% { transform: scale(.95, 1.05) skewX(2.5deg); }
+  60% { transform: scale(1.03, .96) skewX(-2deg); }
+  100% { transform: scale(.98, 1.03) skewX(1deg); }
+}
+.shabbat .greeting { margin: 0; font-size: 52px; font-weight: 800; line-height: 1.05; text-wrap: balance; }
+.shabbat .greeting.long { font-size: 40px; }
+.shabbat .occasion { margin: 8px 0 0; font-size: 22px; font-weight: 700; }
+.shabbat .hdate { margin: 0; font-size: 19px; font-weight: 600; color: var(--ink-soft); }
+.shabbat .window { margin: 22px 0 0; display: grid; grid-template-columns: 1fr 1fr; background: var(--paper); border-radius: 8px; }
+.shabbat .window div { padding: 12px 10px 10px; text-align: center; }
+.shabbat .window div + div { border-inline-start: 2px dashed var(--rule); }
+.shabbat .window .t {
+  display: block; font-family: var(--font-jetbrains), ui-monospace, monospace; font-weight: 700;
+  font-size: 40px; line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.shabbat .window .l { display: block; font-size: 16px; font-weight: 700; color: var(--ink-soft); }
+.shabbat .next { margin: 20px 0 0; }
+.shabbat .next h2 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+.shabbat .next ul { margin: 0; padding: 0; list-style: none; }
+.shabbat .next li {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 9px 2px; border-bottom: 1.5px solid var(--rule); font-size: 20px; font-weight: 600;
+}
+.shabbat .next li:last-child { border-bottom: 0; }
+.shabbat .next li .t { font-family: var(--font-jetbrains), ui-monospace, monospace; font-weight: 500; font-size: 21px; font-variant-numeric: tabular-nums; }
+.shabbat .next li.soon { font-weight: 800; }
+.shabbat .next li.soon .t { font-weight: 700; }
+.shabbat .next li:not(.soon) { color: var(--ink-soft); }
+.shabbat .foot { margin-top: auto; padding-top: 18px; text-align: center; }
+.shabbat .back { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink-soft); }
+.shabbat .credits {
+  margin: 10px 0 0; font-family: system-ui, sans-serif; font-size: 9.5px; line-height: 1.35;
+  color: var(--ink-soft); opacity: .85; text-align: left;
+}
+.shabbat .credits p { margin: 0 0 2px; }
+@media (prefers-reduced-motion: reduce) { .shabbat .flame { animation: none; } }
+@media (max-height: 700px) {
+  .shabbat .candles { width: 110px; }
+  .shabbat .greeting { font-size: 42px; }
+  .shabbat .greeting.long { font-size: 34px; }
+  .shabbat .window .t { font-size: 32px; }
+  .shabbat .next li { padding: 6px 2px; }
+  .shabbat .next li:nth-child(4) { display: none; }
+}
 `;
