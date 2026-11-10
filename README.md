@@ -49,7 +49,7 @@ This is the production order system for a real Israeli bakery. Staff take, price
 
 ## 🛠️ Tech stack
 - **Frontend:** Next.js 16 (App Router, React Server Components, ISR), React 19, TypeScript, Tailwind CSS v4, shadcn-style UI (class-variance-authority, lucide-react, sonner), Hebrew/RTL.
-- **Telegram:** `@telegram-apps/sdk` and `@telegram-apps/init-data-node` for the Mini App; `grammy` for the chat bot webhook.
+- **Telegram:** the Mini App runs on Telegram's WebApp script, with its init-data HMAC-checked by the app itself; `grammy` for the chat bot webhook.
 - **Backend/API:** Next.js Route Handlers, Zod validation, WhatsApp Business Cloud API, `@hebcal/hdate` for Hebrew-calendar dates.
 - **Data:** Neon serverless Postgres via `@neondatabase/serverless`, Drizzle ORM + drizzle-kit (22 tables, 20 migrations).
 - **Infra:** Vercel (hosting, cron, Blob image storage), build-time migrations, custom domain + Vercel URL.

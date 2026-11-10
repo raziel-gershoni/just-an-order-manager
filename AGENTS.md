@@ -5,7 +5,7 @@ a Telegram Mini App + bot for staff and a public SEO storefront for customers.
 
 ## Stack
 Next.js 16 (App Router, RSC) · React 19 · TypeScript · Neon Postgres · Drizzle ORM ·
-Telegram Mini App (@telegram-apps/sdk) + grammy bot · WhatsApp Cloud API · Vercel (Blob, Cron).
+Telegram Mini App + grammy bot · WhatsApp Cloud API · Vercel (Blob, Cron).
 
 ## Working in this repo
 - Build runs Drizzle migrations before `next build`; see `package.json` scripts for the exact commands.
