@@ -13,9 +13,11 @@ import {
   HEBREW_MONTHS,
   formatAgorot,
   formatIsoDate,
+  formatWeekRange,
   type IncomeBread,
   type IncomeMonth,
   type IncomeReport,
+  type IncomeWeek,
 } from '@/lib/income-report-types';
 
 type T = ReturnType<typeof useT>;
@@ -23,9 +25,14 @@ type T = ReturnType<typeof useT>;
 /** Shown before "show all" — enough for the regulars, short enough to scroll past. */
 const CUSTOMERS_PREVIEW = 15;
 
+/** Weeks shown before "show all" — about the last two months. */
+const WEEKS_PREVIEW = 8;
+
 // Month name plus three money columns. 3.75rem holds "₪12,345" in the mono face
 // and still leaves the month ~65px at a 320px phone.
 const GRID = 'grid grid-cols-[minmax(0,1fr)_3.75rem_3.75rem_3.75rem] gap-x-1.5';
+// The weeks card: dates plus מחזור and התקבל.
+const WEEK_GRID = 'grid grid-cols-[minmax(0,1fr)_3.75rem_3.75rem] gap-x-1.5';
 
 /**
  * ₪ and its digits as one LTR run. Always an inline span inside a plain span or
@@ -166,6 +173,42 @@ function MonthRow({
   );
 }
 
+function WeekRow({ w, isCurrent, best, t }: { w: IncomeWeek; isCurrent: boolean; best: number; t: T }) {
+  return (
+    <div className="px-4 py-2.5">
+      <div className={cn(WEEK_GRID, 'items-baseline text-[13px]')}>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">
+            <span dir="ltr" className="tabular-nums">
+              {formatWeekRange(w.start)}
+            </span>
+          </span>
+          {isCurrent && (
+            <span className="block text-[10px] font-semibold text-primary">{t('reports.so_far')}</span>
+          )}
+        </span>
+        <span>
+          <Money agorot={w.billed} round className="font-semibold" />
+        </span>
+        <span>
+          <Money agorot={w.received} round className="text-[12px] text-muted-foreground" />
+        </span>
+      </div>
+      {/* מחזור against the year's best week, with התקבל drawn over it — as the months. */}
+      <div className="relative mt-1.5 h-[3px] overflow-hidden rounded-full bg-muted" aria-hidden>
+        <span
+          className="absolute inset-y-0 start-0 rounded-full bg-primary/30"
+          style={{ width: pct(w.billed, best) }}
+        />
+        <span
+          className="absolute inset-y-0 start-0 rounded-full bg-primary"
+          style={{ width: pct(w.received, best) }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** Bread lines grouped under their type, in the server's order (biggest first). */
 function groupBreads(breads: IncomeBread[]) {
   const groups: { typeId: number; typeName: string; total: number; sizes: IncomeBread[] }[] = [];
@@ -202,11 +245,14 @@ export function IncomeReportView({
   const t = useT();
   const [openMonth, setOpenMonth] = useState<number | null>(null);
   const [allCustomers, setAllCustomers] = useState(false);
+  const [allWeeks, setAllWeeks] = useState(false);
 
   const hasAnyData = r.months.some((m) => m.hasData);
   const best = Math.max(1, ...r.months.map((m) => Math.max(m.billed, m.received)));
   const breadGroups = groupBreads(r.breads);
   const customers = allCustomers ? r.customers : r.customers.slice(0, CUSTOMERS_PREVIEW);
+  const bestWeek = Math.max(1, ...r.weeks.map((w) => Math.max(w.billed, w.received)));
+  const weeks = allWeeks ? r.weeks : r.weeks.slice(0, WEEKS_PREVIEW);
 
   const footParts: ReactNode[] = [];
   if (r.totals.openingOwed > 0) {
@@ -324,6 +370,39 @@ export function IncomeReportView({
               ))}
             </div>
           </Card>
+
+          {r.weeks.length > 0 && (
+            <>
+              <SectionHead label={t('reports.by_week')} />
+              <Card className="mx-4 overflow-hidden p-0">
+                <div className={cn(WEEK_GRID, 'px-4 pb-1.5 pt-3 text-[11px] font-semibold text-muted-foreground')}>
+                  <span>{t('reports.week')}</span>
+                  <span>{t('general.turnover')}</span>
+                  <span>{t('reports.received')}</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {weeks.map((w) => (
+                    <WeekRow
+                      key={w.start}
+                      w={w}
+                      isCurrent={w.start === r.currentWeekStart}
+                      best={bestWeek}
+                      t={t}
+                    />
+                  ))}
+                </div>
+                {!allWeeks && r.weeks.length > WEEKS_PREVIEW && (
+                  <button
+                    type="button"
+                    onClick={() => setAllWeeks(true)}
+                    className="block w-full border-t border-border px-4 py-2.5 text-center text-sm font-medium text-primary hover:bg-muted/40"
+                  >
+                    {t('reports.show_all_weeks')} (<span className="font-mono tabular-nums">{r.weeks.length}</span>)
+                  </button>
+                )}
+              </Card>
+            </>
+          )}
 
           <SectionHead label={t('reports.breads')} loaves={r.totals.units} />
           {breadGroups.length === 0 ? (

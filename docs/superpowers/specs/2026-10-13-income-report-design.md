@@ -229,6 +229,24 @@ No test runner and no database may be touched, so:
 - `npx tsc --noEmit`, `npx eslint`, `npx next build`. Never `npm run build`,
   which migrates production.
 
+## By week (added 2026-11-12)
+
+For the owner's own sense of each week's income, on the screen only; not in the
+download, not for taxes.
+
+- Under לפי חודש, a לפי שבוע card. Each row is one week, `8.11–14.11`: מחזור as
+  the main figure, התקבל beside it smaller and grey, and the month row's bar.
+  Newest week on top, the current one marked עד היום. The latest 8 show first,
+  then a "show all" button like the customers card.
+- Weeks run Sunday to Saturday on Israel days. Each figure follows the month
+  definitions: charges and payments by `created_at`. Adjustments, owed, credit
+  and units are left out.
+- A year lists the weeks that **start** in it, from the week of the first
+  recorded day up to this week. The last one can run into January and is shown
+  whole; a week is never split at a month or year edge. Empty weeks show ₪0.
+- `weeksQuery` in `src/lib/income-report.ts` buckets on `israelDay(created_at)`
+  less its weekday, and reads a week past the year's end for that last week.
+
 ## Out of scope
 
 Payment method, receipt or invoice numbers, VAT, expenses, write-offs, a

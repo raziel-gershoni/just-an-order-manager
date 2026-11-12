@@ -33,6 +33,14 @@ export interface IncomeMonth {
   units: number;
 }
 
+/** One Sunday–Saturday week, Israel time, for the screen only (not the spreadsheet). */
+export interface IncomeWeek {
+  /** The week's Sunday, YYYY-MM-DD. */
+  start: string;
+  billed: number;
+  received: number;
+}
+
 export interface IncomeBread {
   breadTypeId: number;
   breadTypeName: string;
@@ -87,6 +95,14 @@ export interface IncomeReport {
   generatedAt: string;
   /** January … December for a past year; January … this month for the current one. */
   months: IncomeMonth[];
+  /**
+   * The weeks that start (on Sunday) in the year, newest first, from the one
+   * holding the first recorded day up to this week. The last one may run into
+   * January; it is shown whole.
+   */
+  weeks: IncomeWeek[];
+  /** This week's Sunday (YYYY-MM-DD) — the week shown as "עד היום". */
+  currentWeekStart: string;
   totals: IncomeTotals;
   breads: IncomeBread[];
   customers: IncomeCustomer[];
@@ -116,6 +132,13 @@ export function formatAgorot(
 export function formatIsoDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
+}
+
+/** "8.11–14.11" for the week starting on the Sunday "2026-11-08". */
+export function formatWeekRange(start: string): string {
+  const [y, m, d] = start.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m - 1, d + 6));
+  return `${d}.${m}–${end.getUTCDate()}.${end.getUTCMonth() + 1}`;
 }
 
 /** "13/10/2026 21:40" in Israel time, from an ISO instant. */

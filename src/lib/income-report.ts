@@ -1,13 +1,14 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { israelDay } from '@/db/israel-day';
-import { israelToday } from '@/lib/date-utils';
+import { addDaysStr, israelToday, israelTodayStr, weekdayIndex } from '@/lib/date-utils';
 import {
   AUTO_CHARGE_SINCE,
   type IncomeBread,
   type IncomeCustomer,
   type IncomeMonth,
   type IncomeReport,
+  type IncomeWeek,
 } from '@/lib/income-report-types';
 
 // A calendar year's money, units and customers, read live from the ledger.
@@ -92,6 +93,33 @@ function ledgerQuery(groupId: number, year: number) {
   `);
 }
 
+/**
+ * Billed and received per Sunday–Saturday week (Israel days) for the weeks
+ * that start in the year. The last such week can end in early January, so the
+ * read runs a week past the year's end.
+ */
+function weeksQuery(groupId: number, year: number) {
+  return rows(sql`
+    with b as (${yearBounds(year)}),
+    p as (
+      select ${israelDay(sql.raw('p.created_at'))} as d,
+             p.payment_type::text as type,
+             round(p.amount * 100)::bigint as agorot
+      from payments p cross join b
+      where p.group_id = ${groupId}
+        and p.created_at >= b.y0 and p.created_at < b.y1 + interval '7 days'
+    ),
+    w as (select d - extract(dow from d)::int as week_start, type, agorot from p)
+    select week_start::text as week_start, type, sum(agorot)::bigint::text as agorot
+    from w
+    where week_start >= make_date(${year}::int, 1, 1) and week_start < make_date(${year}::int + 1, 1, 1)
+    group by 1, 2
+  `);
+}
+
+/** The Sunday that starts the week of a YYYY-MM-DD day. */
+const sundayOf = (day: string) => addDaysStr(day, -weekdayIndex(day));
+
 /** Units per Israel month, bread type and size, for orders delivered in the year. */
 function unitsQuery(groupId: number, year: number) {
   return rows(sql`
@@ -156,12 +184,13 @@ function owedAndCredit(balances: Iterable<number>): { owed: number; credit: numb
 export async function buildIncomeReport(groupId: number, year: number): Promise<IncomeReport> {
   const today = israelToday();
   // Independent reads, and neon-http pays a round trip for each.
-  const [ledger, unitRows, orderRows, meta, customerRows] = await Promise.all([
+  const [ledger, unitRows, orderRows, meta, customerRows, weekRows] = await Promise.all([
     ledgerQuery(groupId, year),
     unitsQuery(groupId, year),
     ordersQuery(groupId, year),
     metaQuery(groupId),
     customersQuery(groupId),
+    weeksQuery(groupId, year),
   ]);
 
   // Balance before the year, and the year's flows month by month, per customer.
@@ -253,6 +282,34 @@ export async function buildIncomeReport(groupId: number, year: number): Promise<
     });
   }
 
+  // Every week from the one holding the first recorded day up to this one,
+  // empty weeks included, so a quiet week shows as ₪0 rather than vanishing.
+  // A ledger row can sit a moment past today across the server/database clocks.
+  const currentWeekStart = sundayOf(israelTodayStr());
+  const byWeek = new Map<string, IncomeWeek>();
+  let lastWeekWithRows = '';
+  for (const r of weekRows) {
+    const start = String(r.week_start);
+    let w = byWeek.get(start);
+    if (!w) byWeek.set(start, (w = { start, billed: 0, received: 0 }));
+    if (r.type === 'charge') w.billed -= num(r.agorot);
+    else if (r.type === 'payment') w.received += num(r.agorot);
+    if (start > lastWeekWithRows) lastWeekWithRows = start;
+  }
+  const weeks: IncomeWeek[] = [];
+  if (dataStart) {
+    const jan1 = `${year}-01-01`;
+    const firstWeek = addDaysStr(jan1, (7 - weekdayIndex(jan1)) % 7);
+    const dec31 = `${year}-12-31`;
+    const lastWeekOfYear = sundayOf(dec31);
+    const nowWeek = currentWeekStart > lastWeekWithRows ? currentWeekStart : lastWeekWithRows;
+    const from = sundayOf(dataStart) > firstWeek ? sundayOf(dataStart) : firstWeek;
+    const to = nowWeek < lastWeekOfYear ? nowWeek : lastWeekOfYear;
+    for (let start = to; start >= from; start = addDaysStr(start, -7)) {
+      weeks.push(byWeek.get(start) ?? { start, billed: 0, received: 0 });
+    }
+  }
+
   const names = new Map(customerRows.map((r) => [num(r.id), r]));
   const customers: IncomeCustomer[] = [...new Set([...opening.keys(), ...flows.keys()])]
     .map((customerId) => {
@@ -316,6 +373,8 @@ export async function buildIncomeReport(groupId: number, year: number): Promise<
     groupName: str(meta[0]?.group_name) ?? '',
     generatedAt: new Date().toISOString(),
     months,
+    weeks,
+    currentWeekStart,
     totals: {
       billed: sumMonths('billed'),
       received: sumMonths('received'),
