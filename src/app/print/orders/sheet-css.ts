@@ -26,15 +26,15 @@ body { background: #EFEBE2; }
   background: #fff; border: 1px solid var(--rule); border-radius: 8px;
   font-family: var(--font-assistant), system-ui, sans-serif;
 }
-.tabs { display: flex; gap: 4px; }
+.tabs { display: flex; gap: 2px; }
 .tab {
-  padding: 7px 12px; border-radius: 6px; text-decoration: none;
+  padding: 7px 10px; border-radius: 6px; text-decoration: none;
   font-size: 14px; font-weight: 700; color: var(--ink-soft);
   border: 1.5px solid transparent;
 }
 .tab:hover { background: #F3F0E9; }
 .tab-on { color: var(--stamp); border-color: var(--stamp); background: #F6F2FA; }
-.tab:focus-visible, .pick input:focus-visible, .pick button:focus-visible, .print-btn:focus-visible {
+.tab:focus-visible, .switch:focus-visible, .pick input:focus-visible, .pick button:focus-visible, .print-btn:focus-visible {
   outline: 2px solid var(--stamp); outline-offset: 2px;
 }
 .pick { display: flex; gap: 6px; margin-inline-start: auto; }
@@ -44,9 +44,33 @@ body { background: #EFEBE2; }
 }
 .pick button, .print-btn { font-weight: 700; cursor: pointer; }
 .print-btn {
-  font-family: var(--font-assistant), system-ui, sans-serif; font-size: 14px;
-  padding: 7px 16px; border-radius: 6px; border: 1.5px solid var(--stamp);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 34px; padding: 0; border-radius: 6px; border: 1.5px solid var(--stamp);
   background: var(--stamp); color: #F4EEDD;
+}
+/* Orders only: a track and knob, the knob crossing to the far side when on. */
+.switch {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 8px; border-radius: 6px; text-decoration: none; white-space: nowrap;
+  font-size: 14px; font-weight: 700; color: var(--ink-soft);
+}
+.switch:hover { background: #F3F0E9; }
+.switch-track {
+  position: relative; flex: none; width: 30px; height: 18px; border-radius: 9px;
+  background: var(--rule);
+}
+.switch-knob {
+  position: absolute; top: 2px; inset-inline-start: 2px;
+  width: 14px; height: 14px; border-radius: 50%; background: #fff;
+}
+.switch-on { color: var(--stamp); }
+.switch-on .switch-track { background: var(--stamp); }
+.switch-on .switch-knob { inset-inline-start: 14px; }
+/* A phone fits the strip in two rows: the date tabs with the print button at
+   their end, then the switch and the date picker. */
+@media (max-width: 560px) {
+  .print-btn { order: 1; margin-inline-start: auto; }
+  .switch, .pick { order: 2; }
 }
 
 /* ---- the sheet ---- */

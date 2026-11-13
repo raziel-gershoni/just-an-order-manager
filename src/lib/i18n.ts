@@ -503,9 +503,8 @@ const translations: Record<string, string> = {
   'reports.data_starts': 'הנתונים מתחילים ב־',
   'reports.billed_partial_before': 'חיובים לפני',
   'reports.billed_partial_after': 'חלקיים — עד אז חיוב נרשם רק עם רישום התשלום',
-  'print.view_label': 'מה מודפס',
-  'print.view_full': 'גיליון מלא',
   'print.view_orders': 'הזמנות בלבד',
+  'print.print': 'הדפסה',
 
   // General
   'general.loading': '…טוען',

@@ -109,18 +109,18 @@ export default async function PrintOrdersPage({
             </a>
           ))}
         </div>
-        <div className="tabs" role="group" aria-label={t('print.view_label')}>
-          {[false, true].map((only) => (
-            <a
-              key={String(only)}
-              href={href(preset ?? date ?? 'today', only)}
-              className={ordersOnly === only ? 'tab tab-on' : 'tab'}
-              aria-current={ordersOnly === only ? 'page' : undefined}
-            >
-              {only ? t('print.view_orders') : t('print.view_full')}
-            </a>
-          ))}
-        </div>
+        {/* A link dressed as a switch: flipping it reloads the sheet with or without v. */}
+        <a
+          href={href(preset ?? date ?? 'today', !ordersOnly)}
+          className={ordersOnly ? 'switch switch-on' : 'switch'}
+          role="switch"
+          aria-checked={ordersOnly}
+        >
+          <span className="switch-track" aria-hidden="true">
+            <span className="switch-knob" />
+          </span>
+          {t('print.view_orders')}
+        </a>
         {/* A plain GET form: date picking works with no JavaScript at all. */}
         <form className="pick" method="get" action="/print/orders">
           <input type="hidden" name="token" value={token} />

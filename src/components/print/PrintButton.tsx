@@ -1,5 +1,8 @@
 'use client';
 
+import { Printer } from 'lucide-react';
+import { t } from '@/lib/i18n';
+
 /**
  * Opens the browser's print dialog — which is also how you get a PDF, via its
  * "Save as PDF" destination. Deliberately the only client-side code on the
@@ -11,8 +14,14 @@
  */
 export function PrintButton() {
   return (
-    <button type="button" className="print-btn" onClick={() => window.print()}>
-      הדפסה
+    <button
+      type="button"
+      className="print-btn"
+      onClick={() => window.print()}
+      aria-label={t('print.print')}
+      title={t('print.print')}
+    >
+      <Printer aria-hidden="true" width={18} height={18} strokeWidth={2.25} />
     </button>
   );
 }
