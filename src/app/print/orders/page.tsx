@@ -16,7 +16,14 @@ const PRESET_LABELS: Record<PrintPreset, string> = {
   active: 'כל הפעילות',
 };
 
-function Sheet({ sheet, heading }: { sheet: PrintSheet; heading: string }) {
+/**
+ * `v=orders` prints the bags only, for whoever delivers: no mixing weights and
+ * no bake count. Kept in every link on the page so moving between dates keeps
+ * it; a new print link from the app opens the full sheet again.
+ */
+const ORDERS_ONLY = 'orders';
+
+function Sheet({ sheet, heading, ordersOnly }: { sheet: PrintSheet; heading: string; ordersOnly: boolean }) {
   return (
     <main className="sheet">
       <header className="head">
@@ -36,9 +43,13 @@ function Sheet({ sheet, heading }: { sheet: PrintSheet; heading: string }) {
         <p className="empty">אין הזמנות לתאריך הזה.</p>
       ) : (
         <>
-          <MixSection sheet={sheet} />
+          {!ordersOnly && (
+            <>
+              <MixSection sheet={sheet} />
 
-          <BakeSection sheet={sheet} />
+              <BakeSection sheet={sheet} />
+            </>
+          )}
 
           <section className="orders" aria-label="הזמנות">
             {sheet.orders.map((o) => (
@@ -54,9 +65,10 @@ function Sheet({ sheet, heading }: { sheet: PrintSheet; heading: string }) {
 export default async function PrintOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; d?: string }>;
+  searchParams: Promise<{ token?: string; d?: string; v?: string }>;
 }) {
-  const { token, d } = await searchParams;
+  const { token, d, v } = await searchParams;
+  const ordersOnly = v === ORDERS_ONLY;
   const groupId = token ? verifyExportToken(token) : null;
 
   if (!groupId) {
@@ -77,7 +89,8 @@ export default async function PrintOrdersPage({
   const asapSheet =
     display && !display.asapInToday ? await buildPrintSheet(groupId, null, { undatedOnly: true }) : null;
   const sheet = await buildPrintSheet(groupId, date, { withUndated: !!display?.asapInToday });
-  const href = (range: string) => `/print/orders?token=${token}&d=${range}`;
+  const href = (range: string, only = ordersOnly) =>
+    `/print/orders?token=${token}&d=${range}${only ? `&v=${ORDERS_ONLY}` : ''}`;
 
   return (
     <>
@@ -96,17 +109,32 @@ export default async function PrintOrdersPage({
             </a>
           ))}
         </div>
+        <div className="tabs" role="group" aria-label={t('print.view_label')}>
+          {[false, true].map((only) => (
+            <a
+              key={String(only)}
+              href={href(preset ?? date ?? 'today', only)}
+              className={ordersOnly === only ? 'tab tab-on' : 'tab'}
+              aria-current={ordersOnly === only ? 'page' : undefined}
+            >
+              {only ? t('print.view_orders') : t('print.view_full')}
+            </a>
+          ))}
+        </div>
         {/* A plain GET form: date picking works with no JavaScript at all. */}
         <form className="pick" method="get" action="/print/orders">
           <input type="hidden" name="token" value={token} />
+          {ordersOnly && <input type="hidden" name="v" value={ORDERS_ONLY} />}
           <input type="date" name="d" defaultValue={date ?? ''} aria-label="תאריך" />
           <button type="submit">הצג</button>
         </form>
         <PrintButton />
       </nav>
 
-      {asapSheet && asapSheet.orders.length > 0 && <Sheet sheet={asapSheet} heading={t('delivery.asap')} />}
-      <Sheet sheet={sheet} heading={sheet.heading} />
+      {asapSheet && asapSheet.orders.length > 0 && (
+        <Sheet sheet={asapSheet} heading={t('delivery.asap')} ordersOnly={ordersOnly} />
+      )}
+      <Sheet sheet={sheet} heading={sheet.heading} ordersOnly={ordersOnly} />
     </>
   );
 }
