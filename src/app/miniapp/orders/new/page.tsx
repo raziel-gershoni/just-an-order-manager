@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
 import { StickySaveBar } from '@/components/ui/StickySaveBar';
 import { Input, TextArea } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn, friendlyError } from '@/lib/utils';
@@ -20,7 +21,7 @@ import { computeOrderPricing } from '@/lib/pricing';
 import { formatAllocation } from '@/lib/pricing-format';
 import { Tag } from 'lucide-react';
 import { pricingKey } from '@/lib/order-fingerprint';
-import { dayAfter, formatDayMonth, formatWeekdayShort, fridayOfWeek, rollWeeklyPast } from '@/lib/date-utils';
+import { addDaysStr, comingFriday, dayAfter, formatDateLong, formatDayMonth, todayStr, formatWeekdayShort, fridayOfWeek, rollWeeklyPast } from '@/lib/date-utils';
 import { isFridayType, type NextChangeSection, type NextOccurrenceView } from '@/lib/order-next-change-types';
 import { NextChangeConflictSheet, sectionsLabel } from '@/components/orders/NextChangeConflictSheet';
 import type { SourceLine } from '@/lib/order-copy';
@@ -159,6 +160,9 @@ function OrderFormContent() {
   const [quickPicks, setQuickPicks] = useState<number[]>([]);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('shabbat');
   const [deliveryDate, setDeliveryDate] = useState('');
+  // Set by tapping תאריך מסוים: from then on a date that happens to be next
+  // Shabbat's Friday stays under תאריך מסוים instead of jumping to "הבאה".
+  const [ownDate, setOwnDate] = useState(false);
   const [notes, setNotes] = useState('');
   const [totalOverride, setTotalOverride] = useState('');
   const [dealsEnabled, setDealsEnabled] = useState(true);
@@ -735,6 +739,15 @@ function OrderFormContent() {
   // Earliest selectable delivery date (today, local time) as yyyy-MM-dd
   const todayIso = localTodayIso();
 
+  // שבת is the coming Friday — today, on a Friday. "הבאה" beside it is the
+  // Friday after: saved as a plain specific date, shown as "הבאה" again when
+  // the order is opened while that is still next Shabbat. Not in next mode,
+  // where שבת already means that week's Friday.
+  // The bakery's day, as the server resolves שבת — not the phone's.
+  const nextShabbat = addDaysStr(comingFriday(todayStr()), 7);
+  const onNextShabbat =
+    !isNext && !ownDate && deliveryType === 'specific_date' && deliveryDate === nextShabbat;
+
   // A next occurrence always has a day: no "בהקדם" there.
   const deliveryOptions = ([
     ['shabbat', t('delivery.shabbat')],
@@ -1172,21 +1185,60 @@ function OrderFormContent() {
           <div className="grid grid-cols-2 gap-2">
             {deliveryOptions.map(([type, label]) => {
               const Icon = deliveryIcons[type];
+              const on = deliveryType === type && !(type === 'specific_date' && onNextShabbat);
+              const pick = () => {
+                setDeliveryType(type);
+                if (type === 'specific_date') setOwnDate(true);
+                // "Repeat weekly" is hidden for asap; clear it so a stale flag
+                // can't ride along on a now-asap order.
+                if (type === 'asap') setIsRecurring(false);
+              };
+              const tile = 'flex items-center gap-2 py-3 text-sm font-medium transition-all';
+              const tileOn = 'bg-primary/10 text-primary';
+              const tileOff = 'bg-card text-foreground hover:bg-muted';
+              if (type === 'shabbat' && !isNext) {
+                // One tile in two halves: this Shabbat, and the one after.
+                return (
+                  <div
+                    key={type}
+                    className={cn(
+                      'flex overflow-hidden rounded-lg border',
+                      on || onNextShabbat ? 'border-primary/30' : 'border-border'
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      className={cn(tile, 'min-w-0 flex-1 whitespace-nowrap px-3', on ? tileOn : tileOff)}
+                      onClick={pick}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {label}
+                    </button>
+                    <span className={cn('w-px', on || onNextShabbat ? 'bg-primary/30' : 'bg-border')} aria-hidden />
+                    <button
+                      type="button"
+                      aria-pressed={onNextShabbat}
+                      aria-label={t('delivery.next_shabbat_aria').replace('{date}', formatDateLong(nextShabbat))}
+                      className={cn(tile, 'shrink-0 whitespace-nowrap px-3', onNextShabbat ? tileOn : tileOff)}
+                      onClick={() => {
+                        setDeliveryType('specific_date');
+                        setDeliveryDate(nextShabbat);
+                        setOwnDate(false);
+                      }}
+                    >
+                      {t('delivery.next_shabbat')}
+                    </button>
+                  </div>
+                );
+              }
               return (
                 <button
                   key={type}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all border',
-                    deliveryType === type
-                      ? 'bg-primary/10 border-primary/30 text-primary'
-                      : 'bg-card border-border hover:bg-muted text-foreground'
-                  )}
-                  onClick={() => {
-                    setDeliveryType(type);
-                    // "Repeat weekly" is hidden for asap; clear it so a stale flag
-                    // can't ride along on a now-asap order.
-                    if (type === 'asap') setIsRecurring(false);
-                  }}
+                  type="button"
+                  aria-pressed={on}
+                  className={cn(tile, 'rounded-lg border px-4', on ? cn(tileOn, 'border-primary/30') : cn(tileOff, 'border-border'))}
+                  onClick={pick}
                 >
                   <Icon className="h-4 w-4" />
                   {label}
@@ -1194,14 +1246,8 @@ function OrderFormContent() {
               );
             })}
           </div>
-          {deliveryType === 'specific_date' && (
-            <Input
-              type="date"
-              value={deliveryDate}
-              min={minDate}
-              onChange={(e) => setDeliveryDate(e.target.value)}
-              className="mt-3"
-            />
+          {deliveryType === 'specific_date' && !onNextShabbat && (
+            <DatePicker value={deliveryDate} min={minDate} onChange={setDeliveryDate} className="mt-3" />
           )}
           {isNext && nextDate && (
             <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">

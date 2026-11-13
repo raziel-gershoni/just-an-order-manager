@@ -6,6 +6,7 @@ import { useGroup } from '@/hooks/useGroup';
 import { useT, useLang } from '@/hooks/useLang';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   ChevronLeft,
@@ -142,12 +143,7 @@ export default function BakerPage() {
             <Button size="icon" variant="outline" onClick={() => shiftDate(-1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <input
-              type="date"
-              value={shownDate ?? ''}
-              onChange={(e) => e.target.value && setDate(e.target.value)}
-              className="flex-1 bg-transparent text-center font-medium tabular-nums focus:outline-none"
-            />
+            <DatePicker value={shownDate ?? ''} onChange={setDate} bare className="flex-1" />
             <Button size="icon" variant="outline" onClick={() => shiftDate(1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>

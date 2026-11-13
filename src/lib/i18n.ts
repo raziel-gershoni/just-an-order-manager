@@ -16,6 +16,8 @@ const translations: Record<string, string> = {
   'delivery.weekly': 'שבועי',
   'delivery.shabbat': 'שבת',
   'delivery.specific_date': 'תאריך מסוים',
+  'delivery.next_shabbat': 'הבאה',
+  'delivery.next_shabbat_aria': 'שבת הבאה, {date}',
   'delivery.asap': 'בהקדם',
 
   // Roles
@@ -85,6 +87,7 @@ const translations: Record<string, string> = {
   'form.add_customer': 'הוסף לקוח חדש',
   'form.customer_name': 'שם הלקוח',
   'form.add': 'הוסף',
+  'form.pick_date': 'בחירת תאריך',
   'form.change': 'שנה',
   'form.bread_type': 'סוג לחם',
   'form.quantity': 'כמות',

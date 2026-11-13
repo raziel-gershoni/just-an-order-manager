@@ -106,6 +106,14 @@ export function resolveDeliveryDate(
   }
 }
 
+/** "יום שישי, 20 בנובמבר" — the year added only when it isn't this one (Israel calendar). */
+export function formatDateLong(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  if (Number.isNaN(date.getTime())) return dateStr;
+  const sameYear = dateStr.slice(0, 4) === todayStr().slice(0, 4);
+  return format(date, sameYear ? 'EEEE, d בMMMM' : 'EEEE, d בMMMM yyyy', { locale: he });
+}
+
 /**
  * Delivery date for the NEXT occurrence of a recurring order. Recurrence is
  * weekly, so we advance the order's own delivery date by 7 days — robust no
