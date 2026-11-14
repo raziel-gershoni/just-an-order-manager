@@ -1,6 +1,6 @@
 # Delivery route order — design
 
-Status: draft for the owner's approval (2026-11-15).
+Status: approved by the owner 2026-11-15.
 
 ## Why
 

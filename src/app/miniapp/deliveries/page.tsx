@@ -239,8 +239,9 @@ export default function DeliveriesPage() {
       }
       setDeliveries((p) => p.filter((x) => x.id !== d.id));
       // The route is re-planned from this stop's address. Dropping it locally
-      // first keeps the card gone from the list while the new order is fetched.
-      setRoute((r) => (r ? { ...r, stops: r.stops.filter((x) => x.orderId !== d.id) } : r));
+      // first keeps the card gone from the list while the new order is fetched;
+      // the Maps link would still lead back to this stop, so it waits for the new one.
+      setRoute((r) => (r ? { ...r, stops: r.stops.filter((x) => x.orderId !== d.id), maps: null } : r));
       void loadRoute(d.id);
       // The delivery is done either way, but cash that was not recorded has to
       // be said out loud rather than confirmed. A driver has only this tab, so
@@ -276,7 +277,9 @@ export default function DeliveriesPage() {
         ? 'route.no_home'
         : 'route.no_home_driver'
       : route?.status === 'home_not_found'
-        ? 'route.home_not_found'
+        ? route.canManage
+          ? 'route.home_not_found'
+          : 'route.home_not_found_driver'
         : route?.status === 'too_many'
           ? 'route.too_many'
           : route?.status === 'failed'

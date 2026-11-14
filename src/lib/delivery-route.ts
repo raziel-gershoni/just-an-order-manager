@@ -91,9 +91,20 @@ export async function planRoute(input: PlanInput, deps: PlanDeps): Promise<PlanR
     const points = await Promise.all(
       input.orders.map((o) => (o.text ? resolve(o.customerId, o.text, o.cache) : Promise.resolve(null)))
     );
-    const fromPoint = input.from?.text
-      ? await resolve(input.from.customerId, input.from.text, input.from.cache)
-      : null;
+    // The delivered stop only picks the start. If its address can't be looked
+    // up right now, starting from home is still a good route, so that failure
+    // alone doesn't throw the whole plan away.
+    let fromPoint: GeocodeResult | null = null;
+    if (input.from?.text) {
+      try {
+        fromPoint = await resolve(input.from.customerId, input.from.text, input.from.cache);
+      } catch (e) {
+        console.warn(
+          '[delivery-route] the delivered stop could not be placed, starting from home:',
+          e instanceof GoogleMapsError ? e.message : e
+        );
+      }
+    }
 
     const unplaced: number[] = [];
     type Place = { lat: number; lng: number; rough: boolean; text: string; orderIds: number[] };
@@ -148,11 +159,8 @@ export async function planRoute(input: PlanInput, deps: PlanDeps): Promise<PlanR
       log,
     };
   } catch (e) {
-    // Only the code or class goes to the log: the message could carry an address.
-    console.error(
-      '[delivery-route] plan failed',
-      e instanceof GoogleMapsError ? `${e.code} ${e.status ?? ''}`.trim() : e instanceof Error ? e.name : typeof e
-    );
+    // Google's messages and Postgres's carry neither addresses nor the key.
+    console.error('[delivery-route] plan failed:', e instanceof Error ? e.message : e);
     return empty('failed', { orders: input.orders.length, fresh });
   }
 }

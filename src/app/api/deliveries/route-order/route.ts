@@ -5,7 +5,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { openDeliveriesWhere } from '@/lib/open-deliveries';
 import { geoQueryText } from '@/lib/route-order';
 import { planRoute, type GeoCache, type RouteAnswer } from '@/lib/delivery-route';
-import { geocode, driveMatrix, GoogleMapsError, type GeocodeResult } from '@/lib/google-maps';
+import { geocode, driveMatrix, type GeocodeResult } from '@/lib/google-maps';
 
 // The open deliveries in least-driving order from home and back (the deliveries
 // screen applies it to its own list). Every outcome, a Google failure included,
@@ -108,9 +108,8 @@ export const GET = withGroup(async (request, auth, groupId) => {
   const homeText = group?.address?.trim() ? geoQueryText(group.address, group.city) : null;
   const canManage = role === 'owner' || role === 'manager';
 
-  let answer: RouteAnswer;
-  try {
-    const { log, ...plan } = await planRoute(
+  // planRoute never throws: every failure comes back as status 'failed', logged.
+  const { log, ...plan } = await planRoute(
       {
         home: { text: homeText, cache: group ? cacheOf(group) : { lat: null, lng: null, query: null, rough: false } },
         orders: rows.map((r) => ({
@@ -123,18 +122,10 @@ export const GET = withGroup(async (request, auth, groupId) => {
       },
       { geocode, matrix: driveMatrix, saveCustomerGeo, saveHomeGeo }
     );
-    console.log(
-      `[delivery-route] group=${groupId} status=${plan.status} ` +
-        Object.entries(log).map(([k, v]) => `${k}=${v}`).join(' ')
-    );
-    answer = { ...plan, canManage };
-  } catch (e) {
-    // The planner catches Google failures itself; this is a DB write or read that failed.
-    console.error(
-      `[delivery-route] group=${groupId} unexpected`,
-      e instanceof GoogleMapsError ? e.code : e
-    );
-    answer = { status: 'failed', canManage, stops: [], unplaced: [], maps: null };
-  }
+  console.log(
+    `[delivery-route] group=${groupId} status=${plan.status} ` +
+      Object.entries(log).map(([k, v]) => `${k}=${v}`).join(' ')
+  );
+  const answer: RouteAnswer = { ...plan, canManage };
   return jsonResponse(answer);
 });

@@ -36,13 +36,40 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+/**
+ * Google's own words for a refusal ("This API project is not authorized to use
+ * this API", "Routes API has not been used in project …"), cut short. They are
+ * what tells a wrong key restriction from a disabled API during setup, and they
+ * carry neither addresses nor the key.
+ */
+function reasonText(v: unknown): string {
+  return typeof v === 'string' && v.trim() ? ` (${v.trim().slice(0, 200)})` : '';
+}
+
+/** The reason from a non-2xx body: geocode's `error_message`, or the Routes API's `{error:{status,message}}`. Best effort. */
+async function httpReason(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (!isRecord(body)) return '';
+    if (isRecord(body.error)) {
+      return reasonText([body.error.status, body.error.message].filter((x) => typeof x === 'string').join(': '));
+    }
+    return reasonText(body.error_message);
+  } catch (err) {
+    console.warn(`[google-maps] a ${res.status} answer had no JSON body:`, err instanceof Error ? err.message : err);
+    return '';
+  }
+}
+
 /** Reads a geocode answer. "Rough" = the top result is a partial match or only APPROXIMATE (e.g. the town, for a moshav without street numbers). */
 export function parseGeocode(body: unknown): GeocodeResult {
   if (!isRecord(body) || typeof body.status !== 'string') {
     throw new GoogleMapsError('BAD_ANSWER', null, 'geocode answered in an unknown shape');
   }
   if (body.status === 'ZERO_RESULTS') return { kind: 'none' };
-  if (body.status !== 'OK') throw new GoogleMapsError(body.status, null, `geocode answered ${body.status}`);
+  if (body.status !== 'OK') {
+    throw new GoogleMapsError(body.status, null, `geocode answered ${body.status}${reasonText(body.error_message)}`);
+  }
   const top = Array.isArray(body.results) ? body.results[0] : undefined;
   const geometry = isRecord(top) && isRecord(top.geometry) ? top.geometry : undefined;
   const location = geometry && isRecord(geometry.location) ? geometry.location : undefined;
@@ -127,9 +154,9 @@ export async function geocode(query: string): Promise<GeocodeResult> {
   return withRetries('geocode', async () => {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) {
-      const err = new GoogleMapsError(`HTTP_${res.status}`, res.status, `geocode answered ${res.status}`);
+      const err = new GoogleMapsError(`HTTP_${res.status}`, res.status, `geocode answered ${res.status}${await httpReason(res)}`);
       if (res.status === 429 || res.status >= 500) throw err;
-      console.error(`[google-maps] geocode refused: ${res.status}`);
+      console.error(`[google-maps] geocode refused: ${err.message}`);
       throw new AbortError(err);
     }
     const body = await readJson(res, 'geocode');
@@ -138,7 +165,7 @@ export async function geocode(query: string): Promise<GeocodeResult> {
     } catch (err) {
       if (!(err instanceof GoogleMapsError)) throw err;
       if (RETRYABLE_GEOCODE.has(err.code)) throw err; // retried; logged by onFailedAttempt
-      console.error(`[google-maps] geocode failed: ${err.code}`);
+      console.error(`[google-maps] geocode failed: ${err.message}`);
       throw new AbortError(err);
     }
   });
@@ -164,16 +191,16 @@ export async function driveMatrix(points: LatLng[]): Promise<number[][]> {
       cache: 'no-store',
     });
     if (!res.ok) {
-      const err = new GoogleMapsError(`HTTP_${res.status}`, res.status, `matrix answered ${res.status}`);
+      const err = new GoogleMapsError(`HTTP_${res.status}`, res.status, `matrix answered ${res.status}${await httpReason(res)}`);
       if (res.status === 429 || res.status >= 500) throw err;
-      console.error(`[google-maps] matrix refused: ${res.status}`);
+      console.error(`[google-maps] matrix refused: ${err.message}`);
       throw new AbortError(err);
     }
     try {
       return parseMatrix(await readJson(res, 'matrix'), points.length);
     } catch (err) {
       if (err instanceof GoogleMapsError) {
-        console.error(`[google-maps] matrix failed: ${err.code}`);
+        console.error(`[google-maps] matrix failed: ${err.message}`);
         throw new AbortError(err);
       }
       throw err;
