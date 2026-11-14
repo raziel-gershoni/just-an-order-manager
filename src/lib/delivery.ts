@@ -1,5 +1,7 @@
 // Delivery zone + fee logic. Pure functions — safe on client and server.
 
+import { geoQueryText } from '@/lib/route-order';
+
 export type DeliverySettings = {
   enabled: boolean;
   homeCity: string | null;
@@ -63,7 +65,7 @@ export function buildWazeLink(
   address: string | null | undefined,
   city: string | null | undefined
 ): string | null {
-  const parts = [address?.trim(), city?.trim()].filter(Boolean);
-  if (!parts.length) return null;
-  return `https://waze.com/ul?q=${encodeURIComponent(parts.join(', '))}&navigate=yes`;
+  const text = geoQueryText(address, city);
+  if (!text) return null;
+  return `https://waze.com/ul?q=${encodeURIComponent(text)}&navigate=yes`;
 }
