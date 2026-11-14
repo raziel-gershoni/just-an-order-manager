@@ -155,14 +155,6 @@ body {
 }
 .shabbat .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding-top: 4px; }
 .shabbat .candles { width: 150px; height: auto; display: block; margin-bottom: 6px; overflow: visible; }
-.shabbat .flame { transform-box: fill-box; transform-origin: 50% 92%; animation: flicker 3.1s ease-in-out infinite alternate; }
-.shabbat .flame.b { animation-duration: 2.6s; animation-delay: -1.2s; }
-@keyframes flicker {
-  0% { transform: scale(1, 1) skewX(0); }
-  30% { transform: scale(.95, 1.05) skewX(2.5deg); }
-  60% { transform: scale(1.03, .96) skewX(-2deg); }
-  100% { transform: scale(.98, 1.03) skewX(1deg); }
-}
 .shabbat .greeting { margin: 0; font-size: 52px; font-weight: 800; line-height: 1.05; text-wrap: balance; }
 .shabbat .greeting.long { font-size: 40px; }
 .shabbat .occasion { margin: 8px 0 0; font-size: 22px; font-weight: 700; }
@@ -194,7 +186,6 @@ body {
   color: var(--ink-soft); opacity: .85; text-align: left;
 }
 .shabbat .credits p { margin: 0 0 2px; }
-@media (prefers-reduced-motion: reduce) { .shabbat .flame { animation: none; } }
 @media (max-height: 700px) {
   .shabbat { padding-top: 14px; }
   .shabbat .candles { width: 104px; margin-bottom: 2px; }

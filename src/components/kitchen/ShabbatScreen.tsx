@@ -37,11 +37,11 @@ export function ShabbatScreen({ view, credits }: { view: ShabbatView; credits: S
             <line x1="70" y1="60" x2="70" y2="53" />
             <line x1="130" y1="60" x2="130" y2="53" />
           </g>
-          <g className="flame">
+          <g>
             <path style={{ fill: 'var(--flame)' }} d="M70 18C79 31 83 40 79 48C76 54 64 54 61 48C57 40 61 31 70 18Z" />
             <path style={{ fill: 'var(--flame-core)' }} d="M70 32C74 38 75 43 73 47C71 50 69 50 67 47C65 43 66 38 70 32Z" />
           </g>
-          <g className="flame b">
+          <g>
             <path style={{ fill: 'var(--flame)' }} d="M130 18C139 31 143 40 139 48C136 54 124 54 121 48C117 40 121 31 130 18Z" />
             <path style={{ fill: 'var(--flame-core)' }} d="M130 32C134 38 135 43 133 47C131 50 129 50 127 47C125 43 126 38 130 32Z" />
           </g>
