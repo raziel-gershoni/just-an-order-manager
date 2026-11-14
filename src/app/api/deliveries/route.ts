@@ -1,7 +1,8 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, customers, orderItems, customerPhones } from '@/db/schema';
-import { eq, and, inArray, notInArray, asc, sql } from 'drizzle-orm';
+import { eq, inArray, asc, sql } from 'drizzle-orm';
+import { openDeliveriesWhere } from '@/lib/open-deliveries';
 import { orderTotalFromGoods } from '@/lib/order-pricing';
 import { orderPaymentsTotals } from '@/lib/order-payments';
 import { normalizePhoneNumber } from '@/lib/phone-links';
@@ -34,13 +35,7 @@ export const GET = withGroup(async (_request, auth, groupId) => {
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .where(
-      and(
-        eq(orders.groupId, groupId),
-        eq(orders.isDelivery, true),
-        notInArray(orders.status, ['delivered', 'cancelled'])
-      )
-    )
+    .where(openDeliveriesWhere(groupId))
     .orderBy(asc(orders.deliveryDate), asc(orders.id));
 
   const ids = rows.map((r) => r.id);
