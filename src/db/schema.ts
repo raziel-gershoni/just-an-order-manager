@@ -12,6 +12,7 @@ import {
   boolean,
   jsonb,
   bigint,
+  doublePrecision,
   index,
   uniqueIndex,
   primaryKey,
@@ -106,6 +107,15 @@ export const groups = pgTable('groups', {
   // Delivery settings (zoned pricing).
   deliveryEnabled: boolean('delivery_enabled').notNull().default(false),
   deliveryHomeCity: varchar('delivery_home_city', { length: 255 }),
+  // Where delivery runs start and end, as typed. Geocoded lazily by the route
+  // endpoint (never on save): the coordinates are kept with the exact text that
+  // was looked up, so an edited address is looked up again. homeGeoQuery set
+  // with homeGeoLat null means Google said "no results" for that text.
+  deliveryHomeAddress: varchar('delivery_home_address', { length: 500 }),
+  homeGeoLat: doublePrecision('home_geo_lat'),
+  homeGeoLng: doublePrecision('home_geo_lng'),
+  homeGeoQuery: varchar('home_geo_query', { length: 800 }),
+  homeGeoRough: boolean('home_geo_rough').notNull().default(false),
   deliveryFee: decimal('delivery_fee', { precision: 10, scale: 2 })
     .notNull()
     .default('0'),
@@ -350,6 +360,15 @@ export const customers = pgTable('customers', {
   telegramChatId: varchar('telegram_chat_id', { length: 50 }),
   notes: text('notes'),
   deliveryNotes: text('delivery_notes'),
+  // Where the address is, for ordering delivery stops. Looked up lazily by the
+  // route endpoint, with the exact text that was looked up (geoQuery) so a
+  // changed address is looked up again. geoQuery set with geoLat null means
+  // Google said "no results" for that text. geoRough: Google could only place
+  // it approximately (e.g. the town), so the stop is flagged "check address".
+  geoLat: doublePrecision('geo_lat'),
+  geoLng: doublePrecision('geo_lng'),
+  geoQuery: varchar('geo_query', { length: 800 }),
+  geoRough: boolean('geo_rough').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   reminderOptOut: boolean('reminder_opt_out').notNull().default(false),
   // Which staff member works with this customer. Set to the creator on insert,

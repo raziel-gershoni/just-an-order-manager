@@ -239,6 +239,13 @@
       "when": 1793700000000,
       "tag": "0033_shabbat_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793800000000,
+      "tag": "0034_delivery_route",
+      "breakpoints": true
     }
   ]
 }
