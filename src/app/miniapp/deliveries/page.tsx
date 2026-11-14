@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { useT, useLang } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
@@ -10,7 +10,9 @@ import { Badge } from '@/components/ui/Badge';
 import { ASAP_GROUP_KEY, groupByDeliveryDate } from '@/lib/order-grouping';
 import { waHref } from '@/lib/phone-links';
 import { buildWazeLink } from '@/lib/delivery';
-import { Banknote, Check, MessageCircle, MessageCircleOff, Navigation, Truck } from 'lucide-react';
+import { formatDateRelative } from '@/lib/date-utils';
+import type { RouteAnswer } from '@/lib/delivery-route';
+import { Banknote, Check, Map as MapIcon, MessageCircle, MessageCircleOff, Navigation, Truck } from 'lucide-react';
 
 interface Delivery {
   id: number;
@@ -27,6 +29,134 @@ interface Delivery {
   phoneHasWhatsapp: boolean;
 }
 
+function DeliveryCard({
+  d,
+  t,
+  busy,
+  onComplete,
+  number,
+  pills = [],
+  showAsapLine = false,
+}: {
+  d: Delivery;
+  t: (key: string) => string;
+  busy: boolean;
+  onComplete: (d: Delivery, collect: boolean) => void;
+  /** Stop number in the route; absent in the date-grouped layout. */
+  number?: number;
+  pills?: string[];
+  /** The date-grouped layout's own "בהקדם" line under the name. */
+  showAsapLine?: boolean;
+}) {
+  const waze = buildWazeLink(d.address, d.city);
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        {number != null && (
+          <span className="w-6 shrink-0 font-mono text-lg font-bold leading-6 tabular-nums text-primary">
+            {number}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold">{d.customerName}</span>
+            {pills.map((label) => (
+              <span
+                key={label}
+                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+          {showAsapLine && (
+            <div className="text-xs text-muted-foreground">{t('delivery.asap')}</div>
+          )}
+          {(d.address || d.city) && (
+            <div className="text-sm text-muted-foreground">
+              {[d.address, d.city].filter(Boolean).join(', ')}
+            </div>
+          )}
+        </div>
+        <Badge status={d.paid ? 'delivered' : 'to_be_paid'} label={d.paid ? t('notify.settled') : `₪${d.amount.toFixed(0)}`} />
+      </div>
+
+      {d.deliveryNotes && (
+        <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">{d.deliveryNotes}</div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {waze && (
+          <a
+            href={waze}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary"
+          >
+            <Navigation className="h-4 w-4" />
+            {t('deliv.waze')}
+          </a>
+        )}
+        {/* WhatsApp, not tel: — Telegram's WebView drops the tel
+            scheme on both platforms and exposes no call API, so
+            the call button did nothing where this app is used.
+            dir on the digits alone: a number carrying a leading
+            + rendered with the plus at the far end. */}
+        {d.phone &&
+          (d.phoneHasWhatsapp && waHref(d.phone) ? (
+            <a
+              href={waHref(d.phone)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-success"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span dir="ltr" className="tabular-nums">{d.phone}</span>
+            </a>
+          ) : (
+            // A landline, a foreign number, or one the owner
+            // marked as off WhatsApp has no chat to open. The
+            // digits still have to be on screen: this tab is the
+            // driver's only one, and they cannot open the
+            // customer card to look them up.
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground">
+              {d.phoneHasWhatsapp ? (
+                <MessageCircle className="h-4 w-4 opacity-40" />
+              ) : (
+                <MessageCircleOff className="h-4 w-4 opacity-60" />
+              )}
+              <span dir="ltr" className="tabular-nums">{d.phone}</span>
+            </span>
+          ))}
+      </div>
+
+      <div className="flex gap-2 border-t border-dashed border-border pt-3">
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1"
+          loading={busy}
+          onClick={() => onComplete(d, false)}
+        >
+          <Check className="h-4 w-4" />
+          {t('deliv.mark_delivered')}
+        </Button>
+        {!d.paid && d.amount > 0 && (
+          <Button
+            size="sm"
+            className="flex-1"
+            loading={busy}
+            onClick={() => onComplete(d, true)}
+          >
+            <Banknote className="h-4 w-4" />
+            {t('deliv.deliver_collect')}
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export default function DeliveriesPage() {
   const { apiFetch } = useApi();
   const t = useT();
@@ -35,11 +165,32 @@ export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   // The server's day and the bakery's בהקדם switch, which place undated orders.
   const [display, setDisplay] = useState<{ today: string; asapInToday: boolean }>({ today: '', asapInToday: false });
+  const [route, setRoute] = useState<RouteAnswer | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
 
+  // Only the newest route request may land: a slow answer for an older
+  // position must not overwrite the one asked for after the last delivery.
+  const routeSeq = useRef(0);
+
+  // Google being down or the call failing must not hide the deliveries, so a
+  // failed route request is an answer too ('failed': the date-grouped list).
+  async function loadRoute(fromOrderId?: number) {
+    const seq = ++routeSeq.current;
+    let answer: RouteAnswer;
+    try {
+      answer = await apiFetch<RouteAnswer>(
+        `/deliveries/route-order${fromOrderId ? `?from=${fromOrderId}` : ''}`
+      );
+    } catch (err) {
+      console.error('[deliveries] route order failed:', err);
+      answer = { status: 'failed', canManage: false, stops: [], unplaced: [], maps: null };
+    }
+    if (seq === routeSeq.current) setRoute(answer);
+  }
+
   useEffect(() => {
-    apiFetch<{ deliveries: Delivery[]; today: string; asapInToday: boolean }>('/deliveries')
+    const list = apiFetch<{ deliveries: Delivery[]; today: string; asapInToday: boolean }>('/deliveries')
       .then((r) => {
         setDeliveries(r.deliveries);
         setDisplay({ today: r.today, asapInToday: r.asapInToday });
@@ -47,8 +198,9 @@ export default function DeliveriesPage() {
       .catch((err) => {
         console.error('[deliveries] load failed:', err);
         toast.error(t('deliv.load_failed'));
-      })
-      .finally(() => setLoading(false));
+      });
+    // The skeleton stays until both have answered.
+    Promise.all([list, loadRoute()]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -86,6 +238,10 @@ export default function DeliveriesPage() {
         alreadyRecorded = res.outcome === 'already';
       }
       setDeliveries((p) => p.filter((x) => x.id !== d.id));
+      // The route is re-planned from this stop's address. Dropping it locally
+      // first keeps the card gone from the list while the new order is fetched.
+      setRoute((r) => (r ? { ...r, stops: r.stops.filter((x) => x.orderId !== d.id) } : r));
+      void loadRoute(d.id);
       // The delivery is done either way, but cash that was not recorded has to
       // be said out loud rather than confirmed. A driver has only this tab, so
       // this one does not send them to a customer card they cannot open.
@@ -105,10 +261,133 @@ export default function DeliveriesPage() {
     setBusy(null);
   }
 
+  const byId = new Map(deliveries.map((d) => [d.id, d]));
+  const dateTag = (d: Delivery) =>
+    d.deliveryDate == null
+      ? t('delivery.asap')
+      : d.deliveryDate === display.today
+        ? null
+        : formatDateRelative(d.deliveryDate, 'he');
+
+  // Why the list is not in route order, one line above the date groups.
+  const noteKey =
+    route?.status === 'no_home'
+      ? route.canManage
+        ? 'route.no_home'
+        : 'route.no_home_driver'
+      : route?.status === 'home_not_found'
+        ? 'route.home_not_found'
+        : route?.status === 'too_many'
+          ? 'route.too_many'
+          : route?.status === 'failed'
+            ? 'route.failed'
+            : null;
+
+  let routeList: ReactNode = null;
+  if (route?.status === 'ok') {
+    const stops = route.stops.filter((s) => byId.has(s.orderId));
+    const unplaced = route.unplaced.map((id) => byId.get(id)).filter((d): d is Delivery => !!d);
+    const placed = new Set([...route.stops.map((s) => s.orderId), ...route.unplaced]);
+    // A delivery the route knows nothing about (it arrived after the plan was
+    // made) still has to be on the screen, without a number.
+    const unknown = deliveries.filter((d) => !placed.has(d.id));
+    routeList = (
+      <>
+        {route.maps && (
+          <a
+            href={route.maps.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary"
+          >
+            <MapIcon className="h-4 w-4" />
+            {t(route.maps.partial ? 'route.maps_next' : 'route.maps_all')}
+          </a>
+        )}
+        <div className="space-y-3">
+          {stops.map((s, i) => {
+            const d = byId.get(s.orderId)!;
+            const pills = [dateTag(d), s.rough ? t('route.check_address') : null].filter(
+              (x): x is string => !!x
+            );
+            return (
+              <DeliveryCard
+                key={d.id}
+                d={d}
+                t={t}
+                busy={busy === d.id}
+                onComplete={complete}
+                number={i + 1}
+                pills={pills}
+              />
+            );
+          })}
+          {unknown.map((d) => (
+            <DeliveryCard
+              key={d.id}
+              d={d}
+              t={t}
+              busy={busy === d.id}
+              onComplete={complete}
+              pills={[dateTag(d)].filter((x): x is string => !!x)}
+            />
+          ))}
+        </div>
+        {unplaced.length > 0 && (
+          <section>
+            <div className="mb-2 flex items-center gap-3">
+              <span className="font-display text-sm font-bold">{t('route.unplaced')}</span>
+              <span className="flex-1 border-t border-dashed border-border" />
+              <span className="font-mono text-xs text-muted-foreground">{unplaced.length}</span>
+            </div>
+            <div className="space-y-3">
+              {unplaced.map((d) => (
+                <DeliveryCard
+                  key={d.id}
+                  d={d}
+                  t={t}
+                  busy={busy === d.id}
+                  onComplete={complete}
+                  pills={[dateTag(d)].filter((x): x is string => !!x)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </>
+    );
+  }
+
   const groups = groupByDeliveryDate(
     deliveries.map((d) => ({ ...d, totalQuantity: 0 })),
     lang,
     { ...display, order: 'soonest' }
+  );
+
+  const dateGroups = (
+    <>
+          {groups.map((group) => (
+            <section key={group.key}>
+              <div className="mb-2 flex items-center gap-3">
+                <span className="font-display text-sm font-bold">{group.label}</span>
+                <span className="flex-1 border-t border-dashed border-border" />
+                <span className="font-mono text-xs text-muted-foreground">{group.items.length}</span>
+              </div>
+              <div className="space-y-3">
+                {group.items.map((d) => (
+                  <DeliveryCard
+                    key={d.id}
+                    d={d}
+                    t={t}
+                    busy={busy === d.id}
+                    onComplete={complete}
+                    showAsapLine={d.deliveryDate == null && group.key !== ASAP_GROUP_KEY}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+    </>
   );
 
   return (
@@ -127,111 +406,10 @@ export default function DeliveriesPage() {
             <p className="text-sm">{t('deliv.none')}</p>
           </div>
         ) : (
-          groups.map((group) => (
-            <section key={group.key}>
-              <div className="mb-2 flex items-center gap-3">
-                <span className="font-display text-sm font-bold">{group.label}</span>
-                <span className="flex-1 border-t border-dashed border-border" />
-                <span className="font-mono text-xs text-muted-foreground">{group.items.length}</span>
-              </div>
-              <div className="space-y-3">
-                {group.items.map((d) => {
-                  const waze = buildWazeLink(d.address, d.city);
-                  return (
-                    <Card key={d.id} className="space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="font-semibold">{d.customerName}</div>
-                          {d.deliveryDate == null && group.key !== ASAP_GROUP_KEY && (
-                            <div className="text-xs text-muted-foreground">{t('delivery.asap')}</div>
-                          )}
-                          {(d.address || d.city) && (
-                            <div className="text-sm text-muted-foreground">
-                              {[d.address, d.city].filter(Boolean).join(', ')}
-                            </div>
-                          )}
-                        </div>
-                        <Badge status={d.paid ? 'delivered' : 'to_be_paid'} label={d.paid ? t('notify.settled') : `₪${d.amount.toFixed(0)}`} />
-                      </div>
-
-                      {d.deliveryNotes && (
-                        <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">{d.deliveryNotes}</div>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        {waze && (
-                          <a
-                            href={waze}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-primary"
-                          >
-                            <Navigation className="h-4 w-4" />
-                            {t('deliv.waze')}
-                          </a>
-                        )}
-                        {/* WhatsApp, not tel: — Telegram's WebView drops the tel
-                            scheme on both platforms and exposes no call API, so
-                            the call button did nothing where this app is used.
-                            dir on the digits alone: a number carrying a leading
-                            + rendered with the plus at the far end. */}
-                        {d.phone &&
-                          (d.phoneHasWhatsapp && waHref(d.phone) ? (
-                            <a
-                              href={waHref(d.phone)!}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-success"
-                            >
-                              <MessageCircle className="h-4 w-4" />
-                              <span dir="ltr" className="tabular-nums">{d.phone}</span>
-                            </a>
-                          ) : (
-                            // A landline, a foreign number, or one the owner
-                            // marked as off WhatsApp has no chat to open. The
-                            // digits still have to be on screen: this tab is the
-                            // driver's only one, and they cannot open the
-                            // customer card to look them up.
-                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground">
-                              {d.phoneHasWhatsapp ? (
-                                <MessageCircle className="h-4 w-4 opacity-40" />
-                              ) : (
-                                <MessageCircleOff className="h-4 w-4 opacity-60" />
-                              )}
-                              <span dir="ltr" className="tabular-nums">{d.phone}</span>
-                            </span>
-                          ))}
-                      </div>
-
-                      <div className="flex gap-2 border-t border-dashed border-border pt-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1"
-                          loading={busy === d.id}
-                          onClick={() => complete(d, false)}
-                        >
-                          <Check className="h-4 w-4" />
-                          {t('deliv.mark_delivered')}
-                        </Button>
-                        {!d.paid && d.amount > 0 && (
-                          <Button
-                            size="sm"
-                            className="flex-1"
-                            loading={busy === d.id}
-                            onClick={() => complete(d, true)}
-                          >
-                            <Banknote className="h-4 w-4" />
-                            {t('deliv.deliver_collect')}
-                          </Button>
-                        )}
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </section>
-          ))
+          <>
+            {noteKey && <p className="text-sm text-muted-foreground">{t(noteKey)}</p>}
+            {route?.status === 'ok' ? routeList : dateGroups}
+          </>
         )}
       </div>
     </>

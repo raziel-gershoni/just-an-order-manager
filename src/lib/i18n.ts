@@ -828,6 +828,16 @@ const translations: Record<string, string> = {
   'deliv.badge': 'משלוח',
   // Delivery — Waze + customer
   'deliv.waze': 'פתח ב-Waze',
+  // Delivery — route order on the deliveries screen
+  'route.maps_all': 'נווט במסלול ב-Google Maps',
+  'route.maps_next': 'נווט ל-4 העצירות הבאות ב-Google Maps',
+  'route.check_address': 'לבדוק כתובת',
+  'route.unplaced': 'בלי כתובת',
+  'route.no_home': 'כדי לסדר את המשלוחים במסלול, הוסיפו כתובת בית בהגדרות המשלוחים',
+  'route.no_home_driver': 'כדי לסדר את המשלוחים במסלול, בקשו מהמנהל להוסיף כתובת בית בהגדרות',
+  'route.home_not_found': 'כתובת הבית לא נמצאה במפה. בדקו אותה בהגדרות המשלוחים',
+  'route.too_many': 'יותר מדי עצירות לחישוב מסלול, המשלוחים מוצגים לפי תאריך',
+  'route.failed': 'לא הצלחנו לחשב מסלול, המשלוחים מוצגים לפי תאריך',
   'deliv.notes': '(הערות משלוח (קוד כניסה, קומה, דירה',
   // Delivery — deliveries view
   'deliv.today': 'משלוחים היום',
