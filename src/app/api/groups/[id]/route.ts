@@ -28,6 +28,7 @@ const updateGroupSchema = z.object({
   additionsSurcharge: decimalStr.optional(),
   deliveryEnabled: z.boolean().optional(),
   deliveryHomeCity: z.string().max(255).nullable().optional(),
+  deliveryHomeAddress: z.string().max(500).nullable().optional(),
   deliveryFee: decimalStr.optional(),
   deliveryFreeOver: decimalStr.nullable().optional(),
   deliveryCities: z.array(z.string().min(1).max(255)).max(100).optional(),
@@ -72,6 +73,11 @@ export const PATCH = withAuth(async (request, auth) => {
   if (touchesDelivery && !canManage) {
     return errorResponse('Only owner or manager can edit delivery', 403);
   }
+  // Not in DELIVERY_KEYS on purpose: that list feeds PUBLIC_KEYS, and the home
+  // address is private (it never reaches the storefront or its cache purge).
+  if (parsed.data.deliveryHomeAddress !== undefined && !canManage) {
+    return errorResponse('Only owner or manager can edit delivery', 403);
+  }
   if (parsed.data.recurringRemindersEnabled !== undefined && !canManage) {
     return errorResponse('Only owner or manager can edit reminders', 403);
   }
@@ -89,6 +95,11 @@ export const PATCH = withAuth(async (request, auth) => {
   }
   if (parsed.data.asapInToday !== undefined) updates.asapInToday = parsed.data.asapInToday;
   if (parsed.data.kitchenShowRecipe !== undefined) updates.kitchenShowRecipe = parsed.data.kitchenShowRecipe;
+  // Saving only stores the text; the route endpoint geocodes it lazily and
+  // re-looks-up when the text no longer matches the cached query.
+  if (parsed.data.deliveryHomeAddress !== undefined) {
+    updates.deliveryHomeAddress = parsed.data.deliveryHomeAddress?.trim() || null;
+  }
   for (const k of DELIVERY_KEYS) {
     if (parsed.data[k] !== undefined) updates[k] = parsed.data[k];
   }

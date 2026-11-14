@@ -43,6 +43,7 @@ export default function SettingsPage() {
   // Delivery settings
   const [delivEnabled, setDelivEnabled] = useState(false);
   const [delivHomeCity, setDelivHomeCity] = useState('');
+  const [delivHomeAddress, setDelivHomeAddress] = useState('');
   const [delivFee, setDelivFee] = useState('');
   const [delivFreeOver, setDelivFreeOver] = useState('');
   const [delivCities, setDelivCities] = useState<string[]>([]);
@@ -68,6 +69,7 @@ export default function SettingsPage() {
           logoUrl: string | null;
           deliveryEnabled: boolean;
           deliveryHomeCity: string | null;
+          deliveryHomeAddress: string | null;
           deliveryFee: string;
           deliveryFreeOver: string | null;
           deliveryCities: string[] | null;
@@ -85,6 +87,7 @@ export default function SettingsPage() {
         setRole(g.role);
         setDelivEnabled(g.group.deliveryEnabled ?? false);
         setDelivHomeCity(g.group.deliveryHomeCity ?? '');
+        setDelivHomeAddress(g.group.deliveryHomeAddress ?? '');
         setDelivFee(g.group.deliveryFee && g.group.deliveryFee !== '0' ? g.group.deliveryFee : '');
         setDelivFreeOver(g.group.deliveryFreeOver ?? '');
         setDelivCities(g.group.deliveryCities ?? []);
@@ -145,6 +148,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           deliveryEnabled: delivEnabled,
           deliveryHomeCity: delivHomeCity.trim() || null,
+          deliveryHomeAddress: delivHomeAddress.trim() || null,
           deliveryFee: delivFee.trim() || '0',
           deliveryFreeOver: delivFreeOver.trim() || null,
           deliveryCities: delivCities,
@@ -326,6 +330,7 @@ export default function SettingsPage() {
 
             {/* Bakery city — pickup origin + free-delivery zone (always editable). */}
             <Input label={t('deliv.home_city')} value={delivHomeCity} onChange={(e) => setDelivHomeCity(e.target.value)} />
+            <Input label={t('deliv.home_address')} value={delivHomeAddress} onChange={(e) => setDelivHomeAddress(e.target.value)} />
 
             {delivEnabled && (
               <>

@@ -813,6 +813,7 @@ const translations: Record<string, string> = {
   'deliv.title': 'משלוחים',
   'deliv.enable': 'משלוחים פעילים',
   'deliv.home_city': 'עיר המאפייה (איסוף ומשלוח חינם)',
+  'deliv.home_address': 'כתובת הבית (יציאה וחזרה במסלול המשלוחים)',
   'deliv.fee': '(מחיר משלוח (₪',
   'deliv.free_over': '(חינם מעל (₪',
   'deliv.cities': 'ערים למשלוח בתשלום',
