@@ -104,7 +104,7 @@ Base `https://famcal.bot/api/v1/`, `Authorization: Bearer $FAMCAL_API_KEY`, ever
   - When one is active, it renders `ShabbatScreen` in place of the sheets and the dock. Otherwise it renders as today.
   - Polling and the wake lock are untouched.
 - **`ShabbatScreen`** (pure render) shows:
-  - the candles: an inline SVG drawing, because the icon library has no candle. The flames are still (they flickered at first; the owner had them stopped on 2026-11-14);
+  - the lights: an inline SVG line drawing of two olive-oil glasses on a tray, because the icon library has none; only the flames are coloured, and nothing moves (the first version was flickering wax candles, replaced at the owner's request on 2026-11-14);
   - the greeting;
   - the occasion and Hebrew date of the current rest day: the first rest day whose sunset hasn't passed, or the last day;
   - a panel with הדלקת נרות and `endName`;

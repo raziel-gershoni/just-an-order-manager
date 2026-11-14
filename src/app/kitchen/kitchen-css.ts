@@ -14,12 +14,7 @@ export const KITCHEN_CSS = `
   --paper: #fff;
   --stub: #FAF8F4;
   --on-stamp: #FBF8F2;
-  --wax: #FBF7EE;
-  --wax-edge: #D9CFBD;
-  --metal: #8C8374;
-  --flame: #F2A43A;
-  --flame-core: #FFF3C9;
-  --glow: rgba(242, 164, 58, .22);
+  --flame: #E0901F;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -32,12 +27,7 @@ export const KITCHEN_CSS = `
     --stamp: #C9ABF2;
     --flag: #FF9480;
     --on-stamp: #1A1226;
-    --wax: #EDE4D3;
-    --wax-edge: #9A8F7C;
-    --metal: #7A7163;
     --flame: #F5AE45;
-    --flame-core: #FFF6D6;
-    --glow: rgba(245, 174, 69, .30);
   }
 }
 body {
@@ -154,7 +144,7 @@ body {
   padding: 20px 18px calc(12px + env(safe-area-inset-bottom));
 }
 .shabbat .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding-top: 4px; }
-.shabbat .candles { width: 150px; height: auto; display: block; margin-bottom: 6px; overflow: visible; }
+.shabbat .candles { width: 112px; height: auto; display: block; margin-bottom: 8px; overflow: visible; }
 .shabbat .greeting { margin: 0; font-size: 52px; font-weight: 800; line-height: 1.05; text-wrap: balance; }
 .shabbat .greeting.long { font-size: 40px; }
 .shabbat .occasion { margin: 8px 0 0; font-size: 22px; font-weight: 700; }
@@ -188,7 +178,7 @@ body {
 .shabbat .credits p { margin: 0 0 2px; }
 @media (max-height: 700px) {
   .shabbat { padding-top: 14px; }
-  .shabbat .candles { width: 104px; margin-bottom: 2px; }
+  .shabbat .candles { width: 84px; margin-bottom: 4px; }
   .shabbat .window { margin-top: 14px; }
   .shabbat .next { margin-top: 12px; }
   .shabbat .foot { padding-top: 10px; }
