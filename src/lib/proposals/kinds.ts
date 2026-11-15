@@ -64,9 +64,20 @@ export function sameBefore(a: unknown, b: unknown): boolean {
 
 // ---- Formatting ----
 
+// One pass with a function replacer: a name that itself contains "{to}" or "$&"
+// (names come from Claude) must show on the card exactly as typed, not get
+// substituted into by a later variable or by replace()'s special patterns.
 function fill(key: string, vars: Record<string, string | number>): string {
-  return Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), t(key));
+  return t(key).replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
+
+/** Names go onto a plain-text card: a line break in one could fake a line of the card. */
+const hasControlChars = (s: string) => /[\p{Cc}\u2028\u2029]/u.test(s);
+
+/** Every price column is numeric(10,2): a bigger value would only fail at approval. */
+const OVER_MAX = 'Price is too large (the maximum is 99999999.99)';
+const tooBig = (s: string) => Number(s) >= 1e8;
+const MAX_QTY = 2147483647;
 
 /** The numeric(10,2) shape the database holds, and the shape stored in proposals. */
 const priceStr = (s: string | number) => Number(s).toFixed(2);
@@ -207,6 +218,7 @@ async function prepareRecipe(groupId: number, input: Of<'recipe'>): Promise<Prep
 
   const rows = input.ingredients.map((r, i) => ({ ...r, name: r.name.trim(), sortOrder: r.sortOrder ?? i }));
   if (rows.some((r) => r.name === '')) return fail('Ingredient names cannot be blank');
+  if (rows.some((r) => hasControlChars(r.name))) return fail('Ingredient names cannot contain line breaks or control characters');
   const checked = validateRecipe({
     referenceFinishedGrams: input.referenceFinishedGrams,
     ingredients: rows,
@@ -253,6 +265,7 @@ async function readSizePrice(groupId: number, target: Record<string, unknown>) {
 
 async function prepareSizePrice(groupId: number, input: Of<'size_price'>): Promise<Prep> {
   if (!PRICE_INPUT.test(input.price)) return fail('Price must look like 35 or 35.50');
+  if (tooBig(input.price)) return fail(OVER_MAX);
   const size = await findSize(groupId, input.breadSizeId);
   if (!size) return fail(NOT_FOUND);
 
@@ -283,6 +296,7 @@ async function readBreadPrice(groupId: number, target: Record<string, unknown>) 
 
 async function prepareBreadPrice(groupId: number, input: Of<'bread_price'>): Promise<Prep> {
   if (input.price !== null && !PRICE_INPUT.test(input.price)) return fail('Price must look like 35 or 35.50');
+  if (input.price !== null && tooBig(input.price)) return fail(OVER_MAX);
   const link = await findLink(groupId, input.breadTypeId, input.breadSizeId);
   if (!link) return fail(NOT_FOUND);
 
@@ -338,7 +352,10 @@ async function readDeal(groupId: number, target: Record<string, unknown>) {
 
 async function prepareDeal(groupId: number, input: Of<'deal'>): Promise<Prep> {
   if (input.price !== null && !PRICE_INPUT.test(input.price)) return fail('Price must look like 35 or 35.50');
-  if (!Number.isInteger(input.minQty) || input.minQty < 2) return fail('A deal needs a quantity of at least 2');
+  if (input.price !== null && tooBig(input.price)) return fail(OVER_MAX);
+  if (!Number.isInteger(input.minQty) || input.minQty < 2 || input.minQty > MAX_QTY) {
+    return fail('A deal needs a quantity of at least 2');
+  }
   const size = await findSize(groupId, input.breadSizeId);
   if (!size) return fail(NOT_FOUND);
   const bread = input.breadTypeId === null ? null : await findBread(groupId, input.breadTypeId);
@@ -391,10 +408,12 @@ async function readIngredientPrice(groupId: number, target: Record<string, unkno
 async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_price'>): Promise<Prep> {
   const name = input.name.trim();
   if (name === '') return fail('Ingredient name cannot be blank');
+  if (hasControlChars(name)) return fail('Ingredient name cannot contain line breaks or control characters');
   if (input.ingredientKind === 'starter') {
     return fail('The starter price is derived from the starter settings and cannot be proposed');
   }
   if (!PRICE_INPUT.test(input.pricePerKg)) return fail('Price must look like 35 or 35.50');
+  if (tooBig(input.pricePerKg)) return fail(OVER_MAX);
 
   const target = { name, ingredientKind: input.ingredientKind };
   const before = (await readIngredientPrice(groupId, target)) as { pricePerKg: string | null };
