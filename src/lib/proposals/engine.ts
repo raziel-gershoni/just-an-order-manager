@@ -195,11 +195,18 @@ export async function decideProposal(
     await db
       .update(changeProposals)
       .set({ status, error })
-      .where(and(eq(changeProposals.id, id), eq(changeProposals.status, 'applying')));
+      .where(
+        and(
+          eq(changeProposals.id, id),
+          eq(changeProposals.groupId, groupId),
+          eq(changeProposals.status, 'applying')
+        )
+      );
   };
 
   const kind = KINDS[row.kind];
   const target = row.target as Record<string, unknown>;
+  let applied = false;
   try {
     const current = await kind.readBefore(groupId, target);
     if (!sameBefore(current, row.before)) {
@@ -211,6 +218,7 @@ export async function decideProposal(
       await finish('failed', written.error);
       return done(id, groupId, row.kind, decision, 'failed', 'mcp.decision_failed', `status=${written.status}`);
     }
+    applied = true;
     await finish('applied', null);
     return done(id, groupId, row.kind, decision, 'applied', 'mcp.decision_applied');
   } catch (err) {
@@ -218,6 +226,12 @@ export async function decideProposal(
     // numbers): keep only the underlying cause, in the log and in the row.
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
     const message = cause instanceof Error ? cause.message : String(cause);
+    if (applied) {
+      // The change is saved; only the bookkeeping failed. Never tell the owner
+      // "nothing changed" about a saved change: the row stays `applying` in the log.
+      console.error(`[mcp-decision] proposal=${id} group=${groupId} applied but could not record it: ${message}`);
+      return done(id, groupId, row.kind, decision, 'applied', 'mcp.decision_applied', 'unrecorded');
+    }
     console.error(`[mcp-decision] proposal=${id} group=${groupId} apply threw: ${message}`);
     try {
       await finish('failed', message);
