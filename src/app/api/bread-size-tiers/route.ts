@@ -1,9 +1,9 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
-import { breadSizeTiers, breadSizes, breadTypes } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { breadSizeTiers } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
-import { revalidatePublicSite } from '@/lib/public-site';
+import { upsertTier } from '@/lib/catalog-writes';
 
 export const GET = withGroup(async (_request, _auth, groupId) => {
   const tiers = await db
@@ -29,45 +29,8 @@ export const POST = withGroup(async (request, auth, groupId) => {
   if (!parsed.success) return errorResponse(parsed.error.message);
   const { breadSizeId, breadTypeId, minQty, price } = parsed.data;
 
-  const [size] = await db
-    .select({ id: breadSizes.id })
-    .from(breadSizes)
-    .where(and(eq(breadSizes.id, breadSizeId), eq(breadSizes.groupId, groupId)))
-    .limit(1);
-  if (!size) return errorResponse('Size not found', 404);
+  const result = await upsertTier(groupId, { breadSizeId, breadTypeId, minQty, price });
+  if (!result.ok) return errorResponse(result.error, result.status);
 
-  if (breadTypeId != null) {
-    const [type] = await db
-      .select({ id: breadTypes.id })
-      .from(breadTypes)
-      .where(and(eq(breadTypes.id, breadTypeId), eq(breadTypes.groupId, groupId)))
-      .limit(1);
-    if (!type) return errorResponse('Type not found', 404);
-  }
-
-  // Idempotent upsert: clear any existing row for this exact tuple, then insert.
-  // Handles the null-breadTypeId "default" case, which a unique index can't
-  // dedupe because SQL treats NULLs as distinct.
-  const typeCond =
-    breadTypeId == null
-      ? sql`${breadSizeTiers.breadTypeId} IS NULL`
-      : eq(breadSizeTiers.breadTypeId, breadTypeId);
-  await db
-    .delete(breadSizeTiers)
-    .where(
-      and(
-        eq(breadSizeTiers.groupId, groupId),
-        eq(breadSizeTiers.breadSizeId, breadSizeId),
-        typeCond,
-        eq(breadSizeTiers.minQty, minQty)
-      )
-    );
-  const [row] = await db
-    .insert(breadSizeTiers)
-    .values({ groupId, breadSizeId, breadTypeId, minQty, price })
-    .returning();
-
-  // Tiers drive the public "deals" — purge the cached pricelist.
-  revalidatePublicSite(groupId);
-  return jsonResponse({ tier: row }, 201);
+  return jsonResponse({ tier: result.tier }, 201);
 });

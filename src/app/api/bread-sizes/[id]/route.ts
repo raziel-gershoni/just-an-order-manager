@@ -4,6 +4,7 @@ import { breadSizes, breadSizeTiers, breadTypeSizes, orderItems } from '@/db/sch
 import { eq } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { revalidatePublicSite } from '@/lib/public-site';
+import { setSizePrice } from '@/lib/catalog-writes';
 
 function getSizeId(url: string): number {
   return Number(new URL(url).pathname.split('/').pop());
@@ -41,6 +42,16 @@ export const PATCH = withAuth(async (request, auth) => {
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
+
+  // A price-only edit goes through the shared write (the MCP approval path
+  // calls the same one); any other field keeps the generic update below.
+  const keys = Object.keys(parsed.data);
+  if (keys.length === 1 && parsed.data.price !== undefined) {
+    const priced = await setSizePrice(authz.groupId, sizeId, parsed.data.price);
+    if (!priced.ok) return errorResponse(priced.error, priced.status);
+    const [size] = await db.select().from(breadSizes).where(eq(breadSizes.id, sizeId)).limit(1);
+    return jsonResponse({ size });
+  }
 
   const [updated] = await db
     .update(breadSizes)
