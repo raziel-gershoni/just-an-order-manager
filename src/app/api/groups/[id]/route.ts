@@ -20,7 +20,10 @@ export const GET = withAuth(async (_request, auth) => {
 
   if (!group) return errorResponse('Group not found', 404);
 
-  return jsonResponse({ group, role: membership.role });
+  // The key's hash never leaves the server; the settings card needs only when it was made.
+  const { mcpKeyHash: _hash, ...safeGroup } = group;
+  void _hash;
+  return jsonResponse({ group: safeGroup, role: membership.role });
 });
 
 const updateGroupSchema = z.object({
@@ -112,5 +115,7 @@ export const PATCH = withAuth(async (request, auth) => {
 
   if (touchesPublic) revalidatePublicSite(groupId);
 
-  return jsonResponse({ group: updated });
+  const { mcpKeyHash: _hash, ...safeUpdated } = updated;
+  void _hash;
+  return jsonResponse({ group: safeUpdated });
 });

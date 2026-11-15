@@ -932,6 +932,20 @@ const translations: Record<string, string> = {
   'mcp.decision_expired': 'עברו 7 ימים וההצעה פגה. בקשו הצעה חדשה',
   'mcp.decision_stale': 'השתנה מאז ההצעה — בקשו הצעה חדשה',
   'mcp.decision_failed': 'השמירה נכשלה ושום דבר לא השתנה. נסו להציע שוב',
+  'mcp.settings_title': 'חיבור לבוט AI',
+  'mcp.settings_hint': 'מפתח שמאפשר לבוט ה־AI שלכם לקרוא לחמים, מתכונים, עלויות ומכירות, ולהציע שינויים במתכונים ובמחירים. שום שינוי לא נשמר בלי אישור שלכם בצ׳אט.',
+  'mcp.connected_since': 'מחובר מ־{date}',
+  'mcp.not_connected': 'לא מחובר',
+  'mcp.address': 'כתובת השרת',
+  'mcp.create': 'צור מפתח',
+  'mcp.replace': 'החלף מפתח',
+  'mcp.replace_confirm': 'להחליף את המפתח? הבוט יפסיק לעבוד עד שתעדכנו בו את המפתח החדש.',
+  'mcp.disconnect': 'נתק',
+  'mcp.disconnect_confirm': 'לנתק את הבוט? הוא לא יוכל לקרוא או להציע שינויים.',
+  'mcp.key_once': 'העתיקו את המפתח עכשיו ושמרו אותו בהגדרות הבוט. הוא לא יוצג שוב.',
+  'mcp.create_failed': 'יצירת המפתח נכשלה',
+  'mcp.disconnect_failed': 'הניתוק נכשל',
+  'mcp.disconnected_done': 'הבוט נותק',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ignored (Hebrew only), kept so every t(key, lang) call stays valid

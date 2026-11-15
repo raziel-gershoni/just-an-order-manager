@@ -15,6 +15,7 @@ import { getInitial } from '@/lib/name-utils';
 import Link from 'next/link';
 import { LoadError } from '@/components/ui/LoadError';
 import { KitchenScreenCard } from '@/components/settings/KitchenScreenCard';
+import { McpKeyCard } from '@/components/settings/McpKeyCard';
 
 interface Member { id: number; userId: number; name: string; role: string }
 interface Invite { id: number; inviteCode: string; role: string; status: string }
@@ -53,6 +54,7 @@ export default function SettingsPage() {
   // Placement and kitchen switches: null until the group has loaded.
   const [asapInToday, setAsapInToday] = useState<boolean | null>(null);
   const [kitchenShowRecipe, setKitchenShowRecipe] = useState<boolean | null>(null);
+  const [mcpKeyCreatedAt, setMcpKeyCreatedAt] = useState<string | null>(null);
 
   const [inviteRole, setInviteRole] = useState<'manager' | 'baker' | 'driver'>('baker');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export default function SettingsPage() {
           deliveryCities: string[] | null;
           asapInToday: boolean;
           kitchenShowRecipe: boolean;
+          mcpKeyCreatedAt: string | null;
         };
         role: string;
       }>(`/groups/${activeGroupId}`),
@@ -93,6 +96,7 @@ export default function SettingsPage() {
         setDelivCities(g.group.deliveryCities ?? []);
         setAsapInToday(g.group.asapInToday ?? false);
         setKitchenShowRecipe(g.group.kitchenShowRecipe ?? true);
+        setMcpKeyCreatedAt(g.group.mcpKeyCreatedAt ?? null);
         setMembers(m.members);
         setInvites(i.invites);
       })
@@ -439,6 +443,8 @@ export default function SettingsPage() {
       )}
 
       {canManage && activeGroupId && <KitchenScreenCard groupId={activeGroupId} initialShowRecipe={kitchenShowRecipe} />}
+
+      {role === 'owner' && activeGroupId && <McpKeyCard groupId={activeGroupId} initialCreatedAt={mcpKeyCreatedAt} />}
 
       {/* Invite — owners and managers only. The endpoint refuses a baker or a
           driver, so leaving the form on their screen offered a button that
