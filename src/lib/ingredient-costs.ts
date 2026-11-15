@@ -127,7 +127,7 @@ export async function loadBreadsForCosting(groupId: number): Promise<BreadForCos
     .select({ id: breadTypes.id, name: breadTypes.name, isActive: breadTypes.isActive })
     .from(breadTypes)
     .where(eq(breadTypes.groupId, groupId))
-    .orderBy(asc(breadTypes.sortOrder));
+    .orderBy(asc(breadTypes.sortOrder), asc(breadTypes.id));
   if (types.length === 0) return [];
 
   const typeIds = types.map((t) => t.id);
@@ -143,7 +143,7 @@ export async function loadBreadsForCosting(groupId: number): Promise<BreadForCos
       })
       .from(breadRecipeIngredients)
       .where(inArray(breadRecipeIngredients.breadTypeId, typeIds))
-      .orderBy(asc(breadRecipeIngredients.sortOrder)),
+      .orderBy(asc(breadRecipeIngredients.sortOrder), asc(breadRecipeIngredients.id)),
     db
       .select({
         breadTypeId: breadTypeSizes.breadTypeId,
@@ -155,7 +155,7 @@ export async function loadBreadsForCosting(groupId: number): Promise<BreadForCos
       .from(breadTypeSizes)
       .innerJoin(breadSizes, eq(breadSizes.id, breadTypeSizes.breadSizeId))
       .where(and(inArray(breadTypeSizes.breadTypeId, typeIds), eq(breadSizes.isActive, true)))
-      .orderBy(asc(breadTypeSizes.sortOrder)),
+      .orderBy(asc(breadTypeSizes.sortOrder), asc(breadSizes.sortOrder), asc(breadSizes.id)),
   ]);
 
   return types.map((type) => ({
