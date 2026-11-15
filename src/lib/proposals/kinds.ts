@@ -152,7 +152,7 @@ function canonRecipe(rows: { name: string; kind: IngredientKind; pct: number | s
 }
 
 /** Water as a percentage of flour: the number a baker knows a dough by. */
-function hydrationPct(rows: { kind: IngredientKind; pct: number | string }[]): number {
+export function hydrationPct(rows: { kind: IngredientKind; pct: number | string }[]): number {
   const sum = (kind: IngredientKind) =>
     rows.filter((r) => r.kind === kind).reduce((s, r) => s + Number(r.pct), 0);
   const flour = sum('flour');

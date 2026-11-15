@@ -171,7 +171,7 @@ export const groups = pgTable('groups', {
   // shows. The times themselves live in shabbat_times.
   shabbatCity: varchar('shabbat_city', { length: 64 }),
   shabbatCommunity: varchar('shabbat_community', { length: 16 }).notNull().default('sephardi'),
-  // Bakery MCP key (src/lib/mcp-key.ts): only its SHA-256 is stored; the key is
+  // Bakery MCP key (src/lib/mcp/key.ts): only its SHA-256 is stored; the key is
   // shown once when issued. GET /api/groups/:id drops the hash from its reply.
   mcpKeyHash: varchar('mcp_key_hash', { length: 64 }),
   mcpKeyCreatedAt: timestamp('mcp_key_created_at', { withTimezone: true }),
