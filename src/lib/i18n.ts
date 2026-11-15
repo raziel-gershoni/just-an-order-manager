@@ -908,6 +908,22 @@ const translations: Record<string, string> = {
   'kitchen.shabbat_famcal_failed': 'famcal לא ענה, ולכן שום דבר לא נשמר. נסו שוב בעוד דקה.',
   'kitchen.shabbat_no_key': 'חסר מפתח famcal בשרת (FAMCAL_API_KEY), ולכן שום דבר לא נשמר.',
   'kitchen.shabbat_key_refused': 'famcal לא מקבל את המפתח (FAMCAL_API_KEY), ולכן שום דבר לא נשמר. צריך ליצור מפתח חדש ב־famcal.',
+
+  // MCP proposals: the card text the owner approves (plain Telegram text, not the mini app)
+  'proposal.recipe_title': 'מתכון {bread}',
+  'proposal.recipe_changed': '{name}: {from}% ← {to}%',
+  'proposal.recipe_added': 'נוסף {name}: {to}%',
+  'proposal.recipe_removed': 'הוסר {name}',
+  'proposal.recipe_hydration': 'הידרציה: {from}% ← {to}%',
+  'proposal.size_price': 'מחיר {size} (לכל הלחמים בלי מחיר משלהם): ₪{from} ← ₪{to}',
+  'proposal.bread_price': 'מחיר {bread}, {size}: ₪{from} ← ₪{to}',
+  'proposal.bread_price_reset': 'מחיר {bread}, {size}: חוזר למחיר הגודל, ₪{to}',
+  'proposal.deal_set': 'מבצע {size}{forBread}: {qty} ב־₪{to}',
+  'proposal.deal_was': ' (עד עכשיו ₪{from})',
+  'proposal.deal_removed': 'הסרת המבצע {size}{forBread}: {qty} ב־₪{from}',
+  'proposal.deal_for_bread': ' ל{bread}',
+  'proposal.ingredient_price': 'מחיר {name}: ₪{from} ← ₪{to} לק״ג',
+  'proposal.ingredient_price_new': 'מחיר {name}: ₪{to} לק״ג (חדש)',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ignored (Hebrew only), kept so every t(key, lang) call stays valid
