@@ -924,6 +924,14 @@ const translations: Record<string, string> = {
   'proposal.deal_for_bread': ' ל{bread}',
   'proposal.ingredient_price': 'מחיר {name}: ₪{from} ← ₪{to} לק״ג',
   'proposal.ingredient_price_new': 'מחיר {name}: ₪{to} לק״ג (חדש)',
+  'mcp.decision_applied': 'השינוי נשמר',
+  'mcp.decision_rejected': 'ההצעה בוטלה',
+  'mcp.decision_not_owner': 'רק הבעלים יכול לאשר שינויים',
+  'mcp.decision_not_found': 'ההצעה לא נמצאה',
+  'mcp.decision_already': 'כבר הוחלט על ההצעה הזאת',
+  'mcp.decision_expired': 'עברו 7 ימים וההצעה פגה. בקשו הצעה חדשה',
+  'mcp.decision_stale': 'השתנה מאז ההצעה — בקשו הצעה חדשה',
+  'mcp.decision_failed': 'השמירה נכשלה ושום דבר לא השתנה. נסו להציע שוב',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ignored (Hebrew only), kept so every t(key, lang) call stays valid
