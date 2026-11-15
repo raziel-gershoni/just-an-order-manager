@@ -50,7 +50,10 @@ async function run(groupId: number, tool: string, work: () => Promise<ToolResult
   } catch (e) {
     outcome = 'err';
     if (e instanceof ToolInputError) return fail(e.message);
-    console.error(`[mcp] ${tool} failed group=${groupId}`, e);
+    // Drizzle's message embeds the query parameters (prices, recipe numbers):
+    // log only the underlying cause.
+    const cause = e instanceof Error && e.cause instanceof Error ? e.cause : e;
+    console.error(`[mcp] ${tool} failed group=${groupId}: ${cause instanceof Error ? cause.message : String(cause)}`);
     return fail('Internal error. Nothing was changed. Try again later.');
   } finally {
     console.log(`[mcp] group=${groupId} tool=${tool} ms=${Date.now() - started} ${outcome}`);

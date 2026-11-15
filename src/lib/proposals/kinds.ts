@@ -72,7 +72,10 @@ function fill(key: string, vars: Record<string, string | number>): string {
 }
 
 /** Names go onto a plain-text card: a line break in one could fake a line of the card. */
-const hasControlChars = (s: string) => /[\p{Cc}\u2028\u2029]/u.test(s);
+// Format characters (\p{Cf}) include the bidi overrides and isolates: one at the
+// end of a name would reorder the rest of its card line, so the price shown
+// would not be the price stored.
+const hasControlChars = (s: string) => /[\p{Cc}\p{Cf}\u2028\u2029]/u.test(s);
 
 /** Every price column is numeric(10,2): a bigger value would only fail at approval. */
 const OVER_MAX = 'Price is too large (the maximum is 99999999.99)';
@@ -291,7 +294,17 @@ async function prepareSizePrice(groupId: number, input: Of<'size_price'>): Promi
 
 async function readBreadPrice(groupId: number, target: Record<string, unknown>) {
   const link = await findLink(groupId, Number(target.breadTypeId), Number(target.breadSizeId));
-  return link ? { priceOverride: link.priceOverride === null ? null : priceStr(link.priceOverride) } : MISSING;
+  return link ? breadPriceBefore(link) : MISSING;
+}
+
+// The size's own price is part of what the card shows (as the "from" price, or
+// as the price a reset falls back to), so it is part of the snapshot: if it
+// changes before approval, the card no longer describes the result.
+function breadPriceBefore(link: { priceOverride: string | null; basePrice: string }) {
+  return {
+    priceOverride: link.priceOverride === null ? null : priceStr(link.priceOverride),
+    basePrice: priceStr(link.basePrice),
+  };
 }
 
 async function prepareBreadPrice(groupId: number, input: Of<'bread_price'>): Promise<Prep> {
@@ -300,11 +313,11 @@ async function prepareBreadPrice(groupId: number, input: Of<'bread_price'>): Pro
   const link = await findLink(groupId, input.breadTypeId, input.breadSizeId);
   if (!link) return fail(NOT_FOUND);
 
-  const before = { priceOverride: link.priceOverride === null ? null : priceStr(link.priceOverride) };
+  const before = breadPriceBefore(link);
   // A price equal to the size's own is not an override: it is stored as none.
   const canon = input.price === null ? '' : canonicalOverridePrice(input.price, link.basePrice);
   const after = { priceOverride: canon === '' ? null : canon };
-  if (sameBefore(before, after)) return fail(ALREADY);
+  if (before.priceOverride === after.priceOverride) return fail(ALREADY);
 
   const names = { bread: link.breadName, size: link.sizeName };
   const to = after.priceOverride ?? link.basePrice;

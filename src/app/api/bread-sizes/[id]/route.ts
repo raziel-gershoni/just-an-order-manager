@@ -43,21 +43,18 @@ export const PATCH = withAuth(async (request, auth) => {
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  // A price-only edit goes through the shared write (the MCP approval path
-  // calls the same one); any other field keeps the generic update below.
-  const keys = Object.keys(parsed.data);
-  if (keys.length === 1 && parsed.data.price !== undefined) {
-    const priced = await setSizePrice(authz.groupId, sizeId, parsed.data.price);
+  // The price always goes through the shared write (the MCP approval path calls
+  // the same one); the other fields keep the generic update.
+  const { price, ...rest } = parsed.data;
+  if (Object.keys(rest).length > 0) {
+    await db.update(breadSizes).set(rest).where(eq(breadSizes.id, sizeId));
+  }
+  if (price !== undefined) {
+    const priced = await setSizePrice(authz.groupId, sizeId, price);
     if (!priced.ok) return errorResponse(priced.error, priced.status);
-    const [size] = await db.select().from(breadSizes).where(eq(breadSizes.id, sizeId)).limit(1);
-    return jsonResponse({ size });
   }
 
-  const [updated] = await db
-    .update(breadSizes)
-    .set(parsed.data)
-    .where(eq(breadSizes.id, sizeId))
-    .returning();
+  const [updated] = await db.select().from(breadSizes).where(eq(breadSizes.id, sizeId)).limit(1);
 
   // Price/name/active edits flow to the public pricelist — purge its cache.
   revalidatePublicSite(authz.groupId);

@@ -233,11 +233,22 @@ export async function decideProposal(
       return done(id, groupId, row.kind, decision, 'applied', 'mcp.decision_applied', 'unrecorded');
     }
     console.error(`[mcp-decision] proposal=${id} group=${groupId} apply threw: ${message}`);
+    // A throw is not proof that nothing was written: a deal is a delete then an
+    // insert, and a neon-http statement can commit with its response lost. Only
+    // say "nothing changed" when the value still reads as it did.
+    let untouched = false;
     try {
-      await finish('failed', message);
-    } catch (finishErr) {
-      console.error(`[mcp-decision] proposal=${id} could not record the failure:`, finishErr);
+      untouched = sameBefore(await kind.readBefore(groupId, target), row.before);
+    } catch (readErr) {
+      console.error(`[mcp-decision] proposal=${id} could not re-read after the failure:`, readErr instanceof Error ? readErr.message : readErr);
     }
-    return done(id, groupId, row.kind, decision, 'failed', 'mcp.decision_failed', 'threw');
+    try {
+      await finish('failed', untouched ? message : `${message} (value no longer matches before; check it)`);
+    } catch (finishErr) {
+      console.error(`[mcp-decision] proposal=${id} could not record the failure:`, finishErr instanceof Error ? finishErr.message : finishErr);
+    }
+    return untouched
+      ? done(id, groupId, row.kind, decision, 'failed', 'mcp.decision_failed', 'threw')
+      : done(id, groupId, row.kind, decision, 'failed', 'mcp.decision_uncertain', 'threw, value changed');
   }
 }
