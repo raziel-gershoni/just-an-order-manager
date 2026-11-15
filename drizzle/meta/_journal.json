@@ -246,6 +246,13 @@
       "when": 1793800000000,
       "tag": "0034_delivery_route",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793900000000,
+      "tag": "0035_bakery_mcp",
+      "breakpoints": true
     }
   ]
 }

@@ -70,6 +70,26 @@ export const ingredientKindEnum = pgEnum('ingredient_kind', [
   'other',
 ]);
 
+// Bakery MCP proposals (src/lib/proposals). 'applying' is the transient state of
+// an approval that has claimed the row and is running the stale check and write.
+export const proposalKindEnum = pgEnum('change_proposal_kind', [
+  'recipe',
+  'size_price',
+  'bread_price',
+  'deal',
+  'ingredient_price',
+]);
+
+export const proposalStatusEnum = pgEnum('change_proposal_status', [
+  'pending',
+  'applying',
+  'applied',
+  'rejected',
+  'expired',
+  'stale',
+  'failed',
+]);
+
 export const reminderOccasionEnum = pgEnum('reminder_occasion', [
   'week_start',
   'shabbat',
@@ -151,8 +171,13 @@ export const groups = pgTable('groups', {
   // shows. The times themselves live in shabbat_times.
   shabbatCity: varchar('shabbat_city', { length: 64 }),
   shabbatCommunity: varchar('shabbat_community', { length: 16 }).notNull().default('sephardi'),
+  // Bakery MCP key (src/lib/mcp-key.ts): only its SHA-256 is stored; the key is
+  // shown once when issued. GET /api/groups/:id drops the hash from its reply.
+  mcpKeyHash: varchar('mcp_key_hash', { length: 64 }),
+  mcpKeyCreatedAt: timestamp('mcp_key_created_at', { withTimezone: true }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+},
+(table) => [uniqueIndex('groups_mcp_key_hash_idx').on(table.mcpKeyHash)]);
 
 export const groupMembers = pgTable(
   'group_members',
@@ -514,6 +539,32 @@ export const shabbatTimes = pgTable('shabbat_times', {
   data: jsonb('data').$type<StoredShabbatTimes>().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Changes Claude proposed through the bakery MCP, and the change log: what was
+// proposed, the values it was made from (before), what it would set (after), the
+// Hebrew text the owner approved, and who decided when. Never pruned.
+export const changeProposals = pgTable(
+  'change_proposals',
+  {
+    id: serial('id').primaryKey(),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    kind: proposalKindEnum('kind').notNull(),
+    target: jsonb('target').$type<unknown>().notNull(),
+    // Null = the row did not exist (before) or is removed (after).
+    before: jsonb('before').$type<unknown>(),
+    after: jsonb('after').$type<unknown>(),
+    summaryHe: text('summary_he').notNull(),
+    status: proposalStatusEnum('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    decidedByUserId: integer('decided_by_user_id').references(() => users.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    error: text('error'),
+  },
+  (table) => [index('change_proposals_group_status_idx').on(table.groupId, table.status)]
+);
 
 export const payments = pgTable('payments', {
   id: serial('id').primaryKey(),
