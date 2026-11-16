@@ -70,11 +70,13 @@ export default function Dashboard() {
     if (activeGroupRole === 'driver') router.replace('/miniapp/deliveries');
   }, [activeGroupRole, router]);
 
-  // Ready-deliveries count for the dashboard entry-point (owner/manager).
+  // Deliveries count for the dashboard entry-point (owner/manager): the ready
+  // ones plus today's not yet marked ready, so the screen where they are marked
+  // stays reachable when the kitchen forgot to mark any.
   useEffect(() => {
     if (!canManage) return;
-    apiFetch<{ deliveries: unknown[] }>('/deliveries')
-      .then((r) => setDeliveryCount(r.deliveries.length))
+    apiFetch<{ deliveries: unknown[]; notReady: unknown[] }>('/deliveries')
+      .then((r) => setDeliveryCount(r.deliveries.length + r.notReady.length))
       .catch((err) => console.warn('[dashboard] deliveries count failed:', err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage]);

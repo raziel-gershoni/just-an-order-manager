@@ -2,7 +2,7 @@ import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, customers, orderItems, customerPhones } from '@/db/schema';
 import { eq, inArray, asc, sql } from 'drizzle-orm';
-import { readyDeliveriesWhere } from '@/lib/ready-deliveries';
+import { notReadyTodayWhere, readyDeliveriesWhere } from '@/lib/ready-deliveries';
 import { orderTotalFromGoods } from '@/lib/order-pricing';
 import { orderPaymentsTotals } from '@/lib/order-payments';
 import { normalizePhoneNumber } from '@/lib/phone-links';
@@ -100,6 +100,24 @@ export const GET = withGroup(async (_request, auth, groupId) => {
     };
   });
 
+  const today = todayStr();
   const { asapInToday } = await getOrderDisplay(groupId);
-  return jsonResponse({ deliveries, today: todayStr(), asapInToday });
+
+  // Today's deliveries still waiting to be marked ready, listed under the run
+  // with a ready button, so a stop the kitchen forgot to mark isn't missed.
+  const notReady = await db
+    .select({
+      id: orders.id,
+      deliveryDate: orders.deliveryDate,
+      status: orders.status,
+      customerName: customers.name,
+      address: customers.address,
+      city: customers.city,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .where(notReadyTodayWhere(groupId, today, asapInToday))
+    .orderBy(asc(orders.deliveryDate), asc(orders.id));
+
+  return jsonResponse({ deliveries, notReady, today, asapInToday });
 });

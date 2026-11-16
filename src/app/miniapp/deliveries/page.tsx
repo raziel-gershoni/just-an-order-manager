@@ -14,7 +14,7 @@ import { waHref } from '@/lib/phone-links';
 import { buildWazeLink } from '@/lib/delivery';
 import { formatDateRelative } from '@/lib/date-utils';
 import type { RouteAnswer } from '@/lib/delivery-route';
-import { Banknote, Check, Map as MapIcon, MessageCircle, MessageCircleOff, Navigation, Truck } from 'lucide-react';
+import { Banknote, Check, CircleCheck, Map as MapIcon, MessageCircle, MessageCircleOff, Navigation, Truck } from 'lucide-react';
 
 interface Delivery {
   id: number;
@@ -29,6 +29,16 @@ interface Delivery {
   phone: string | null;
   /** False when the owner marked every one of the customer's numbers as off WhatsApp. */
   phoneHasWhatsapp: boolean;
+}
+
+/** A delivery of today that nobody has marked ready yet. */
+interface NotReady {
+  id: number;
+  deliveryDate: string | null;
+  status: string;
+  customerName: string;
+  address: string | null;
+  city: string | null;
 }
 
 function DeliveryCard({
@@ -166,6 +176,7 @@ export default function DeliveriesPage() {
   const toast = useToast();
   const { activeGroupRole } = useGroup();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [notReady, setNotReady] = useState<NotReady[]>([]);
   // The server's day and the bakery's בהקדם switch, which place undated orders.
   const [display, setDisplay] = useState<{ today: string; asapInToday: boolean }>({ today: '', asapInToday: false });
   const [route, setRoute] = useState<RouteAnswer | null>(null);
@@ -192,23 +203,64 @@ export default function DeliveriesPage() {
     if (seq === routeSeq.current) setRoute(answer);
   }
 
-  useEffect(() => {
-    const list = apiFetch<{ deliveries: Delivery[]; today: string; asapInToday: boolean }>('/deliveries')
+  // Orders whose status flip already landed this session.
+  const deliveredRef = useRef<Set<number>>(new Set());
+
+  function loadList() {
+    return apiFetch<{ deliveries: Delivery[]; notReady: NotReady[]; today: string; asapInToday: boolean }>('/deliveries')
       .then((r) => {
-        setDeliveries(r.deliveries);
+        // A stop delivered here whose payment failed is no longer on the
+        // server's list, yet its card is the driver's only way to retry the
+        // payment: a re-read keeps it.
+        setDeliveries((prev) => [
+          ...r.deliveries,
+          ...prev.filter((x) => deliveredRef.current.has(x.id) && !r.deliveries.some((y) => y.id === x.id)),
+        ]);
+        setNotReady(r.notReady);
         setDisplay({ today: r.today, asapInToday: r.asapInToday });
       })
       .catch((err) => {
         console.error('[deliveries] load failed:', err);
         toast.error(t('deliv.load_failed'));
       });
+  }
+
+  useEffect(() => {
     // The skeleton stays until both have answered.
-    Promise.all([list, loadRoute()]).finally(() => setLoading(false));
+    Promise.all([loadList(), loadRoute()]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Orders whose status flip already landed this session.
-  const deliveredRef = useRef<Set<number>>(new Set());
+  // The stop delivered last, where a re-planned route starts; home before the first.
+  const lastDeliveredRef = useRef<number | undefined>(undefined);
+
+  // Marks a delivery the kitchen forgot as ready, so it joins the run. Same
+  // transition as the order page and the bot's buttons, customer message
+  // included. A waiting order is approved first: the state machine has no
+  // step straight from waiting to ready.
+  async function markReady(n: NotReady) {
+    setBusy(n.id);
+    try {
+      if (n.status === 'pending') {
+        await apiFetch(`/orders/${n.id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'confirmed' }),
+        });
+      }
+      await apiFetch(`/orders/${n.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'ready', notifyCustomer: true }),
+      });
+      toast.success(t('deliv.marked_ready'));
+    } catch (e) {
+      console.error(`[deliveries] marking order ${n.id} ready failed (was ${n.status}):`, e);
+      toast.error(t('orders.update_failed'));
+    }
+    // Either way the lists are read again: a half-done step (approved, not yet
+    // ready) must show as it now is, and a ready stop joins the route.
+    await Promise.all([loadList(), loadRoute(lastDeliveredRef.current)]);
+    setBusy(null);
+  }
 
   async function complete(d: Delivery, collect: boolean) {
     // The status already landed, which only happens here after a collect whose
@@ -245,6 +297,7 @@ export default function DeliveriesPage() {
       // first keeps the card gone from the list while the new order is fetched;
       // the Maps link would still lead back to this stop, so it waits for the new one.
       setRoute((r) => (r ? { ...r, stops: r.stops.filter((x) => x.orderId !== d.id), maps: null } : r));
+      lastDeliveredRef.current = d.id;
       void loadRoute(d.id);
       // The delivery is done either way, but cash that was not recorded has to
       // be said out loud rather than confirmed. A driver has only this tab, so
@@ -266,7 +319,7 @@ export default function DeliveriesPage() {
   }
 
   const byId = new Map(deliveries.map((d) => [d.id, d]));
-  const dateTag = (d: Delivery) =>
+  const dateTag = (d: { deliveryDate: string | null }) =>
     d.deliveryDate == null
       ? t('delivery.asap')
       : d.deliveryDate === display.today
@@ -396,6 +449,53 @@ export default function DeliveriesPage() {
     </>
   );
 
+  const notReadySection = notReady.length > 0 && (
+    <section>
+      <div className="mb-2 flex items-center gap-3">
+        <span className="font-display text-sm font-bold">{t('deliv.not_ready')}</span>
+        <span className="flex-1 border-t border-dashed border-border" />
+        <span className="font-mono text-xs text-muted-foreground">{notReady.length}</span>
+      </div>
+      <div className="space-y-3">
+        {notReady.map((n) => (
+          <Card key={n.id} className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-semibold">{n.customerName}</span>
+                {[t(`status.${n.status}`), dateTag(n)]
+                  .filter((x): x is string => !!x)
+                  .map((label) => (
+                    <span
+                      key={label}
+                      className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {label}
+                    </span>
+                  ))}
+              </div>
+              {(n.address || n.city) && (
+                <div className="text-sm text-muted-foreground">
+                  {[n.address, n.city].filter(Boolean).join(', ')}
+                </div>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              loading={busy === n.id}
+              disabled={busy !== null && busy !== n.id}
+              onClick={() => markReady(n)}
+            >
+              <CircleCheck className="h-4 w-4" />
+              {t('deliv.mark_ready')}
+            </Button>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <>
       {/* Owner and managers come here from the homepage and need the way back;
@@ -413,14 +513,18 @@ export default function DeliveriesPage() {
         {loading ? (
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
         ) : deliveries.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
-            <Truck className="h-8 w-8 opacity-40" />
-            <p className="text-sm">{t('deliv.none')}</p>
-          </div>
+          <>
+            <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
+              <Truck className="h-8 w-8 opacity-40" />
+              <p className="text-sm">{t('deliv.none')}</p>
+            </div>
+            {notReadySection}
+          </>
         ) : (
           <>
             {noteKey && <p className="text-sm text-muted-foreground">{t(noteKey)}</p>}
             {route?.status === 'ok' ? routeList : dateGroups}
+            {notReadySection}
           </>
         )}
       </div>
