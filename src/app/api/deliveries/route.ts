@@ -2,14 +2,14 @@ import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, customers, orderItems, customerPhones } from '@/db/schema';
 import { eq, inArray, asc, sql } from 'drizzle-orm';
-import { openDeliveriesWhere } from '@/lib/open-deliveries';
+import { readyDeliveriesWhere } from '@/lib/ready-deliveries';
 import { orderTotalFromGoods } from '@/lib/order-pricing';
 import { orderPaymentsTotals } from '@/lib/order-payments';
 import { normalizePhoneNumber } from '@/lib/phone-links';
 import { todayStr } from '@/lib/date-utils';
 import { getOrderDisplay } from '@/lib/asap';
 
-// Active deliveries (is_delivery, not yet delivered/cancelled) for owner/manager
+// Ready deliveries (is_delivery, status ready) for owner/manager
 // /driver. Returns the navigable address + private notes + the amount to collect
 // (the total less anything paid in advance).
 export const GET = withGroup(async (_request, auth, groupId) => {
@@ -35,7 +35,7 @@ export const GET = withGroup(async (_request, auth, groupId) => {
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .where(openDeliveriesWhere(groupId))
+    .where(readyDeliveriesWhere(groupId))
     .orderBy(asc(orders.deliveryDate), asc(orders.id));
 
   const ids = rows.map((r) => r.id);

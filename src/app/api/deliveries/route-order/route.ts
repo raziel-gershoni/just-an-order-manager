@@ -2,12 +2,12 @@ import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { orders, customers, groups } from '@/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
-import { openDeliveriesWhere } from '@/lib/open-deliveries';
+import { readyDeliveriesWhere } from '@/lib/ready-deliveries';
 import { geoQueryText } from '@/lib/route-order';
 import { planRoute, type GeoCache, type RouteAnswer } from '@/lib/delivery-route';
 import { geocode, driveMatrix, type GeocodeResult } from '@/lib/google-maps';
 
-// The open deliveries in least-driving order from home and back (the deliveries
+// The ready deliveries in least-driving order from home and back (the deliveries
 // screen applies it to its own list). Every outcome, a Google failure included,
 // is a 200 with a status: the screen falls back to its date-grouped list.
 // ?from=<orderId>: a delivered order of this group whose address starts the route.
@@ -49,7 +49,7 @@ export const GET = withGroup(async (request, auth, groupId) => {
     })
     .from(orders)
     .innerJoin(customers, eq(orders.customerId, customers.id))
-    .where(openDeliveriesWhere(groupId))
+    .where(readyDeliveriesWhere(groupId))
     .orderBy(asc(orders.deliveryDate), asc(orders.id));
 
   // Only a delivered delivery of this group may start the route; anything else

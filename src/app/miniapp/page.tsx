@@ -70,7 +70,7 @@ export default function Dashboard() {
     if (activeGroupRole === 'driver') router.replace('/miniapp/deliveries');
   }, [activeGroupRole, router]);
 
-  // Active-deliveries count for the dashboard entry-point (owner/manager).
+  // Ready-deliveries count for the dashboard entry-point (owner/manager).
   useEffect(() => {
     if (!canManage) return;
     apiFetch<{ deliveries: unknown[] }>('/deliveries')

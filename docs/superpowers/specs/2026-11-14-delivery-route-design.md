@@ -8,14 +8,14 @@ The owner delivers personally, typically about 3 stops in one run that starts an
 
 ## What it does
 
-The deliveries screen (`/miniapp/deliveries`) shows the open deliveries as **one numbered list in route order**: the order with the least total driving time, from the bakery's home address, through every stop, and back home.
+The deliveries screen (`/miniapp/deliveries`) shows the ready deliveries as **one numbered list in route order**: the order with the least total driving time, from the bakery's home address, through every stop, and back home.
 
-- **What's in the route (owner):** every undelivered delivery the screen already lists (`is_delivery`, status not delivered or cancelled), **whatever its date**, including בהקדם and overdue ones. A delivery dated next week joins today's route too. That's accepted; a date filter can come later if it bites.
+- **What's in the route (owner, changed 2026-11-16):** only deliveries marked **ready** (`is_delivery`, status `ready`), whatever their date. The screen and the route share this one filter (`src/lib/ready-deliveries.ts`). An order still waiting or baking is not on the screen until it is marked ready. *Before:* every undelivered delivery of any date was listed, and the owner found the one long list a mess.
 - **There's no button (owner):** the route is worked out each time the screen opens.
 - **It updates as you go (owner):** when a stop is marked delivered on this screen (נמסר or מסר ונגבה), the remaining stops re-sort, starting from the stop just delivered and ending at home. While the new order is being fetched, the list keeps the previous order minus the delivered stop, which is already a sensible order. *My call:* the "where am I" point is the delivered stop's address, not the phone's GPS. No location permission is asked for.
 - **"Least driving" means driving time with no live traffic (my call).** Traffic-aware times cost more and are capped lower, and for a few local stops the order rarely changes.
 - **Who sees it (owner):** the same people who see the deliveries screen today: the owner, managers and drivers. Bakers never see it, and the server already refuses them.
-- **The homepage is untouched (owner, option A).** Its "משלוחים היום" button already opens this screen.
+- **The homepage is untouched (owner, option A).** Its "משלוחים היום" button already opens this screen, and its count is the ready deliveries. The screen has a back button for the owner and managers; for a driver it is home, so it has none.
 
 ## The screen
 
@@ -106,7 +106,7 @@ Step-by-step instructions with exact values come at build time. Until the key ex
 
 ## Anti-goals
 
-- **Hiding a delivery.** Every open delivery stays on the screen, in the route or under בלי כתובת.
+- **Hiding a ready delivery.** Every ready delivery stays on the screen, in the route or under בלי כתובת.
 - **Losing what the screen already does.** That covers collecting, the paid badge, notes, WhatsApp and Waze, plus the existing retry safety of "delivered, but the payment failed".
 - **Exposing the Google key** to the browser.
 - **Re-geocoding unchanged addresses** on every open.

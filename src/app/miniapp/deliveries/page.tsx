@@ -7,6 +7,8 @@ import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { useGroup } from '@/hooks/useGroup';
 import { ASAP_GROUP_KEY, groupByDeliveryDate } from '@/lib/order-grouping';
 import { waHref } from '@/lib/phone-links';
 import { buildWazeLink } from '@/lib/delivery';
@@ -162,6 +164,7 @@ export default function DeliveriesPage() {
   const t = useT();
   const lang = useLang();
   const toast = useToast();
+  const { activeGroupRole } = useGroup();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   // The server's day and the bakery's בהקדם switch, which place undated orders.
   const [display, setDisplay] = useState<{ today: string; asapInToday: boolean }>({ today: '', asapInToday: false });
@@ -395,10 +398,16 @@ export default function DeliveriesPage() {
 
   return (
     <>
-      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/90 px-5 py-3 backdrop-blur">
-        <Truck className="h-5 w-5 text-primary" />
-        <h1 className="text-lg font-bold">{t('deliv.today')}</h1>
-      </div>
+      {/* Owner and managers come here from the homepage and need the way back;
+          for a driver this screen is home, so there is nothing to go back to. */}
+      {activeGroupRole === 'owner' || activeGroupRole === 'manager' ? (
+        <PageHeader title={t('deliv.today')} />
+      ) : (
+        <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-border bg-background/90 px-5 py-3 backdrop-blur">
+          <Truck className="h-5 w-5 text-primary" />
+          <h1 className="text-lg font-bold">{t('deliv.today')}</h1>
+        </div>
+      )}
 
       <div className="space-y-5 p-5">
         {loading ? (

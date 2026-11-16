@@ -843,7 +843,7 @@ const translations: Record<string, string> = {
   // Delivery — deliveries view
   'deliv.today': 'משלוחים היום',
   'deliv.upcoming': 'משלוחים קרובים',
-  'deliv.none': 'אין משלוחים',
+  'deliv.none': 'אין משלוחים מוכנים. משלוח מופיע כאן כשההזמנה מסומנת כמוכנה',
   'deliv.load_failed': 'טעינת המשלוחים נכשלה',
   'deliv.collect': 'לגבייה',
   'deliv.mark_delivered': 'נמסר',
