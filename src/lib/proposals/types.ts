@@ -7,7 +7,7 @@ import { recipeInputSchema, type WriteResult } from '@/lib/catalog-writes';
  * tool per kind) and the one place the proposal engine's kinds are typed.
  */
 
-export type ProposalKind = 'recipe' | 'size_price' | 'bread_price' | 'deal' | 'ingredient_price';
+export type ProposalKind = 'recipe' | 'size_price' | 'bread_price' | 'deal' | 'ingredient_price' | 'home_made';
 
 const id = z.number().int().positive();
 const price = z.string().regex(PRICE_INPUT);
@@ -57,12 +57,25 @@ export const ingredientPriceProposalSchema = z.object({
   pricePerKg: price,
 });
 
+export const homeMadeProposalSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  ingredientKind: z.enum(['starter', 'other']),
+  /** The one flour it is made from; required, a proposal never leaves it unset. */
+  flourName: z.string().trim().min(1).max(100),
+  liquidName: z.string().trim().min(1).max(100),
+  liquidKind: z.enum(['water', 'other']),
+  /** Liquid per 100 g flour. */
+  hydrationPct: z.number().int().min(1).max(1000),
+  wasteFactor: z.number().min(1).max(10),
+});
+
 export type ProposalInput =
   | ({ kind: 'recipe' } & z.infer<typeof recipeProposalSchema>)
   | ({ kind: 'size_price' } & z.infer<typeof sizePriceProposalSchema>)
   | ({ kind: 'bread_price' } & z.infer<typeof breadPriceProposalSchema>)
   | ({ kind: 'deal' } & z.infer<typeof dealProposalSchema>)
-  | ({ kind: 'ingredient_price' } & z.infer<typeof ingredientPriceProposalSchema>);
+  | ({ kind: 'ingredient_price' } & z.infer<typeof ingredientPriceProposalSchema>)
+  | ({ kind: 'home_made' } & z.infer<typeof homeMadeProposalSchema>);
 
 export type Prepared = {
   /** Ids that say what the proposal is about: kept so approval re-reads the same thing. */

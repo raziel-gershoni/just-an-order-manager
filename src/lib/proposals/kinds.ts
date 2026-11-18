@@ -6,6 +6,7 @@ import {
   breadSizeTiers,
   breadRecipeIngredients,
   ingredientPrices,
+  homeMadeIngredients,
 } from '@/db/schema';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
@@ -19,9 +20,12 @@ import {
   upsertTier,
   deleteTier,
   upsertIngredientPrice,
+  upsertHomeMade,
   type RecipeInput,
   type WriteResult,
 } from '@/lib/catalog-writes';
+import { totalHydration, type HydrationSplits } from '@/lib/hydration';
+import { loadHydrationSplits } from '@/lib/ingredient-costs';
 import type { KindHandler, Prepared, ProposalInput, ProposalKind } from './types';
 
 /**
@@ -154,14 +158,6 @@ function canonRecipe(rows: { name: string; kind: IngredientKind; pct: number | s
     });
 }
 
-/** Water as a percentage of flour: the number a baker knows a dough by. */
-export function hydrationPct(rows: { kind: IngredientKind; pct: number | string }[]): number {
-  const sum = (kind: IngredientKind) =>
-    rows.filter((r) => r.kind === kind).reduce((s, r) => s + Number(r.pct), 0);
-  const flour = sum('flour');
-  return flour > 0 ? (sum('water') / flour) * 100 : 0;
-}
-
 async function readRecipe(groupId: number, breadTypeId: number) {
   if (!(await findBread(groupId, breadTypeId))) return MISSING;
   const rows = await db
@@ -179,7 +175,8 @@ async function readRecipe(groupId: number, breadTypeId: number) {
 function recipeSummary(
   breadName: string,
   before: CanonIngredient[] | null,
-  after: { name: string; kind: IngredientKind; pct: string; sortOrder: number }[]
+  after: { name: string; kind: IngredientKind; pct: string; sortOrder: number }[],
+  splits: HydrationSplits
 ): string {
   const beforeByKey = new Map((before ?? []).map((b) => [`${b.name}|${b.kind}`, b]));
   const afterKeys = new Set(after.map((a) => `${a.name}|${a.kind}`));
@@ -208,8 +205,11 @@ function recipeSummary(
 
   const out = [fill('proposal.recipe_title', { bread: breadName }), ...lines.map((l) => l.text)];
   if (before) {
-    const from = pct1(hydrationPct(before));
-    const to = pct1(hydrationPct(after));
+    // Total hydration: the flour and liquid inside home-made rows count.
+    const total = (rows: { name: string; kind: IngredientKind; pct: string }[]) =>
+      totalHydration(rows.map((r) => ({ name: r.name, kind: r.kind, pct: Number(r.pct) })), splits).pct ?? 0;
+    const from = pct1(total(before));
+    const to = pct1(total(after));
     if (from !== to) out.push(fill('proposal.recipe_hydration', { from, to }));
   }
   return out.join('\n');
@@ -237,7 +237,7 @@ async function prepareRecipe(groupId: number, input: Of<'recipe'>): Promise<Prep
   // pct_of_finished is numeric(7,4): a bigger value would fail at approval.
   if (after.some((i) => Number(i.pct) >= 1000)) return fail('An ingredient is over 1000% of the finished loaf');
 
-  const before = await readRecipe(groupId, input.breadTypeId);
+  const [before, splits] = await Promise.all([readRecipe(groupId, input.breadTypeId), loadHydrationSplits(groupId)]);
   if (!Array.isArray(before) && before !== null) return fail(NOT_FOUND);
   if (sameBefore(before, canonRecipe(after))) return fail(ALREADY);
 
@@ -254,7 +254,7 @@ async function prepareRecipe(groupId: number, input: Of<'recipe'>): Promise<Prep
           sortOrder: i.sortOrder,
         })),
       },
-      summaryHe: recipeSummary(bread.name, before, after),
+      summaryHe: recipeSummary(bread.name, before, after, splits),
     },
   };
 }
@@ -427,6 +427,9 @@ async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_pri
   }
   if (!PRICE_INPUT.test(input.pricePerKg)) return fail('Price must look like 35 or 35.50');
   if (tooBig(input.pricePerKg)) return fail(OVER_MAX);
+  if (await findHomeMade(groupId, name, input.ingredientKind)) {
+    return fail(`${name} is home-made: propose_home_made_ingredient sets it`);
+  }
 
   const target = { name, ingredientKind: input.ingredientKind };
   const before = (await readIngredientPrice(groupId, target)) as { pricePerKg: string | null };
@@ -443,6 +446,126 @@ async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_pri
           ? fill('proposal.ingredient_price_new', { name, to: money(after.pricePerKg) })
           : fill('proposal.ingredient_price', { name, from: money(before.pricePerKg), to: money(after.pricePerKg) }),
     },
+  };
+}
+
+// ---- home_made ----
+
+type HomeMadeBefore = {
+  settings: {
+    flourName: string | null;
+    liquidName: string;
+    liquidKind: 'water' | 'other';
+    hydrationPct: number;
+    wasteFactor: string;
+  } | null;
+  typedPrice: string | null;
+};
+
+async function findHomeMade(groupId: number, name: string, kind: IngredientKind) {
+  const [row] = await db
+    .select({
+      flourName: homeMadeIngredients.flourName,
+      liquidName: homeMadeIngredients.liquidName,
+      liquidKind: homeMadeIngredients.liquidKind,
+      hydrationPct: homeMadeIngredients.hydrationPct,
+      wasteFactor: homeMadeIngredients.wasteFactor,
+    })
+    .from(homeMadeIngredients)
+    .where(
+      and(
+        eq(homeMadeIngredients.groupId, groupId),
+        eq(homeMadeIngredients.name, name),
+        eq(homeMadeIngredients.kind, kind)
+      )
+    )
+    .limit(1);
+  return row;
+}
+
+async function readHomeMade(
+  groupId: number,
+  target: { name: string; ingredientKind: IngredientKind }
+): Promise<HomeMadeBefore> {
+  const row = await findHomeMade(groupId, target.name, target.ingredientKind);
+  const typed = (await readIngredientPrice(groupId, target)) as { pricePerKg: string | null };
+  return {
+    settings: row
+      ? {
+          flourName: row.flourName,
+          liquidName: row.liquidName,
+          liquidKind: row.liquidKind as 'water' | 'other',
+          hydrationPct: row.hydrationPct,
+          wasteFactor: Number(row.wasteFactor).toFixed(2),
+        }
+      : null,
+    typedPrice: typed.pricePerKg,
+  };
+}
+
+async function prepareHomeMade(groupId: number, input: Of<'home_made'>): Promise<Prep> {
+  const name = input.name.trim();
+  const flourName = input.flourName.trim();
+  const liquidName = input.liquidName.trim();
+  if (name === '' || flourName === '' || liquidName === '') return fail('Names cannot be blank');
+  if ([name, flourName, liquidName].some(hasControlChars)) {
+    return fail('Names cannot contain line breaks or control characters');
+  }
+  if (liquidName === name && input.liquidKind === 'other') {
+    return fail('A home-made ingredient cannot be its own liquid');
+  }
+  if (input.liquidKind === 'other') {
+    // The liquid of kind "starter" cannot be expressed (liquidKind is water|other),
+    // so a starter's name given as an "other" liquid is refused by name.
+    if (await findHomeMade(groupId, liquidName, 'starter')) {
+      return fail(`${liquidName} is a starter: a home-made ingredient cannot be made from another home-made ingredient`);
+    }
+    if (await findHomeMade(groupId, liquidName, 'other')) {
+      return fail(`${liquidName} is home-made: a home-made ingredient cannot be made from another home-made ingredient`);
+    }
+  }
+
+  const target = { name, ingredientKind: input.ingredientKind };
+  const before = await readHomeMade(groupId, target);
+  const after = {
+    flourName,
+    liquidName,
+    liquidKind: input.liquidKind,
+    hydrationPct: input.hydrationPct,
+    wasteFactor: input.wasteFactor.toFixed(2),
+  };
+  if (before.settings && sameBefore(before.settings, after)) return fail(ALREADY);
+
+  const fields: { label: string; from: string | null; to: string; changed: boolean }[] = [
+    { label: t('proposal.home_made_flour'), from: before.settings?.flourName ?? null, to: flourName, changed: before.settings?.flourName !== flourName },
+    { label: t('proposal.home_made_liquid'), from: before.settings?.liquidName ?? null, to: liquidName, changed: before.settings?.liquidName !== liquidName },
+    {
+      label: t('proposal.home_made_hydration'),
+      from: before.settings ? `${before.settings.hydrationPct}%` : null,
+      to: `${after.hydrationPct}%`,
+      changed: before.settings?.hydrationPct !== after.hydrationPct,
+    },
+    {
+      label: t('proposal.home_made_waste'),
+      from: before.settings?.wasteFactor ?? null,
+      to: after.wasteFactor,
+      changed: before.settings?.wasteFactor !== after.wasteFactor,
+    },
+  ];
+  const lines = fields
+    .filter((f) => f.changed)
+    .map((f) =>
+      before.settings && f.from !== null
+        ? fill('proposal.home_made_field', { label: f.label, from: f.from, to: f.to })
+        : fill('proposal.home_made_field_new', { label: f.label, to: f.to })
+    );
+  // A new row (or an unset flour) lists every field, so the card says the whole setup.
+  const out = [fill('proposal.home_made_title', { name }), ...lines];
+  if (before.typedPrice !== null) out.push(fill('proposal.home_made_drops_price', { price: money(before.typedPrice) }));
+
+  return {
+    ok: true,
+    prepared: { target, before, after, summaryHe: out.join('\n') },
   };
 }
 
@@ -484,5 +607,22 @@ export const KINDS: Record<ProposalKind, KindHandler> = {
         kind: target.ingredientKind as IngredientKind,
         pricePerKg: (after as { pricePerKg: string }).pricePerKg,
       }),
+  },
+  home_made: {
+    prepare: (g, i) => prepareHomeMade(g, i as Of<'home_made'>),
+    readBefore: (g, target) =>
+      readHomeMade(g, { name: String(target.name), ingredientKind: target.ingredientKind as IngredientKind }),
+    apply: (g, target, after) => {
+      const a = after as NonNullable<HomeMadeBefore['settings']>;
+      return upsertHomeMade(g, {
+        name: String(target.name),
+        kind: target.ingredientKind as 'starter' | 'other',
+        flourName: a.flourName,
+        liquidName: a.liquidName,
+        liquidKind: a.liquidKind,
+        hydrationPct: a.hydrationPct,
+        wasteFactor: Number(a.wasteFactor),
+      });
+    },
   },
 };

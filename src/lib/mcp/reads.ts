@@ -11,11 +11,17 @@ import {
   groups,
 } from '@/db/schema';
 import { israelToday } from '@/lib/date-utils';
-import { loadBreadsForCosting, loadIngredientsInUse, loadPriceBook, loadPriceRows } from '@/lib/ingredient-costs';
-import { costScaledRecipe, priceKey, starterPricePerKg } from '@/lib/cost';
+import {
+  loadBreadsForCosting,
+  loadHydrationSplits,
+  loadIngredientsInUse,
+  loadPriceBook,
+  loadPriceRows,
+} from '@/lib/ingredient-costs';
+import { costScaledRecipe, homeMadePricePerKg, priceKey } from '@/lib/cost';
 import { buildIncomeReport } from '@/lib/income-report';
 import { KIND_DISPLAY_ORDER, scaleRecipe, withBakersPercents, type IngredientKind } from '@/lib/recipe';
-import { hydrationPct } from '@/lib/proposals/kinds';
+import { totalHydration } from '@/lib/hydration';
 
 /**
  * What the bakery MCP lets Claude read. Every function is scoped to one bakery
@@ -150,15 +156,19 @@ export interface RecipeView {
   breadTypeId: number;
   name: string;
   updatedAt: string;
+  /** Total hydration: counts the flour and liquid inside home-made ingredients. */
   hydrationPct: number;
+  /** Starters with no settings yet, which the hydration leaves out. */
+  hydrationLeavesOut: string[];
   ingredients: { name: string; kind: IngredientKind; pctOfFinished: number; bakersPct: number }[];
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 export async function getRecipes(groupId: number, breadTypeId?: number): Promise<RecipeView[]> {
-  const [breads, stamps] = await Promise.all([
+  const [breads, splits, stamps] = await Promise.all([
     loadBreadsForCosting(groupId),
+    loadHydrationSplits(groupId),
     db
       .select({ breadTypeId: breadRecipes.breadTypeId, updatedAt: breadRecipes.updatedAt })
       .from(breadRecipes)
@@ -171,11 +181,16 @@ export async function getRecipes(groupId: number, breadTypeId?: number): Promise
     if (breadTypeId !== undefined && bread.breadTypeId !== breadTypeId) continue;
     if (bread.ingredients.length === 0) continue;
     const withBakers = withBakersPercents({ ingredients: bread.ingredients });
+    const hydration = totalHydration(
+      bread.ingredients.map((i) => ({ name: i.name, kind: i.kind, pct: i.pctOfFinished })),
+      splits
+    );
     out.push({
       breadTypeId: bread.breadTypeId,
       name: bread.breadTypeName,
       updatedAt: (updated.get(bread.breadTypeId) ?? new Date(0)).toISOString(),
-      hydrationPct: round1(hydrationPct(bread.ingredients.map((i) => ({ kind: i.kind, pct: i.pctOfFinished })))),
+      hydrationPct: round1(hydration.pct ?? 0),
+      hydrationLeavesOut: hydration.leavesOut,
       ingredients: withBakers.ingredients.map((i) => ({
         name: i.name,
         kind: i.kind,
@@ -195,24 +210,54 @@ export async function getIngredientPrices(groupId: number) {
     loadPriceBook(groupId),
     loadIngredientsInUse(groupId),
   ]);
-  const derived = starterPricePerKg(book);
   const prices = rows
     .map((r) => ({ name: r.name, kind: r.kind, pricePerKg: money(Number(r.pricePerKg)) }))
     .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
+
+  // Saved rows, plus every starter in a recipe that has none yet (not set up).
+  const saved = Object.values(book.homeMade).map((h) => {
+    const derived = homeMadePricePerKg(h, book);
+    return {
+      name: h.name,
+      kind: h.kind as IngredientKind,
+      setUp: h.flourName !== null,
+      flourName: h.flourName,
+      liquidName: h.liquidName as string | null,
+      liquidKind: h.liquidKind as string | null,
+      hydrationPct: h.hydrationPct as number | null,
+      wasteFactor: h.wasteFactor as number | null,
+      derivedPricePerKg: derived === null ? null : money(derived),
+    };
+  });
+  const missing = inUse
+    .filter((i) => i.kind === 'starter' && !(priceKey(i.name, i.kind) in book.homeMade))
+    .map((i) => ({
+      name: i.name,
+      kind: i.kind,
+      setUp: false,
+      flourName: null as string | null,
+      liquidName: null as string | null,
+      liquidKind: null as string | null,
+      hydrationPct: null as number | null,
+      wasteFactor: null as number | null,
+      derivedPricePerKg: null as string | null,
+    }));
+  const homeMade = [...saved, ...missing].sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
+
+  // costScaledRecipe's own rule: a starter, or an `other` with settings, is priced
+  // from its settings (and unpriced when they cannot price it); anything else
+  // needs a typed price.
   const unpricedInUse = inUse
-    .filter((i) => (i.kind === 'starter' ? derived === null : book.pricePerKg[priceKey(i.name, i.kind)] === undefined))
+    .filter((i) => {
+      const settings = book.homeMade[priceKey(i.name, i.kind)];
+      if (i.kind === 'starter' || settings !== undefined) {
+        return settings === undefined || homeMadePricePerKg(settings, book) === null;
+      }
+      return book.pricePerKg[priceKey(i.name, i.kind)] === undefined;
+    })
     .map((i) => ({ name: i.name, kind: i.kind, usedBy: i.usedBy }))
     .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
-  return {
-    prices,
-    starter: {
-      flourName: book.starter.flourName,
-      hydrationPct: book.starter.hydrationPct,
-      wasteFactor: book.starter.wasteFactor,
-      derivedPricePerKg: derived === null ? null : money(derived),
-    },
-    unpricedInUse,
-  };
+  return { prices, homeMade, unpricedInUse };
 }
 
 // ---- get_loaf_costs ----
