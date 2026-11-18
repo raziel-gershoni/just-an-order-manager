@@ -412,7 +412,7 @@ export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Prom
     )
     DELETE FROM ingredient_prices
     WHERE group_id = ${groupId} AND name = ${name} AND kind = 'other'::ingredient_kind
-      AND ${s.kind} = 'other'
+      AND ${s.kind}::text = 'other'
   `);
   return { ok: true };
 }
