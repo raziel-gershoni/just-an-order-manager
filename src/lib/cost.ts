@@ -20,19 +20,28 @@ export function priceKey(name: string, kind: IngredientKind): string {
   return `${name}|${kind}`;
 }
 
-export interface StarterSettings {
-  /** Which flour feeds the starter. Null = not configured. */
+export type HomeMadeKind = 'starter' | 'other';
+export type LiquidKind = 'water' | 'other';
+
+/** How one home-made ingredient (a starter, tangzhong) is made. */
+export interface HomeMadeSettings {
+  name: string;
+  kind: HomeMadeKind;
+  /** The one flour it is made from. Null = not set up yet. */
   flourName: string | null;
-  /** Water as a percentage of the starter's flour. 100 = equal parts. */
+  liquidName: string;
+  liquidKind: LiquidKind;
+  /** Liquid per 100 g flour, 1..1000. 100 = equal parts. */
   hydrationPct: number;
-  /** Multiplier for the portion discarded between feeds. 1 = no waste. */
+  /** Multiplier for what is discarded or lost on the way. 1..10. */
   wasteFactor: number;
 }
 
 export interface PriceBook {
   /** ₪ per kg, keyed by priceKey(). A missing key means no price; 0 is a real price. */
   pricePerKg: Record<string, number>;
-  starter: StarterSettings;
+  /** Home-made ingredients by priceKey(); their ₪/kg is derived, never typed. */
+  homeMade: Record<string, HomeMadeSettings>;
 }
 
 export interface CostedIngredient {
@@ -42,7 +51,7 @@ export interface CostedIngredient {
   /** null when nothing prices this ingredient — never coerced to 0. */
   pricePerKg: number | null;
   cost: number | null;
-  /** True for starter, whose ₪/kg is computed rather than typed. */
+  /** True for home-made rows, whose ₪/kg is computed rather than typed. */
   derived: boolean;
 }
 
@@ -73,38 +82,47 @@ function waterPricePerKg(book: PriceBook): number {
 }
 
 /**
- * ₪/kg of maintained starter, derived from the flour that feeds it.
+ * ₪/kg of one home-made ingredient, from the flour and liquid it is made of.
  *
- * At hydration h the starter is 100 parts flour to h parts water, so a kilo of
- * it is 100/(100+h) flour by weight. The waste factor scales the whole thing:
- * a starter fed twice for every use costs more per gram used than its
- * ingredients, because the discard is paid for too.
+ * At hydration h it is 100 parts flour to h parts liquid, so a kilo is
+ * 100/(100+h) flour by weight. The waste factor scales the whole thing: what
+ * is discarded or lost is paid for too.
  *
- * Returns null when the flour is unset or unpriced — starter then reads as
- * unpriced rather than free.
+ * Returns null when the flour is unset or unpriced, or an `other` liquid has no
+ * price (or is itself home-made) — it then reads as unpriced, never free.
  */
-export function starterPricePerKg(book: PriceBook): number | null {
-  const { flourName, hydrationPct, wasteFactor } = book.starter;
-  if (!flourName) return null;
-
-  const flour = book.pricePerKg[priceKey(flourName, 'flour')];
+export function homeMadePricePerKg(s: HomeMadeSettings, book: PriceBook): number | null {
+  if (!s.flourName) return null;
+  const flour = book.pricePerKg[priceKey(s.flourName, 'flour')];
   if (flour === undefined) return null;
 
-  const flourShare = 100 / (100 + hydrationPct);
-  const waterShare = hydrationPct / (100 + hydrationPct);
-  return (flourShare * flour + waterShare * waterPricePerKg(book)) * wasteFactor;
+  let liquid: number;
+  if (s.liquidKind === 'water') {
+    liquid = book.pricePerKg[priceKey(s.liquidName, 'water')] ?? waterPricePerKg(book);
+  } else {
+    const key = priceKey(s.liquidName, 'other');
+    if (key in book.homeMade) return null;
+    const typed = book.pricePerKg[key];
+    if (typed === undefined) return null;
+    liquid = typed;
+  }
+
+  const flourShare = 100 / (100 + s.hydrationPct);
+  const liquidShare = s.hydrationPct / (100 + s.hydrationPct);
+  return (flourShare * flour + liquidShare * liquid) * s.wasteFactor;
 }
 
 /** Cost one already-scaled recipe. Reads unrounded grams — never the display integer. */
 export function costScaledRecipe(scaled: ScaledRecipe, book: PriceBook): LoafCost {
-  const derivedStarter = starterPricePerKg(book);
-
   const ingredients: CostedIngredient[] = scaled.ingredients.map((i) => {
-    // A starter row is priced by the starter settings, not by a price row of
-    // its own: the owner never buys מחמצת, so there is no invoice to type in.
-    const derived = i.kind === 'starter';
+    // A starter row is priced from its home-made settings only (never bought,
+    // so no invoice to type in); an `other` row is derived once it has settings.
+    const settings = book.homeMade[priceKey(i.name, i.kind)];
+    const derived = i.kind === 'starter' || settings !== undefined;
     const pricePerKg = derived
-      ? derivedStarter
+      ? settings
+        ? homeMadePricePerKg(settings, book)
+        : null
       : (book.pricePerKg[priceKey(i.name, i.kind)] ?? null);
 
     return {

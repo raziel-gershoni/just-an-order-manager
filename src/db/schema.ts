@@ -78,6 +78,7 @@ export const proposalKindEnum = pgEnum('change_proposal_kind', [
   'bread_price',
   'deal',
   'ingredient_price',
+  'home_made',
 ]);
 
 export const proposalStatusEnum = pgEnum('change_proposal_status', [
@@ -144,11 +145,7 @@ export const groups = pgTable('groups', {
   // Master switch for the automatic twice-weekly recurring-order reminders.
   // Off by default — the feature ships dark until the owner turns it on.
   recurringRemindersEnabled: boolean('recurring_reminders_enabled').notNull().default(false),
-  // מחמצת is never bought, so it has no invoice price: it is fed from a flour
-  // the baker picks, at a hydration, and part of it is discarded between feeds.
-  // These three settings price every starter in the bakery (src/lib/cost.ts).
-  // Null flour means "not configured yet" — starter then reads as unpriced
-  // rather than free.
+  // Unused since 0036 (home_made_ingredients); dropped in a later migration.
   starterFlourName: varchar('starter_flour_name', { length: 100 }),
   starterHydrationPct: integer('starter_hydration_pct').notNull().default(100),
   starterWasteFactor: decimal('starter_waste_factor', { precision: 4, scale: 2 })
@@ -367,6 +364,40 @@ export const ingredientPrices = pgTable(
   },
   (table) => [
     uniqueIndex('ingredient_prices_group_name_kind_idx').on(
+      table.groupId,
+      table.name,
+      table.kind
+    ),
+  ]
+);
+
+/**
+ * How each home-made ingredient (any starter, tangzhong) is made: one flour and
+ * one liquid at a hydration, with a waste factor. Its ₪/kg is derived from them
+ * (src/lib/cost.ts) and its flour and liquid count in total hydration
+ * (src/lib/hydration.ts). Keyed on (name, kind) like ingredient_prices; an
+ * `other` ingredient is either typed-price or home-made, never both (the writes
+ * in catalog-writes.ts enforce it). Null flour = not set up yet.
+ */
+export const homeMadeIngredients = pgTable(
+  'home_made_ingredients',
+  {
+    id: serial('id').primaryKey(),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    name: varchar('name', { length: 100 }).notNull(),
+    kind: ingredientKindEnum('kind').notNull(),
+    flourName: varchar('flour_name', { length: 100 }),
+    liquidName: varchar('liquid_name', { length: 100 }).notNull(),
+    liquidKind: ingredientKindEnum('liquid_kind').notNull(),
+    hydrationPct: integer('hydration_pct').notNull(),
+    wasteFactor: decimal('waste_factor', { precision: 4, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('home_made_ingredients_group_name_kind_idx').on(
       table.groupId,
       table.name,
       table.kind
