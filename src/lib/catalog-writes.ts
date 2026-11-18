@@ -429,11 +429,7 @@ export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Prom
   return { ok: true };
 }
 
-/**
- * One ingredient's price per kilo. A single upsert: unlike the price-book save
- * it prunes nothing, so a proposal for one ingredient cannot drop the others.
- * A home-made kind's price is derived from its settings, never stored here.
- */
+/** Removes one ingredient price; a home-made kind has none stored. */
 export async function deleteIngredientPrice(
   groupId: number,
   name: string,
@@ -452,6 +448,11 @@ export async function deleteIngredientPrice(
   return { ok: true };
 }
 
+/**
+ * One ingredient's price per kilo. A single upsert: unlike the price-book save
+ * it prunes nothing, so a proposal for one ingredient cannot drop the others.
+ * A home-made kind's price is derived from its settings, never stored here.
+ */
 export async function upsertIngredientPrice(
   groupId: number,
   p: { name: string; kind: IngredientKind; pricePerKg: string }

@@ -413,7 +413,8 @@ async function applyDeal(groupId: number, target: Record<string, unknown>, after
 async function priceUsers(groupId: number, name: string, kind: IngredientKind): Promise<string[]> {
   const list = await loadIngredientsForPricing(groupId);
   const key = priceKey(name, kind);
-  return list.find((i) => priceKey(i.name, i.kind) === key)?.usedBy ?? [];
+  // Sorted so the stored and re-read lists compare equal whatever order the loaders give.
+  return [...(list.find((i) => priceKey(i.name, i.kind) === key)?.usedBy ?? [])].sort();
 }
 
 async function readIngredientPrice(groupId: number, target: Record<string, unknown>) {
@@ -496,7 +497,6 @@ type HomeMadeSettingsBefore = {
     wasteFactor: string;
   } | null;
 };
-type HomeMadeBefore = HomeMadeSettingsBefore;
 
 async function findHomeMade(groupId: number, name: string, kind: IngredientKind) {
   const [row] = await db
@@ -522,9 +522,9 @@ async function findHomeMade(groupId: number, name: string, kind: IngredientKind)
 async function readHomeMade(
   groupId: number,
   target: { name: string; ingredientKind: IngredientKind; remove?: boolean }
-): Promise<HomeMadeBefore & { usedBy?: string[] }> {
+): Promise<HomeMadeSettingsBefore & { usedBy?: string[] }> {
   const row = await findHomeMade(groupId, target.name, target.ingredientKind);
-  const settings: HomeMadeBefore['settings'] = row
+  const settings: HomeMadeSettingsBefore['settings'] = row
       ? {
           flourName: row.flourName,
           liquidName: row.liquidName,
@@ -536,7 +536,7 @@ async function readHomeMade(
   if (target.remove === true) {
     const inUse = await loadIngredientsInUse(groupId);
     const key = priceKey(target.name, target.ingredientKind);
-    return { settings, usedBy: inUse.find((i) => priceKey(i.name, i.kind) === key)?.usedBy ?? [] };
+    return { settings, usedBy: [...(inUse.find((i) => priceKey(i.name, i.kind) === key)?.usedBy ?? [])].sort() };
   }
   return { settings };
 }
@@ -669,7 +669,7 @@ export const KINDS: Record<ProposalKind, KindHandler> = {
       }),
     apply: (g, target, after) => {
       if (target.remove === true) return deleteHomeMade(g, String(target.name), target.ingredientKind as HomeMadeKind);
-      const a = after as NonNullable<HomeMadeBefore['settings']>;
+      const a = after as NonNullable<HomeMadeSettingsBefore['settings']>;
       return upsertHomeMade(g, {
         name: String(target.name),
         kind: target.ingredientKind as HomeMadeKind,
