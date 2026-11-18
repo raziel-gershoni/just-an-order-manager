@@ -145,7 +145,7 @@ export function RecipeEditor({
   const [copying, setCopying] = useState(false);
   // Home-made splits from the group read: the only source while this bread has
   // no recipe yet (creating one), when the per-recipe read has none.
-  const [groupSplits, setGroupSplits] = useState<HydrationSplits>({});
+  const [groupSplits, setGroupSplits] = useState<HydrationSplits | null>(null);
 
   // Ingredient prices, for the one-line cost readout. Owner/manager only — the
   // endpoint 403s for bakers, so asking would just log a failure.
@@ -333,16 +333,18 @@ export function RecipeEditor({
 
   const previewPcts = useMemo(() => pctOfFlourFromRows(rows), [rows]);
   // Grams stand in for the percentage: the hydration ratio does not depend on scale.
-  const previewHydration = useMemo(
-    () =>
-      totalHydration(
-        rows
-          .filter((r) => r.name.trim())
-          .map((r) => ({ name: r.name.trim(), kind: r.kind, pct: Number(r.grams) || 0 })),
-        recipe?.hydrationSplits ?? groupSplits
-      ),
-    [rows, recipe, groupSplits]
-  );
+  // Null until some split source loaded: without the home-made splits the
+  // line would count a starter or tangzong as plain flour/water, so it hides.
+  const previewHydration = useMemo(() => {
+    const splits = recipe?.hydrationSplits ?? groupSplits;
+    if (!splits) return null;
+    return totalHydration(
+      rows
+        .filter((r) => r.name.trim())
+        .map((r) => ({ name: r.name.trim(), kind: r.kind, pct: Number(r.grams) || 0 })),
+      splits
+    );
+  }, [rows, recipe, groupSplits]);
 
   /** Ids of rows whose trimmed name collides with an earlier row's. */
   const duplicateRowIds = useMemo(() => {
