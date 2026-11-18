@@ -299,95 +299,137 @@ export const homeMadeSchema = z.object({
 type PriceInput = { name: string; kind: IngredientKind; pricePerKg: string };
 
 /**
- * The cross-table rules the two tables cannot enforce themselves: no typed
- * starter price (it is derived), an `other` ingredient is typed-price or
- * home-made never both, and no key twice in either list. Readable messages,
- * because the unique index would answer with a Postgres error.
+ * The rules for a prices body, pure: no typed starter price (it is derived) and
+ * no key twice. Readable messages, because the unique index would answer with a
+ * Postgres error. That a key is not home-made needs the database; see
+ * saveIngredientBook.
  */
-export function validateIngredientBook(
-  prices: PriceInput[],
-  homeMade: HomeMadeSettings[]
-): { ok: true } | { ok: false; error: string } {
+export function validateIngredientBook(prices: PriceInput[]): { ok: true } | { ok: false; error: string } {
   const nameOf = (key: string) => key.slice(0, key.lastIndexOf('|'));
   const priceKeys = prices.map((p) => priceKey(p.name, p.kind));
-  const homeKeys = homeMade.map((h) => priceKey(h.name, h.kind));
 
   if (prices.some((p) => p.kind === 'starter')) {
     return { ok: false, error: 'The starter price is derived from the starter settings' };
   }
   const dupPrice = priceKeys.find((k, i) => priceKeys.indexOf(k) !== i);
   if (dupPrice) return { ok: false, error: `Ingredient "${nameOf(dupPrice)}" appears twice` };
-  const dupHome = homeKeys.find((k, i) => homeKeys.indexOf(k) !== i);
-  if (dupHome) return { ok: false, error: `Home-made ingredient "${nameOf(dupHome)}" appears twice` };
-  const both = homeKeys.find((k) => priceKeys.includes(k));
-  if (both) {
-    return { ok: false, error: `Ingredient "${nameOf(both)}" is home-made; it cannot also have a typed price` };
-  }
   return { ok: true };
 }
 
 /**
- * Replace the group's whole price book and home-made list in ONE statement
- * (neon-http has no interactive transactions, so a two-statement swap can
- * strand the group half-saved).
+ * Names go onto plain-text cards: a line break in one could fake a line of the
+ * card. Format characters (\p{Cf}) include the bidi overrides and isolates: one
+ * at the end of a name would reorder the rest of its card line.
+ */
+export const hasControlChars = (s: string) => /[\p{Cc}\p{Cf}\u2028\u2029]/u.test(s);
+
+/**
+ * The settings rules both the catalogue editor and an MCP proposal enforce:
+ * names present and clean, and a liquid that is neither the entry itself nor
+ * another home-made ingredient. An English message, or null when fine. A null
+ * flour is allowed (not set up yet); a blank one is not.
+ */
+export async function checkHomeMade(groupId: number, s: HomeMadeSettings): Promise<string | null> {
+  const name = s.name.trim();
+  const flourName = s.flourName === null ? null : s.flourName.trim();
+  const liquidName = s.liquidName.trim();
+  if (name === '' || flourName === '' || liquidName === '') return 'Names cannot be blank';
+  if ([name, flourName ?? '', liquidName].some(hasControlChars)) {
+    return 'Names cannot contain line breaks or control characters';
+  }
+  if (s.liquidKind !== 'other') return null;
+  if (liquidName === name) return 'A home-made ingredient cannot be its own liquid';
+  // A liquid of kind "starter" cannot be expressed (liquidKind is water|other),
+  // so a starter's name given as an "other" liquid is refused by name.
+  const rows = await db
+    .select({ kind: homeMadeIngredients.kind })
+    .from(homeMadeIngredients)
+    .where(
+      and(
+        eq(homeMadeIngredients.groupId, groupId),
+        eq(homeMadeIngredients.name, liquidName),
+        inArray(homeMadeIngredients.kind, ['starter', 'other'])
+      )
+    );
+  if (rows.some((r) => r.kind === 'starter')) {
+    return `${liquidName} is a starter: a home-made ingredient cannot be made from another home-made ingredient`;
+  }
+  if (rows.some((r) => r.kind === 'other')) {
+    return `${liquidName} is home-made: a home-made ingredient cannot be made from another home-made ingredient`;
+  }
+  return null;
+}
+
+/**
+ * Replace the group's whole price book in ONE statement (neon-http has no
+ * interactive transactions, so a two-statement swap can strand a half-saved
+ * book). Prices only: it never touches home_made_ingredients.
+ *
+ * A typed price for a key that has a home-made row is refused (400). The check
+ * is in the same statement, so a home-made row saved a moment earlier cannot
+ * slip past a read that went before: when any such key is in the body, the
+ * upsert and the prune do nothing and the statement answers the blocked names.
  *
  * Upsert-then-prune rather than delete-then-insert. Every statement inside a
  * WITH sees the same snapshot, so a DELETE in one CTE does not clear the way
  * for an INSERT in another: the unique index still sees the old rows and
  * rejects the new ones. The prune and the upsert touch disjoint keys, so
- * sharing a snapshot is safe. The lists arrive as JSON through
+ * sharing a snapshot is safe. The list arrives as JSON through
  * jsonb_to_recordset so an empty list stays a valid statement.
  */
-export async function saveIngredientBook(
-  groupId: number,
-  prices: PriceInput[],
-  homeMade: HomeMadeSettings[]
-): Promise<WriteResult> {
+export async function saveIngredientBook(groupId: number, prices: PriceInput[]): Promise<WriteResult> {
   const pricesJson = JSON.stringify(prices.map((p) => ({ name: p.name.trim(), kind: p.kind, price: p.pricePerKg })));
-  const homeJson = JSON.stringify(
-    homeMade.map((h) => ({
-      name: h.name.trim(),
-      kind: h.kind,
-      flour: h.flourName?.trim() ?? null,
-      liquid: h.liquidName.trim(),
-      liquid_kind: h.liquidKind,
-      hydration: h.hydrationPct,
-      waste: h.wasteFactor.toFixed(2),
-    }))
-  );
-  await db.execute(sql`
+  const res = await db.execute(sql`
     WITH p_in AS (
            SELECT name, kind, price::numeric AS price_per_kg
            FROM jsonb_to_recordset(${pricesJson}::jsonb) AS x(name varchar, kind ingredient_kind, price text)
          ),
-         h_in AS (
-           SELECT name, kind, flour, liquid, liquid_kind, hydration, waste::numeric AS waste
-           FROM jsonb_to_recordset(${homeJson}::jsonb)
-             AS x(name varchar, kind ingredient_kind, flour varchar, liquid varchar,
-                  liquid_kind ingredient_kind, hydration integer, waste text)
+         blocked AS (
+           SELECT p.name FROM p_in p
+           JOIN home_made_ingredients h ON h.group_id = ${groupId} AND h.name = p.name AND h.kind = p.kind
          ),
          p_up AS (
            INSERT INTO ingredient_prices (group_id, name, kind, price_per_kg, created_at, updated_at)
            SELECT ${groupId}, name, kind, price_per_kg, now(), now() FROM p_in
+           WHERE NOT EXISTS (SELECT 1 FROM blocked)
            ON CONFLICT (group_id, name, kind)
            DO UPDATE SET price_per_kg = EXCLUDED.price_per_kg, updated_at = now()
-         ),
-         h_up AS (
-           INSERT INTO home_made_ingredients
-             (group_id, name, kind, flour_name, liquid_name, liquid_kind, hydration_pct, waste_factor, created_at, updated_at)
-           SELECT ${groupId}, name, kind, flour, liquid, liquid_kind, hydration, waste, now(), now() FROM h_in
-           ON CONFLICT (group_id, name, kind)
-           DO UPDATE SET flour_name = EXCLUDED.flour_name, liquid_name = EXCLUDED.liquid_name,
-                         liquid_kind = EXCLUDED.liquid_kind, hydration_pct = EXCLUDED.hydration_pct,
-                         waste_factor = EXCLUDED.waste_factor, updated_at = now()
          ),
          p_del AS (
            DELETE FROM ingredient_prices
            WHERE group_id = ${groupId} AND (name, kind) NOT IN (SELECT name, kind FROM p_in)
+             AND NOT EXISTS (SELECT 1 FROM blocked)
          )
-    DELETE FROM home_made_ingredients
-    WHERE group_id = ${groupId} AND (name, kind) NOT IN (SELECT name, kind FROM h_in)
+    SELECT name FROM blocked
   `);
+  const blocked = (res as unknown as { rows: { name: string }[] }).rows;
+  if (blocked.length > 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Ingredient "${blocked[0].name}" is home-made; its price is derived from its settings`,
+    };
+  }
+  return { ok: true };
+}
+
+/** Removes one home-made ingredient's settings. A recipe row using the name stays; it reads as not set up. */
+export async function deleteHomeMade(
+  groupId: number,
+  name: string,
+  kind: 'starter' | 'other'
+): Promise<WriteResult> {
+  const deleted = await db
+    .delete(homeMadeIngredients)
+    .where(
+      and(
+        eq(homeMadeIngredients.groupId, groupId),
+        eq(homeMadeIngredients.name, name.trim()),
+        eq(homeMadeIngredients.kind, kind)
+      )
+    )
+    .returning({ id: homeMadeIngredients.id });
+  if (deleted.length === 0) return { ok: false, status: 404, error: 'Home-made ingredient not found' };
   return { ok: true };
 }
 

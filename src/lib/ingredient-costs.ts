@@ -140,6 +140,132 @@ export async function loadIngredientsInUse(groupId: number): Promise<InUseIngred
   return [...byKey.values()];
 }
 
+/**
+ * The prices screen's list: what recipes use, plus every flour and liquid a
+ * saved home-made entry is made from that no recipe lists (a rye starter is fed
+ * rye flour no bread has on its own). Those carry the entry names as `usedBy`.
+ * A key that is itself home-made is left out: its price is derived, and a typed
+ * one is refused on save.
+ */
+export async function loadIngredientsForPricing(groupId: number): Promise<InUseIngredient[]> {
+  const [inUse, homeMade] = await Promise.all([loadIngredientsInUse(groupId), loadHomeMade(groupId)]);
+  const byKey = new Map(inUse.map((i) => [priceKey(i.name, i.kind), i]));
+  const homeKeys = new Set(homeMade.map((h) => priceKey(h.name, h.kind)));
+  const out = [...inUse];
+  const feed = (name: string, kind: IngredientKind, entry: string) => {
+    const key = priceKey(name, kind);
+    if (homeKeys.has(key)) return;
+    let item = byKey.get(key);
+    if (!item) {
+      item = { name, kind, usedBy: [] };
+      byKey.set(key, item);
+      out.push(item);
+    } else if (inUse.includes(item)) {
+      return; // a recipe already lists it
+    }
+    if (!item.usedBy.includes(entry)) item.usedBy.push(entry);
+  };
+  for (const h of homeMade) {
+    if (h.flourName) feed(h.flourName, 'flour', h.name);
+    feed(h.liquidName, h.liquidKind, h.name);
+  }
+  return out;
+}
+
+/**
+ * A saved price whose ingredient is on no list the screen shows. Free-text
+ * ingredient names mean a typo mints a new identity and orphans the old price;
+ * showing orphans is how that becomes visible the day it happens.
+ */
+export function orphanPrices(prices: PriceRow[], listed: { name: string; kind: IngredientKind }[]): PriceRow[] {
+  const keys = new Set(listed.map((i) => priceKey(i.name, i.kind)));
+  return prices.filter((p) => !keys.has(priceKey(p.name, p.kind)));
+}
+
+export interface HomeMadeEntry {
+  name: string;
+  kind: 'starter' | 'other';
+  /** Null for a starter a recipe uses that has no settings yet. */
+  saved: HomeMadeSettings | null;
+  usedBy: string[];
+}
+
+export interface HomeMadeCatalog {
+  entries: HomeMadeEntry[];
+  flourOptions: string[];
+  liquidOptions: { name: string; kind: 'water' | 'other' }[];
+  book: PriceBook;
+}
+
+/** What the catalogue's "מכינים בעצמנו" section reads: entries plus the pickers' options. */
+export async function loadHomeMadeCatalog(groupId: number): Promise<HomeMadeCatalog> {
+  const [inUse, homeMade, prices, book] = await Promise.all([
+    loadIngredientsInUse(groupId),
+    loadHomeMade(groupId),
+    loadPriceRows(groupId),
+    loadPriceBook(groupId),
+  ]);
+  const usedByKey = new Map(inUse.map((i) => [priceKey(i.name, i.kind), i.usedBy]));
+
+  const entries: HomeMadeEntry[] = homeMade.map((h) => ({
+    name: h.name,
+    kind: h.kind,
+    saved: h,
+    usedBy: usedByKey.get(priceKey(h.name, h.kind)) ?? [],
+  }));
+  const savedKeys = new Set(homeMade.map((h) => priceKey(h.name, h.kind)));
+  for (const i of inUse) {
+    if (i.kind === 'starter' && !savedKeys.has(priceKey(i.name, i.kind))) {
+      entries.push({ name: i.name, kind: 'starter', saved: null, usedBy: i.usedBy });
+    }
+  }
+  entries.sort(
+    (a, b) => Number(a.kind !== 'starter') - Number(b.kind !== 'starter') || a.name.localeCompare(b.name, 'he')
+  );
+
+  const flours = new Set<string>();
+  for (const i of inUse) if (i.kind === 'flour') flours.add(i.name);
+  for (const p of prices) if (p.kind === 'flour') flours.add(p.name);
+  for (const h of homeMade) if (h.flourName) flours.add(h.flourName);
+
+  const liquids = new Map<string, { name: string; kind: 'water' | 'other' }>();
+  const addLiquid = (name: string, kind: IngredientKind) => {
+    if (kind !== 'water' && kind !== 'other') return;
+    if (kind === 'other' && savedKeys.has(priceKey(name, kind))) return;
+    liquids.set(priceKey(name, kind), { name, kind });
+  };
+  for (const i of inUse) addLiquid(i.name, i.kind);
+  for (const p of prices) addLiquid(p.name, p.kind);
+  // What a saved entry already uses stays offered, whatever it is now.
+  for (const h of homeMade) liquids.set(priceKey(h.liquidName, h.liquidKind), { name: h.liquidName, kind: h.liquidKind });
+
+  return {
+    entries,
+    flourOptions: [...flours].sort((a, b) => a.localeCompare(b, 'he')),
+    liquidOptions: [...liquids.values()].sort(
+      (a, b) => Number(a.kind !== 'water') - Number(b.kind !== 'water') || a.name.localeCompare(b.name, 'he')
+    ),
+    book,
+  };
+}
+
+/**
+ * Recipe name suggestions by kind: every name in the recipes plus every saved
+ * home-made entry under its kind, so a baker can pick "מחמצת שיפון" before any
+ * recipe uses it.
+ */
+export function buildNamesByKind(
+  recipeRows: { name: string; kind: IngredientKind }[],
+  homeMade: { name: string; kind: IngredientKind }[]
+): Record<IngredientKind, string[]> {
+  const out: Record<IngredientKind, string[]> = { flour: [], water: [], salt: [], starter: [], other: [] };
+  for (const r of [...recipeRows, ...homeMade]) {
+    if (!out[r.kind].includes(r.name)) out[r.kind].push(r.name);
+  }
+  for (const kind of Object.keys(out) as IngredientKind[]) out[kind].sort((a, b) => a.localeCompare(b, 'he'));
+  return out;
+}
+
 /** Every bread with its recipe percentages and its enabled sizes' weights. */
 export async function loadBreadsForCosting(groupId: number): Promise<BreadForCosting[]> {
   const types = await db

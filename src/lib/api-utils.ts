@@ -21,6 +21,18 @@ export function refuseUnlessManager(request: Request, auth: AuthContext, groupId
   return null;
 }
 
+/**
+ * Ingredient costs and home-made settings are money: owner and manager only,
+ * enforced in the API rather than in JSX. Null when the request may go on.
+ */
+export function denyBakers(auth: AuthContext, groupId: number): Response | null {
+  const role = auth.memberships.find((m) => m.groupId === groupId)?.role;
+  if (role === 'baker' || role === 'driver') {
+    return errorResponse('Only owners and managers can see ingredient costs', 403);
+  }
+  return null;
+}
+
 type AuthenticatedHandler = (
   request: Request,
   auth: AuthContext

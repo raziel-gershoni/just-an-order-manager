@@ -21,6 +21,8 @@ import {
   deleteTier,
   upsertIngredientPrice,
   upsertHomeMade,
+  checkHomeMade,
+  hasControlChars,
   type RecipeInput,
   type WriteResult,
 } from '@/lib/catalog-writes';
@@ -74,12 +76,6 @@ export function sameBefore(a: unknown, b: unknown): boolean {
 function fill(key: string, vars: Record<string, string | number>): string {
   return t(key).replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
-
-/** Names go onto a plain-text card: a line break in one could fake a line of the card. */
-// Format characters (\p{Cf}) include the bidi overrides and isolates: one at the
-// end of a name would reorder the rest of its card line, so the price shown
-// would not be the price stored.
-const hasControlChars = (s: string) => /[\p{Cc}\p{Cf}\u2028\u2029]/u.test(s);
 
 /** Every price column is numeric(10,2): a bigger value would only fail at approval. */
 const OVER_MAX = 'Price is too large (the maximum is 99999999.99)';
@@ -514,23 +510,16 @@ async function prepareHomeMade(groupId: number, input: Of<'home_made'>): Promise
   const name = input.name.trim();
   const flourName = input.flourName.trim();
   const liquidName = input.liquidName.trim();
-  if (name === '' || flourName === '' || liquidName === '') return fail('Names cannot be blank');
-  if ([name, flourName, liquidName].some(hasControlChars)) {
-    return fail('Names cannot contain line breaks or control characters');
-  }
-  if (liquidName === name && input.liquidKind === 'other') {
-    return fail('A home-made ingredient cannot be its own liquid');
-  }
-  if (input.liquidKind === 'other') {
-    // The liquid of kind "starter" cannot be expressed (liquidKind is water|other),
-    // so a starter's name given as an "other" liquid is refused by name.
-    if (await findHomeMade(groupId, liquidName, 'starter')) {
-      return fail(`${liquidName} is a starter: a home-made ingredient cannot be made from another home-made ingredient`);
-    }
-    if (await findHomeMade(groupId, liquidName, 'other')) {
-      return fail(`${liquidName} is home-made: a home-made ingredient cannot be made from another home-made ingredient`);
-    }
-  }
+  const refusal = await checkHomeMade(groupId, {
+    name,
+    kind: input.ingredientKind as 'starter' | 'other',
+    flourName,
+    liquidName,
+    liquidKind: input.liquidKind,
+    hydrationPct: input.hydrationPct,
+    wasteFactor: input.wasteFactor,
+  });
+  if (refusal) return fail(refusal);
 
   const target = { name, ingredientKind: input.ingredientKind };
   const before = await readHomeMade(groupId, target);
