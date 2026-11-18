@@ -98,6 +98,9 @@ export function CopyRecipeFlow({
               <span className="text-xs text-muted-foreground tabular-nums">
                 {s.ingredients.length} {t('settings.ingredients_count')}
                 {s.hydrationPct != null && ` · ${t('settings.total_hydration')} ${s.hydrationPct}%`}
+                {s.hydrationPct != null &&
+                  (s.hydrationLeavesOut?.length ?? 0) > 0 &&
+                  ` (${t('settings.hydration_leaves_out')}: ${s.hydrationLeavesOut!.join(', ')})`}
               </span>
             </button>
           ))}

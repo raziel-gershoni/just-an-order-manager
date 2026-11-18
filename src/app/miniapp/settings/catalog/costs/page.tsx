@@ -261,12 +261,17 @@ export default function CostsPage() {
           pricePerKg: value.toFixed(2),
         };
       });
+      // A starter with no saved row and no flour yet carries nothing worth
+      // saving (an `other` row marked home-made is still sent: the mark itself
+      // is the change). Sending its defaults would create a row, and a pending
+      // home-made proposal for it (made against "no settings") would then be
+      // refused as stale after any unrelated price save.
+      const homeMade = homeMadeSettings.filter(
+        (h) => h.kind !== 'starter' || h.flourName !== null || priceKey(h.name, h.kind) in savedByKey
+      );
       await apiFetch('/ingredient-prices', {
         method: 'PUT',
-        body: JSON.stringify({
-          prices,
-          homeMade: homeMadeSettings,
-        }),
+        body: JSON.stringify({ prices, homeMade }),
       });
       // Reload rather than patch local state: the save changes which prices are
       // orphaned and which ingredients are in use, and a removed orphan that
@@ -389,7 +394,9 @@ export default function CostsPage() {
                       <div className="flex items-center gap-1.5 text-sm">
                         {derived === null ? (
                           <span className="text-xs text-muted-foreground">
-                            {t('costs.home_made_not_set_up')}
+                            {book.homeMade[key]?.flourName
+                              ? `${t('costs.missing_price')}: ${missingForHomeMade(book.homeMade[key], book) ?? ''}`
+                              : t('costs.home_made_not_set_up')}
                           </span>
                         ) : (
                           <>
@@ -492,6 +499,7 @@ export default function CostsPage() {
 
         {/* HOME-MADE: starters and anything else made here, priced from what
             they are made of. */}
+        {visibleDrafts.length > 0 && (
         <Card className="space-y-4">
           <div className="space-y-1">
             <h2 className="text-sm font-bold">{t('costs.home_made_block')}</h2>
@@ -733,6 +741,7 @@ export default function CostsPage() {
             );
           })}
         </Card>
+        )}
 
         {/* COST PER LOAF */}
         <Card className="space-y-3">

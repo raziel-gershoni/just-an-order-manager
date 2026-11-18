@@ -207,10 +207,17 @@ function recipeSummary(
   if (before) {
     // Total hydration: the flour and liquid inside home-made rows count.
     const total = (rows: { name: string; kind: IngredientKind; pct: string }[]) =>
-      totalHydration(rows.map((r) => ({ name: r.name, kind: r.kind, pct: Number(r.pct) })), splits).pct ?? 0;
-    const from = pct1(total(before));
-    const to = pct1(total(after));
-    if (from !== to) out.push(fill('proposal.recipe_hydration', { from, to }));
+      totalHydration(rows.map((r) => ({ name: r.name, kind: r.kind, pct: Number(r.pct) })), splits);
+    const afterTotal = total(after);
+    const from = pct1(total(before).pct ?? 0);
+    const to = pct1(afterTotal.pct ?? 0);
+    if (from !== to) {
+      // A starter with no settings is left out of the figure; say which.
+      const leavesOut = afterTotal.leavesOut.length
+        ? fill('proposal.recipe_hydration_leaves_out', { names: afterTotal.leavesOut.join(', ') })
+        : '';
+      out.push(fill('proposal.recipe_hydration', { from, to }) + leavesOut);
+    }
   }
   return out.join('\n');
 }

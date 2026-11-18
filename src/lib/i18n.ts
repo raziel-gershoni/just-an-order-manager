@@ -924,6 +924,7 @@ const translations: Record<string, string> = {
   'proposal.recipe_added': 'נוסף {name}: {to}%',
   'proposal.recipe_removed': 'הוסר {name}',
   'proposal.recipe_hydration': 'הידרציה: {from}% ← {to}%',
+  'proposal.recipe_hydration_leaves_out': ' (לא כולל: {names})',
   'proposal.size_price': 'מחיר {size} (לכל הלחמים בלי מחיר משלהם): ₪{from} ← ₪{to}',
   'proposal.bread_price': 'מחיר {bread}, {size}: ₪{from} ← ₪{to}',
   'proposal.bread_price_reset': 'מחיר {bread}, {size}: חוזר למחיר הגודל, ₪{to}',

@@ -73,10 +73,13 @@ export function draftToSettings(d: HomeMadeDraft, saved?: HomeMadeSettings): Hom
   // A cleared liquid name (a new one being typed) falls back to the saved
   // liquid, else water, for the same reason.
   const liquidBlank = d.liquidName.trim() === '';
+  // Same for the flour: "קמח אחר…" clears the name while a new one is typed,
+  // and saving before typing must keep the saved flour, not wipe it.
+  const flourBlank = !d.flourName?.trim();
   return {
     name: d.name,
     kind: d.kind,
-    flourName: d.flourName?.trim() ? d.flourName.trim() : null,
+    flourName: flourBlank ? (saved?.flourName ?? null) : d.flourName!.trim(),
     liquidName: liquidBlank ? (saved?.liquidName ?? WATER_NAME) : d.liquidName.trim(),
     liquidKind: liquidBlank ? (saved?.liquidKind ?? 'water') : d.liquidKind,
     hydrationPct: Math.round(clamp(d.hydration, saved?.hydrationPct ?? def.hydration, 1, 1000)),
