@@ -12,7 +12,10 @@ import {
 import { t, type Lang } from '@/lib/i18n';
 import { escapeHtml } from '@/lib/telegram-html';
 import { formatStaffItemLabel } from '@/lib/order-display';
-import { buildRecipeBlockForOrders } from '@/lib/order-recipe';
+import { aggregateRecipesForOrders, buildRecipeBlockForOrders } from '@/lib/order-recipe';
+import { loadHomeMade } from '@/lib/ingredient-costs';
+import { priceKey, type HomeMadeSettings } from '@/lib/cost';
+import type { ScaledRecipe } from '@/lib/recipe';
 import { formatWeekdayShort } from '@/lib/date-utils';
 import { getOrderDisplay, openUndated, todayCondition, undatedFirst } from '@/lib/asap';
 
@@ -265,8 +268,7 @@ export async function morningBake(
       and(
         eq(orders.groupId, groupId),
         todayCondition(today, asapInToday),
-        ne(orders.status, 'cancelled'),
-        ne(orders.status, 'delivered')
+        stillToBake()
       )
     )
     .orderBy(undatedFirst, asc(orders.id));
@@ -285,4 +287,78 @@ export async function morningBake(
   }
 
   return { today: todayLines, asap: asapLines, recipeBlock };
+}
+
+/** Orders that still need baking: the morning summary's and the prep reminder's shared status filter. */
+function stillToBake() {
+  return and(ne(orders.status, 'cancelled'), ne(orders.status, 'delivered'));
+}
+
+export type PrepLine = {
+  name: string;
+  kind: 'starter' | 'tangzhong';
+  grams: number;
+  /** What the amount is made of; null when the ingredient has no flour set up. */
+  split: { flourName: string; flourGrams: number; liquidName: string; liquidGrams: number } | null;
+};
+
+/**
+ * Every starter and tangzhong across the day's scaled recipes, summed by name
+ * and kind (first-seen order), each with its flour/liquid split from its own
+ * hydration: flour = total x 100/(100+h), liquid = total x h/(100+h).
+ */
+export function prepLinesFrom(
+  byType: { recipe: ScaledRecipe | null }[],
+  homeMade: HomeMadeSettings[]
+): PrepLine[] {
+  const totals = new Map<string, { name: string; kind: 'starter' | 'tangzhong'; grams: number }>();
+  for (const t of byType) {
+    for (const ing of t.recipe?.ingredients ?? []) {
+      if (ing.kind !== 'starter' && ing.kind !== 'tangzhong') continue;
+      const key = priceKey(ing.name, ing.kind);
+      const prev = totals.get(key);
+      if (prev) prev.grams += ing.grams;
+      else totals.set(key, { name: ing.name, kind: ing.kind, grams: ing.grams });
+    }
+  }
+  const settings = new Map(homeMade.map((h) => [priceKey(h.name, h.kind), h]));
+  return Array.from(totals.entries()).map(([key, tot]) => {
+    const h = settings.get(key);
+    const split =
+      h && h.flourName
+        ? {
+            flourName: h.flourName,
+            flourGrams: (tot.grams * 100) / (100 + h.hydrationPct),
+            liquidName: h.liquidName,
+            liquidGrams: (tot.grams * h.hydrationPct) / (100 + h.hydrationPct),
+          }
+        : null;
+    return { ...tot, split };
+  });
+}
+
+/**
+ * Tomorrow's bake for the day-before prep reminder: bread lines and how much of
+ * each starter and tangzhong to prepare. Only orders dated that day; undated
+ * (בהקדם) ones stay in the morning message. Null when nothing is ordered.
+ */
+export async function prepBake(
+  groupId: number,
+  tomorrow: string
+): Promise<{ lines: BakeLine[]; prep: PrepLine[] } | null> {
+  const rows = await db
+    .select({ id: orders.id, customerName: customers.name })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .where(and(eq(orders.groupId, groupId), eq(orders.deliveryDate, tomorrow), stillToBake()))
+    .orderBy(asc(orders.id));
+
+  const lines = await bakeLines(rows);
+  if (lines.length === 0) return null;
+
+  const [{ byType }, homeMade] = await Promise.all([
+    aggregateRecipesForOrders(rows.map((o) => o.id)),
+    loadHomeMade(groupId),
+  ]);
+  return { lines, prep: prepLinesFrom(byType, homeMade) };
 }

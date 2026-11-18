@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { t } from './i18n';
+import type { BakeLine, PrepLine } from './day-digest';
 import { sendWhatsAppTemplate } from './whatsapp';
 import { daysAgoLabel, formatWeekdayShort } from './date-utils';
 import { siteBaseUrl } from './site-url';
@@ -458,6 +459,48 @@ export async function sendMorningSummary(
 
     return lines.join('\n');
   });
+}
+
+/**
+ * The day-before prep message (Telegram HTML): tomorrow's breads, then how much
+ * of each starter and tangzhong to prepare. Grams are whole grams, like the
+ * morning recipe block; "להכין" is left out when there is nothing to prepare.
+ */
+export function prepReminderText(
+  tomorrow: string,
+  bake: { lines: BakeLine[]; prep: PrepLine[] },
+  lang: 'en' | 'he' = 'he'
+): string {
+  const lines = [`<b>📋 ${t('notify.prep_title', lang)}</b>`, formatWeekdayShort(tomorrow), ''];
+
+  const byLabel = new Map<string, number>();
+  for (const l of bake.lines) byLabel.set(l.breadTypeName, (byLabel.get(l.breadTypeName) ?? 0) + l.quantity);
+  for (const [label, qty] of byLabel) lines.push(`${esc(label)}: ${qty} ${t('notify.loaves', lang)}`);
+  const total = bake.lines.reduce((s, l) => s + l.quantity, 0);
+  lines.push(`<b>${t('notify.prep_total', lang)}:</b> ${total} ${t('notify.loaves', lang)}`);
+
+  if (bake.prep.length > 0) {
+    const g = (grams: number) => `${Math.round(grams)}ג`;
+    lines.push('', `<b>${t('notify.prep_heading', lang)}:</b>`);
+    for (const p of bake.prep) {
+      const split = p.split
+        ? ` (${esc(p.split.flourName)} ${g(p.split.flourGrams)} · ${esc(p.split.liquidName)} ${g(p.split.liquidGrams)})`
+        : '';
+      lines.push(`${esc(p.name)} ${g(p.grams)}${split}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/** Sends the prep reminder to the bakers; the caller has already checked there is something to say. */
+export async function sendPrepReminder(
+  groupId: number,
+  tomorrow: string,
+  bake: { lines: BakeLine[]; prep: PrepLine[] }
+): Promise<{ sent: number; failed: number }> {
+  if (bake.lines.length === 0) return { sent: 0, failed: 0 };
+  const recipients = await getRecipientsByRole(groupId, ['baker']);
+  return await sendToRecipients(recipients, (lang) => prepReminderText(tomorrow, bake, lang));
 }
 
 // ---- A customer's WhatsApp message, forwarded to Telegram ----

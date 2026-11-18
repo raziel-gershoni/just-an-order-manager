@@ -48,6 +48,12 @@ const SCHEDULES = [
     what: 'baking summary + approval/overdue/unpaid nudges',
   },
   {
+    id: 'razei-prep-reminder',
+    path: '/api/cron/prep-reminder',
+    cron: 'CRON_TZ=Asia/Jerusalem 0 6,20 * * *',
+    what: 'day-before prep reminder: 06:00 Sun–Fri, 20:00 Sat',
+  },
+  {
     id: 'razei-recurring-reminder',
     path: '/api/cron/recurring-reminder',
     cron: 'CRON_TZ=Asia/Jerusalem 0 10 * * *',

@@ -29,6 +29,16 @@ export function israelToday(now: Date = new Date()): { year: number; month: numb
   return { year: part('year'), month: part('month'), day: part('day') };
 }
 
+/** The hour (0-23) on the bakery's clock, whatever the server's zone. */
+export function israelHour(now: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  return Number(parts.find((p) => p.type === 'hour')?.value);
+}
+
 /**
  * The bakery's calendar day (yyyy-MM-dd) of an instant — the one place a
  * timestamp turns into an Israel date. A `timestamp` column (no zone) comes
