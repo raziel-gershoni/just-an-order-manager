@@ -9,7 +9,7 @@ import {
 } from '@/db/schema';
 import { eq, and, inArray, asc } from 'drizzle-orm';
 import type { IngredientKind } from './recipe';
-import { priceKey, type HomeMadeSettings, type PriceBook } from './cost';
+import { isHomeMadeKind, priceKey, type HomeMadeKind, type HomeMadeSettings, type PriceBook } from './cost';
 import { hydrationSplits, type HydrationSplits } from './hydration';
 
 /**
@@ -80,7 +80,7 @@ export async function loadHomeMade(groupId: number): Promise<HomeMadeSettings[]>
 
   return rows.map((r) => ({
     name: r.name,
-    // The table's CHECKs limit these to starter/other and water/other.
+    // The table's CHECKs limit these to starter/tangzhong and water/other.
     kind: r.kind as HomeMadeSettings['kind'],
     flourName: r.flourName,
     liquidName: r.liquidName,
@@ -144,17 +144,13 @@ export async function loadIngredientsInUse(groupId: number): Promise<InUseIngred
  * The prices screen's list: what recipes use, plus every flour and liquid a
  * saved home-made entry is made from that no recipe lists (a rye starter is fed
  * rye flour no bread has on its own). Those carry the entry names as `usedBy`.
- * A key that is itself home-made is left out: its price is derived, and a typed
- * one is refused on save.
  */
 export async function loadIngredientsForPricing(groupId: number): Promise<InUseIngredient[]> {
   const [inUse, homeMade] = await Promise.all([loadIngredientsInUse(groupId), loadHomeMade(groupId)]);
   const byKey = new Map(inUse.map((i) => [priceKey(i.name, i.kind), i]));
-  const homeKeys = new Set(homeMade.map((h) => priceKey(h.name, h.kind)));
   const out = [...inUse];
   const feed = (name: string, kind: IngredientKind, entry: string) => {
     const key = priceKey(name, kind);
-    if (homeKeys.has(key)) return;
     let item = byKey.get(key);
     if (!item) {
       item = { name, kind, usedBy: [] };
@@ -184,8 +180,8 @@ export function orphanPrices(prices: PriceRow[], listed: { name: string; kind: I
 
 export interface HomeMadeEntry {
   name: string;
-  kind: 'starter' | 'other';
-  /** Null for a starter a recipe uses that has no settings yet. */
+  kind: HomeMadeKind;
+  /** Null for a starter or tangzhong a recipe uses that has no settings yet. */
   saved: HomeMadeSettings | null;
   usedBy: string[];
 }
@@ -215,8 +211,8 @@ export async function loadHomeMadeCatalog(groupId: number): Promise<HomeMadeCata
   }));
   const savedKeys = new Set(homeMade.map((h) => priceKey(h.name, h.kind)));
   for (const i of inUse) {
-    if (i.kind === 'starter' && !savedKeys.has(priceKey(i.name, i.kind))) {
-      entries.push({ name: i.name, kind: 'starter', saved: null, usedBy: i.usedBy });
+    if (isHomeMadeKind(i.kind) && !savedKeys.has(priceKey(i.name, i.kind))) {
+      entries.push({ name: i.name, kind: i.kind, saved: null, usedBy: i.usedBy });
     }
   }
   entries.sort(
@@ -231,7 +227,6 @@ export async function loadHomeMadeCatalog(groupId: number): Promise<HomeMadeCata
   const liquids = new Map<string, { name: string; kind: 'water' | 'other' }>();
   const addLiquid = (name: string, kind: IngredientKind) => {
     if (kind !== 'water' && kind !== 'other') return;
-    if (kind === 'other' && savedKeys.has(priceKey(name, kind))) return;
     liquids.set(priceKey(name, kind), { name, kind });
   };
   for (const i of inUse) addLiquid(i.name, i.kind);
@@ -258,7 +253,7 @@ export function buildNamesByKind(
   recipeRows: { name: string; kind: IngredientKind }[],
   homeMade: { name: string; kind: IngredientKind }[]
 ): Record<IngredientKind, string[]> {
-  const out: Record<IngredientKind, string[]> = { flour: [], water: [], salt: [], starter: [], other: [] };
+  const out: Record<IngredientKind, string[]> = { flour: [], water: [], salt: [], starter: [], tangzhong: [], other: [] };
   for (const r of [...recipeRows, ...homeMade]) {
     if (!out[r.kind].includes(r.name)) out[r.kind].push(r.name);
   }

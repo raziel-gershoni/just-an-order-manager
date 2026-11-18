@@ -20,17 +20,22 @@ export const GET = withGroup(async (_request, auth, groupId) => {
   }
 });
 
+/** `create: true` is the add form: saving over an entry that exists is then refused (409). */
+const putSchema = homeMadeSchema.extend({ create: z.boolean().optional() });
+
 export const PUT = withGroup(async (request, auth, groupId) => {
   const denied = denyBakers(auth, groupId);
   if (denied) return denied;
 
-  const parsed = homeMadeSchema.safeParse(await request.json());
+  const body = await request.json();
+  const parsed = putSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
+  const { create, ...settings } = parsed.data;
 
   try {
-    const refusal = await checkHomeMade(groupId, parsed.data);
-    if (refusal) return errorResponse(refusal, 400);
-    const saved = await upsertHomeMade(groupId, parsed.data);
+    const refusal = await checkHomeMade(groupId, settings, { create });
+    if (refusal) return errorResponse(refusal.error, refusal.code === 'exists' ? 409 : 400);
+    const saved = await upsertHomeMade(groupId, settings);
     if (!saved.ok) return errorResponse(saved.error, saved.status);
   } catch (e) {
     console.error('[home-made] write failed', e);
@@ -41,7 +46,7 @@ export const PUT = withGroup(async (request, auth, groupId) => {
 
 const deleteQuery = z.object({
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['starter', 'other']),
+  kind: z.enum(['starter', 'tangzhong']),
 });
 
 export const DELETE = withGroup(async (request, auth, groupId) => {

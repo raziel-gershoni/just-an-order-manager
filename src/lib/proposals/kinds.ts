@@ -12,6 +12,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { PRICE_INPUT, canonicalOverridePrice } from '@/lib/pricing';
 import { KIND_DISPLAY_ORDER, type IngredientKind, type Recipe } from '@/lib/recipe';
+import { isHomeMadeKind, type HomeMadeKind } from '@/lib/cost';
 import {
   validateRecipe,
   saveRecipe,
@@ -425,14 +426,13 @@ async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_pri
   const name = input.name.trim();
   if (name === '') return fail('Ingredient name cannot be blank');
   if (hasControlChars(name)) return fail('Ingredient name cannot contain line breaks or control characters');
-  if (input.ingredientKind === 'starter') {
-    return fail('The starter price is derived from the starter settings and cannot be proposed');
+  if (isHomeMadeKind(input.ingredientKind)) {
+    return fail(
+      `The ${input.ingredientKind} price is derived from its settings and cannot be proposed: propose_home_made_ingredient sets it`
+    );
   }
   if (!PRICE_INPUT.test(input.pricePerKg)) return fail('Price must look like 35 or 35.50');
   if (tooBig(input.pricePerKg)) return fail(OVER_MAX);
-  if (await findHomeMade(groupId, name, input.ingredientKind)) {
-    return fail(`${name} is home-made: propose_home_made_ingredient sets it`);
-  }
 
   const target = { name, ingredientKind: input.ingredientKind };
   const before = (await readIngredientPrice(groupId, target)) as { pricePerKg: string | null };
@@ -462,7 +462,6 @@ type HomeMadeBefore = {
     hydrationPct: number;
     wasteFactor: string;
   } | null;
-  typedPrice: string | null;
 };
 
 async function findHomeMade(groupId: number, name: string, kind: IngredientKind) {
@@ -491,7 +490,6 @@ async function readHomeMade(
   target: { name: string; ingredientKind: IngredientKind }
 ): Promise<HomeMadeBefore> {
   const row = await findHomeMade(groupId, target.name, target.ingredientKind);
-  const typed = (await readIngredientPrice(groupId, target)) as { pricePerKg: string | null };
   return {
     settings: row
       ? {
@@ -502,7 +500,6 @@ async function readHomeMade(
           wasteFactor: Number(row.wasteFactor).toFixed(2),
         }
       : null,
-    typedPrice: typed.pricePerKg,
   };
 }
 
@@ -512,14 +509,14 @@ async function prepareHomeMade(groupId: number, input: Of<'home_made'>): Promise
   const liquidName = input.liquidName.trim();
   const refusal = await checkHomeMade(groupId, {
     name,
-    kind: input.ingredientKind as 'starter' | 'other',
+    kind: input.ingredientKind,
     flourName,
     liquidName,
     liquidKind: input.liquidKind,
     hydrationPct: input.hydrationPct,
     wasteFactor: input.wasteFactor,
   });
-  if (refusal) return fail(refusal);
+  if (refusal) return fail(refusal.error);
 
   const target = { name, ingredientKind: input.ingredientKind };
   const before = await readHomeMade(groupId, target);
@@ -557,7 +554,6 @@ async function prepareHomeMade(groupId: number, input: Of<'home_made'>): Promise
     );
   // A new row (or an unset flour) lists every field, so the card says the whole setup.
   const out = [fill('proposal.home_made_title', { name }), ...lines];
-  if (before.typedPrice !== null) out.push(fill('proposal.home_made_drops_price', { price: money(before.typedPrice) }));
 
   return {
     ok: true,
@@ -612,7 +608,7 @@ export const KINDS: Record<ProposalKind, KindHandler> = {
       const a = after as NonNullable<HomeMadeBefore['settings']>;
       return upsertHomeMade(g, {
         name: String(target.name),
-        kind: target.ingredientKind as 'starter' | 'other',
+        kind: target.ingredientKind as HomeMadeKind,
         flourName: a.flourName,
         liquidName: a.liquidName,
         liquidKind: a.liquidKind,

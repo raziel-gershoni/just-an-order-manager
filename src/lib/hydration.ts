@@ -1,4 +1,4 @@
-import { priceKey, type HomeMadeSettings } from './cost';
+import { isHomeMadeKind, priceKey, type HomeMadeSettings } from './cost';
 import type { IngredientKind } from './recipe';
 
 /**
@@ -38,7 +38,7 @@ export function totalHydration(
       flour += r.pct;
     } else if (r.kind === 'water') {
       liquid += r.pct;
-    } else if (r.kind === 'starter' && !leavesOut.includes(r.name)) {
+    } else if (isHomeMadeKind(r.kind) && !leavesOut.includes(r.name)) {
       leavesOut.push(r.name);
     }
   }

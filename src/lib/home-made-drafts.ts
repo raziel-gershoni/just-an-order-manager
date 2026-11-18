@@ -1,4 +1,7 @@
+import { hasControlChars } from './text-checks';
+import type { IngredientKind } from './recipe';
 import {
+  isHomeMadeKind,
   priceKey,
   type HomeMadeKind,
   type HomeMadeSettings,
@@ -26,7 +29,7 @@ export interface HomeMadeDraft {
 /** Defaults for a home-made ingredient with no saved row. */
 export const HOME_MADE_DEFAULTS: Record<HomeMadeKind, { hydration: number; waste: number }> = {
   starter: { hydration: 100, waste: 1.5 },
-  other: { hydration: 100, waste: 1 },
+  tangzhong: { hydration: 500, waste: 1 },
 };
 
 export const WATER_NAME = 'מים';
@@ -88,7 +91,7 @@ export function draftToSettings(d: HomeMadeDraft, saved?: HomeMadeSettings): Hom
 }
 
 /**
- * Initial drafts: every saved row, plus every in-use starter with none (defaults,
+ * Initial drafts: every saved row, plus every in-use starter or tangzhong with none (defaults,
  * liquid = the first in-use water name, else "מים").
  */
 export function buildDrafts(
@@ -100,8 +103,10 @@ export function buildDrafts(
   for (const s of saved) out[priceKey(s.name, s.kind)] = draftFromSettings(s);
   const water = inUse.find((i) => i.kind === 'water')?.name ?? defaultWater;
   for (const i of inUse) {
-    const key = priceKey(i.name, i.kind as HomeMadeKind);
-    if (i.kind === 'starter' && !(key in out)) out[key] = defaultDraft(i.name, 'starter', water);
+    if (!isHomeMadeKind(i.kind as IngredientKind)) continue;
+    const kind = i.kind as HomeMadeKind;
+    const key = priceKey(i.name, kind);
+    if (!(key in out)) out[key] = defaultDraft(i.name, kind, water);
   }
   return out;
 }
@@ -126,7 +131,7 @@ export const HOME_MADE_PRESETS: Record<
 > = {
   regular: { hydration: '100', waste: '1.5', kind: 'starter' },
   stiff: { hydration: '50', waste: '1.5', kind: 'starter' },
-  tangzhong: { hydration: '500', waste: '1', kind: 'other' },
+  tangzhong: { hydration: '500', waste: '1', kind: 'tangzhong' },
 };
 
 /** Which chips the editor offers: all when adding, the ones that fit the kind when editing. */
@@ -157,4 +162,20 @@ export function draftForEntry(
   defaultWater: string
 ): HomeMadeDraft {
   return entry.saved ? draftFromSettings(entry.saved) : defaultDraft(entry.name, entry.kind, defaultWater);
+}
+
+/**
+ * The name rules for one home-made entry, pure: the add form and the server
+ * share it. `exists` only applies when creating: saving over an entry is an edit.
+ */
+export function homeMadeConflict(
+  s: { name: string; kind: HomeMadeKind },
+  saved: { name: string; kind: HomeMadeKind | string }[],
+  opts: { create?: boolean }
+): { code: 'blank' | 'control_chars' | 'exists' } | null {
+  const name = s.name.trim();
+  if (name === '') return { code: 'blank' };
+  if (hasControlChars(name)) return { code: 'control_chars' };
+  if (opts.create && saved.some((e) => e.name.trim() === name && e.kind === s.kind)) return { code: 'exists' };
+  return null;
 }

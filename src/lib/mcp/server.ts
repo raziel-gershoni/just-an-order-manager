@@ -109,10 +109,10 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
       read(
         'get_recipes',
         'Get recipes',
-        'Recipes of the breads that have one: ingredients with name, kind (flour, water, salt, starter, other), pctOfFinished ' +
+        'Recipes of the breads that have one: ingredients with name, kind (flour, water, salt, starter, tangzhong, other), pctOfFinished ' +
           '(grams per 100 g of finished loaf, bake loss included, so a recipe sums to a little over 100) and bakersPct (percent of the flour), ' +
           'the total hydration and when the recipe last changed. Hydration counts the flour and liquid inside home-made ingredients ' +
-          '(starters, tangzhong) by their own hydration; hydrationLeavesOut names starters with no settings, which it cannot count. ' +
+          '(starters, tangzhong) by their own hydration; hydrationLeavesOut names starters and tangzhong with no settings, which it cannot count. ' +
           'Pass breadTypeId for one bread.',
         z.object({ breadTypeId: z.number().int().positive().optional() }),
         (args: { breadTypeId?: number }) => getRecipes(groupId, args.breadTypeId)
@@ -120,10 +120,9 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
       read(
         'get_ingredient_prices',
         'Get ingredient prices',
-        'Price per kg of each priced ingredient (name and kind); homeMade, the ingredients the bakery makes itself (every starter, and any ' +
-          'other ingredient marked so, such as tangzhong) with their flour, liquid, hydration (liquid per 100 g flour), waste factor and derived ' +
+        'Price per kg of each priced ingredient (name and kind); homeMade, the ingredients the bakery makes itself (every starter and tangzhong) with their flour, liquid, hydration (liquid per 100 g flour), waste factor and derived ' +
           'price per kg (setUp false: no flour chosen yet, so unpriced); and the ingredients used in recipes that have no price yet. ' +
-          'Starters and marked ingredients are priced from their flour, liquid, hydration and waste, not typed. ' + MONEY,
+          'Tangzhong is its own kind (recipe rows use kind "tangzhong"); only starter and tangzhong are home-made. Both are priced from their flour, liquid, hydration and waste, not typed. ' + MONEY,
         z.object({}),
         () => getIngredientPrices(groupId)
       );
@@ -181,7 +180,7 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
         'propose_ingredient_price',
         'Propose an ingredient price',
         'Set the price per kg of one ingredient, by its name and kind exactly as get_ingredient_prices shows them. ' +
-          'Only that ingredient changes. Home-made ingredients cannot be set here (use propose_home_made_ingredient). ' + MONEY,
+          'Only that ingredient changes. Starter and tangzhong prices cannot be set here (use propose_home_made_ingredient). ' + MONEY,
         ingredientPriceProposalSchema,
         (args: z.infer<typeof ingredientPriceProposalSchema>) => ({ kind: 'ingredient_price', ...args })
       );
@@ -189,8 +188,8 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
         'propose_home_made_ingredient',
         'Propose home-made ingredient settings',
         'Set how one home-made ingredient is made: one flour, one liquid, hydration (liquid per 100 g of flour) and a waste factor (1 or more), ' +
-          'by its name and kind (starter or other) as get_ingredient_prices shows them. Its price per kg is then derived from them. ' +
-          'For an "other" ingredient (such as tangzhong) this also makes it home-made and removes its typed price. ' +
+          'by its name and kind (starter or tangzhong) as get_ingredient_prices shows them. Its price per kg is then derived from them. ' +
+          'Home-made means starter or tangzhong only; an "other" ingredient is always bought and priced with propose_ingredient_price. ' +
           'Usual hydration: regular starter 100, stiff starter 50-60, tangzhong 500 (1:5). ' +
           'Names are free text; keep the existing spelling of an ingredient so recipes and prices still match it.',
         homeMadeProposalSchema,

@@ -18,7 +18,7 @@ import {
   loadPriceBook,
   loadPriceRows,
 } from '@/lib/ingredient-costs';
-import { costScaledRecipe, homeMadePricePerKg, priceKey } from '@/lib/cost';
+import { costScaledRecipe, homeMadePricePerKg, isHomeMadeKind, priceKey } from '@/lib/cost';
 import { buildIncomeReport } from '@/lib/income-report';
 import { KIND_DISPLAY_ORDER, scaleRecipe, withBakersPercents, type IngredientKind } from '@/lib/recipe';
 import { totalHydration } from '@/lib/hydration';
@@ -215,7 +215,7 @@ export async function getIngredientPrices(groupId: number) {
     .map((r) => ({ name: r.name, kind: r.kind, pricePerKg: money(Number(r.pricePerKg)) }))
     .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
 
-  // Saved rows, plus every starter in a recipe that has none yet (not set up).
+  // Saved rows, plus every starter or tangzhong in a recipe that has none yet (not set up).
   const saved = Object.values(book.homeMade).map((h) => {
     const derived = homeMadePricePerKg(h, book);
     return {
@@ -231,7 +231,7 @@ export async function getIngredientPrices(groupId: number) {
     };
   });
   const missing = inUse
-    .filter((i) => i.kind === 'starter' && !(priceKey(i.name, i.kind) in book.homeMade))
+    .filter((i) => isHomeMadeKind(i.kind) && !(priceKey(i.name, i.kind) in book.homeMade))
     .map((i) => ({
       name: i.name,
       kind: i.kind,
@@ -245,13 +245,13 @@ export async function getIngredientPrices(groupId: number) {
     }));
   const homeMade = [...saved, ...missing].sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
 
-  // costScaledRecipe's own rule: a starter, or an `other` with settings, is priced
+  // costScaledRecipe's own rule: a home-made kind (starter, tangzhong) is priced
   // from its settings (and unpriced when they cannot price it); anything else
   // needs a typed price.
   const unpricedInUse = inUse
     .filter((i) => {
       const settings = book.homeMade[priceKey(i.name, i.kind)];
-      if (i.kind === 'starter' || settings !== undefined) {
+      if (isHomeMadeKind(i.kind)) {
         return settings === undefined || homeMadePricePerKg(settings, book) === null;
       }
       return book.pricePerKg[priceKey(i.name, i.kind)] === undefined;

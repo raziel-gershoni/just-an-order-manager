@@ -39,5 +39,6 @@ export const EMPTY_NAMES: NamesByKind = {
   water: [],
   salt: [],
   starter: [],
+  tangzhong: [],
   other: [],
 };

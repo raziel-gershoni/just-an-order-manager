@@ -20,8 +20,14 @@ export function priceKey(name: string, kind: IngredientKind): string {
   return `${name}|${kind}`;
 }
 
-export type HomeMadeKind = 'starter' | 'other';
+/** Home-made kinds are priced from their settings, never typed. */
+export type HomeMadeKind = 'starter' | 'tangzhong';
+/** A liquid is water or a bought `other` ingredient, never itself home-made. */
 export type LiquidKind = 'water' | 'other';
+
+export function isHomeMadeKind(kind: IngredientKind): kind is HomeMadeKind {
+  return kind === 'starter' || kind === 'tangzhong';
+}
 
 /** How one home-made ingredient (a starter, tangzhong) is made. */
 export interface HomeMadeSettings {
@@ -89,7 +95,7 @@ function waterPricePerKg(book: PriceBook): number {
  * is discarded or lost is paid for too.
  *
  * Returns null when the flour is unset or unpriced, or an `other` liquid has no
- * price (or is itself home-made) — it then reads as unpriced, never free.
+ * typed price — it then reads as unpriced, never free.
  */
 export function homeMadePricePerKg(s: HomeMadeSettings, book: PriceBook): number | null {
   if (!s.flourName) return null;
@@ -100,9 +106,7 @@ export function homeMadePricePerKg(s: HomeMadeSettings, book: PriceBook): number
   if (s.liquidKind === 'water') {
     liquid = book.pricePerKg[priceKey(s.liquidName, 'water')] ?? waterPricePerKg(book);
   } else {
-    const key = priceKey(s.liquidName, 'other');
-    if (key in book.homeMade) return null;
-    const typed = book.pricePerKg[key];
+    const typed = book.pricePerKg[priceKey(s.liquidName, 'other')];
     if (typed === undefined) return null;
     liquid = typed;
   }
@@ -115,10 +119,10 @@ export function homeMadePricePerKg(s: HomeMadeSettings, book: PriceBook): number
 /** Cost one already-scaled recipe. Reads unrounded grams — never the display integer. */
 export function costScaledRecipe(scaled: ScaledRecipe, book: PriceBook): LoafCost {
   const ingredients: CostedIngredient[] = scaled.ingredients.map((i) => {
-    // A starter row is priced from its home-made settings only (never bought,
-    // so no invoice to type in); an `other` row is derived once it has settings.
+    // A home-made row (starter, tangzhong) is priced from its settings only
+    // (never bought, so no invoice to type in); every other row uses its typed price.
     const settings = book.homeMade[priceKey(i.name, i.kind)];
-    const derived = i.kind === 'starter' || settings !== undefined;
+    const derived = isHomeMadeKind(i.kind);
     const pricePerKg = derived
       ? settings
         ? homeMadePricePerKg(settings, book)

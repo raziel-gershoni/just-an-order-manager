@@ -58,7 +58,7 @@ const putSchema = z.object({
     .array(
       z.object({
         name: z.string().trim().min(1).max(100),
-        kind: z.enum(['flour', 'water', 'salt', 'starter', 'other']),
+        kind: z.enum(['flour', 'water', 'salt', 'starter', 'tangzhong', 'other']),
         pricePerKg: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a number like 5 or 5.40'),
       })
     )

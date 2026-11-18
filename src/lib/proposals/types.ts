@@ -18,7 +18,7 @@ const price = z.string().regex(PRICE_INPUT);
 const recipeRow = z
   .object({
     name: z.string().min(1).max(100),
-    kind: z.enum(['flour', 'water', 'salt', 'starter', 'other']),
+    kind: z.enum(['flour', 'water', 'salt', 'starter', 'tangzhong', 'other']),
     sortOrder: z.number().int().nonnegative().optional(),
     grams: z.number().positive().optional(),
     pctOfFinished: z.number().positive().optional(),
@@ -53,13 +53,13 @@ export const dealProposalSchema = z.object({
 
 export const ingredientPriceProposalSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  ingredientKind: z.enum(['flour', 'water', 'salt', 'starter', 'other']),
+  ingredientKind: z.enum(['flour', 'water', 'salt', 'starter', 'tangzhong', 'other']),
   pricePerKg: price,
 });
 
 export const homeMadeProposalSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  ingredientKind: z.enum(['starter', 'other']),
+  ingredientKind: z.enum(['starter', 'tangzhong']),
   /** The one flour it is made from; required, a proposal never leaves it unset. */
   flourName: z.string().trim().min(1).max(100),
   liquidName: z.string().trim().min(1).max(100),

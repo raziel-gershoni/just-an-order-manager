@@ -68,6 +68,7 @@ export const ingredientKindEnum = pgEnum('ingredient_kind', [
   'salt',
   'starter',
   'other',
+  'tangzhong',
 ]);
 
 // Bakery MCP proposals (src/lib/proposals). 'applying' is the transient state of

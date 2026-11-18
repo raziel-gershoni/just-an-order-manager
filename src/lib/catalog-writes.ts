@@ -8,8 +8,10 @@ import {
   ingredientPrices,
   homeMadeIngredients,
 } from '@/db/schema';
-import { and, eq, inArray, sql } from 'drizzle-orm';
-import { priceKey, type HomeMadeSettings } from '@/lib/cost';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { isHomeMadeKind, priceKey, type HomeMadeSettings, type HomeMadeKind } from '@/lib/cost';
+import { hasControlChars } from '@/lib/text-checks';
+import { homeMadeConflict } from '@/lib/home-made-drafts';
 import { z } from 'zod/v4';
 import { revalidatePublicSite } from '@/lib/public-site';
 import {
@@ -32,7 +34,7 @@ export type WriteResult = { ok: true } | { ok: false; status: 400 | 404; error: 
 
 // ---- Recipe ----
 
-const ingredientKindSchema = z.enum(['flour', 'water', 'salt', 'starter', 'other']);
+const ingredientKindSchema = z.enum(['flour', 'water', 'salt', 'starter', 'tangzhong', 'other']);
 
 export const recipeInputSchema = z.object({
   referenceFinishedGrams: z.number().int().positive(),
@@ -288,7 +290,7 @@ export async function deleteTier(
 /** One home-made ingredient's settings (starter, tangzhong). */
 export const homeMadeSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['starter', 'other']),
+  kind: z.enum(['starter', 'tangzhong']),
   flourName: z.string().trim().min(1).max(100).nullable(),
   liquidName: z.string().trim().min(1).max(100),
   liquidKind: z.enum(['water', 'other']),
@@ -299,76 +301,67 @@ export const homeMadeSchema = z.object({
 type PriceInput = { name: string; kind: IngredientKind; pricePerKg: string };
 
 /**
- * The rules for a prices body, pure: no typed starter price (it is derived) and
- * no key twice. Readable messages, because the unique index would answer with a
- * Postgres error. That a key is not home-made needs the database; see
- * saveIngredientBook.
+ * The rules for a prices body, pure: no typed price for a home-made kind
+ * (starter, tangzhong: derived from its settings) and no key twice. Readable
+ * messages, because the unique index would answer with a Postgres error.
  */
 export function validateIngredientBook(prices: PriceInput[]): { ok: true } | { ok: false; error: string } {
   const nameOf = (key: string) => key.slice(0, key.lastIndexOf('|'));
   const priceKeys = prices.map((p) => priceKey(p.name, p.kind));
 
-  if (prices.some((p) => p.kind === 'starter')) {
-    return { ok: false, error: 'The starter price is derived from the starter settings' };
+  const homeMadeTyped = prices.find((p) => isHomeMadeKind(p.kind));
+  if (homeMadeTyped) {
+    return { ok: false, error: `The ${homeMadeTyped.kind} price is derived from its settings` };
   }
   const dupPrice = priceKeys.find((k, i) => priceKeys.indexOf(k) !== i);
   if (dupPrice) return { ok: false, error: `Ingredient "${nameOf(dupPrice)}" appears twice` };
   return { ok: true };
 }
 
-/**
- * Names go onto plain-text cards: a line break in one could fake a line of the
- * card. Format characters (\p{Cf}) include the bidi overrides and isolates: one
- * at the end of a name would reorder the rest of its card line.
- */
-export const hasControlChars = (s: string) => /[\p{Cc}\p{Cf}\u2028\u2029]/u.test(s);
+export { hasControlChars };
 
 /**
  * The settings rules both the catalogue editor and an MCP proposal enforce:
- * names present and clean, and a liquid that is neither the entry itself nor
- * another home-made ingredient. An English message, or null when fine. A null
- * flour is allowed (not set up yet); a blank one is not.
+ * names present and clean (the shared homeMadeConflict), and, when creating, a
+ * name and kind not already saved. A liquid is water or a bought `other`, so it
+ * can never be home-made. A coded refusal with an English message, or null when
+ * fine. A null flour is allowed (not set up yet); a blank one is not.
  */
-export async function checkHomeMade(groupId: number, s: HomeMadeSettings): Promise<string | null> {
+export async function checkHomeMade(
+  groupId: number,
+  s: HomeMadeSettings,
+  opts: { create?: boolean } = {}
+): Promise<{ code: 'blank' | 'control_chars' | 'exists'; error: string } | null> {
   const name = s.name.trim();
   const flourName = s.flourName === null ? null : s.flourName.trim();
   const liquidName = s.liquidName.trim();
-  if (name === '' || flourName === '' || liquidName === '') return 'Names cannot be blank';
-  if ([name, flourName ?? '', liquidName].some(hasControlChars)) {
-    return 'Names cannot contain line breaks or control characters';
+  if (flourName === '' || liquidName === '') return { code: 'blank', error: 'Names cannot be blank' };
+  if ([flourName ?? '', liquidName].some(hasControlChars)) {
+    return { code: 'control_chars', error: 'Names cannot contain line breaks or control characters' };
   }
-  if (s.liquidKind !== 'other') return null;
-  if (liquidName === name) return 'A home-made ingredient cannot be its own liquid';
-  // A liquid of kind "starter" cannot be expressed (liquidKind is water|other),
-  // so a starter's name given as an "other" liquid is refused by name.
-  const rows = await db
-    .select({ kind: homeMadeIngredients.kind })
-    .from(homeMadeIngredients)
-    .where(
-      and(
-        eq(homeMadeIngredients.groupId, groupId),
-        eq(homeMadeIngredients.name, liquidName),
-        inArray(homeMadeIngredients.kind, ['starter', 'other'])
-      )
-    );
-  if (rows.some((r) => r.kind === 'starter')) {
-    return `${liquidName} is a starter: a home-made ingredient cannot be made from another home-made ingredient`;
-  }
-  if (rows.some((r) => r.kind === 'other')) {
-    return `${liquidName} is home-made: a home-made ingredient cannot be made from another home-made ingredient`;
-  }
-  return null;
+  const saved = opts.create
+    ? await db
+        .select({ name: homeMadeIngredients.name, kind: homeMadeIngredients.kind })
+        .from(homeMadeIngredients)
+        .where(eq(homeMadeIngredients.groupId, groupId))
+        .orderBy(asc(homeMadeIngredients.kind), asc(homeMadeIngredients.name))
+    : [];
+  const conflict = homeMadeConflict({ name, kind: s.kind }, saved, opts);
+  if (!conflict) return null;
+  const error =
+    conflict.code === 'blank'
+      ? 'Names cannot be blank'
+      : conflict.code === 'control_chars'
+        ? 'Names cannot contain line breaks or control characters'
+        : `"${name}" already exists as a ${s.kind}`;
+  return { code: conflict.code, error };
 }
 
 /**
  * Replace the group's whole price book in ONE statement (neon-http has no
  * interactive transactions, so a two-statement swap can strand a half-saved
- * book). Prices only: it never touches home_made_ingredients.
- *
- * A typed price for a key that has a home-made row is refused (400). The check
- * is in the same statement, so a home-made row saved a moment earlier cannot
- * slip past a read that went before: when any such key is in the body, the
- * upsert and the prune do nothing and the statement answers the blocked names.
+ * book). Prices only: it never touches home_made_ingredients. A typed price for
+ * a home-made kind is refused earlier, by validateIngredientBook.
  *
  * Upsert-then-prune rather than delete-then-insert. Every statement inside a
  * WITH sees the same snapshot, so a DELETE in one CTE does not clear the way
@@ -379,37 +372,20 @@ export async function checkHomeMade(groupId: number, s: HomeMadeSettings): Promi
  */
 export async function saveIngredientBook(groupId: number, prices: PriceInput[]): Promise<WriteResult> {
   const pricesJson = JSON.stringify(prices.map((p) => ({ name: p.name.trim(), kind: p.kind, price: p.pricePerKg })));
-  const res = await db.execute(sql`
+  await db.execute(sql`
     WITH p_in AS (
            SELECT name, kind, price::numeric AS price_per_kg
            FROM jsonb_to_recordset(${pricesJson}::jsonb) AS x(name varchar, kind ingredient_kind, price text)
          ),
-         blocked AS (
-           SELECT p.name FROM p_in p
-           JOIN home_made_ingredients h ON h.group_id = ${groupId} AND h.name = p.name AND h.kind = p.kind
-         ),
          p_up AS (
            INSERT INTO ingredient_prices (group_id, name, kind, price_per_kg, created_at, updated_at)
            SELECT ${groupId}, name, kind, price_per_kg, now(), now() FROM p_in
-           WHERE NOT EXISTS (SELECT 1 FROM blocked)
            ON CONFLICT (group_id, name, kind)
            DO UPDATE SET price_per_kg = EXCLUDED.price_per_kg, updated_at = now()
-         ),
-         p_del AS (
-           DELETE FROM ingredient_prices
-           WHERE group_id = ${groupId} AND (name, kind) NOT IN (SELECT name, kind FROM p_in)
-             AND NOT EXISTS (SELECT 1 FROM blocked)
          )
-    SELECT name FROM blocked
+    DELETE FROM ingredient_prices
+    WHERE group_id = ${groupId} AND (name, kind) NOT IN (SELECT name, kind FROM p_in)
   `);
-  const blocked = (res as unknown as { rows: { name: string }[] }).rows;
-  if (blocked.length > 0) {
-    return {
-      ok: false,
-      status: 400,
-      error: `Ingredient "${blocked[0].name}" is home-made; its price is derived from its settings`,
-    };
-  }
   return { ok: true };
 }
 
@@ -417,7 +393,7 @@ export async function saveIngredientBook(groupId: number, prices: PriceInput[]):
 export async function deleteHomeMade(
   groupId: number,
   name: string,
-  kind: 'starter' | 'other'
+  kind: HomeMadeKind
 ): Promise<WriteResult> {
   const deleted = await db
     .delete(homeMadeIngredients)
@@ -434,15 +410,13 @@ export async function deleteHomeMade(
 }
 
 /**
- * One home-made ingredient's settings: a single upsert, pruning nothing. For an
- * `other` ingredient it also drops that key's typed price in the same
- * statement (typed-price or home-made, never both).
+ * One home-made ingredient's settings: a single upsert, pruning nothing. The
+ * kinds cannot overlap with bought ones, so no typed price needs dropping.
  */
 export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Promise<WriteResult> {
   const name = s.name.trim();
   await db.execute(sql`
-    WITH up AS (
-      INSERT INTO home_made_ingredients
+    INSERT INTO home_made_ingredients
         (group_id, name, kind, flour_name, liquid_name, liquid_kind, hydration_pct, waste_factor, created_at, updated_at)
       VALUES (${groupId}, ${name}, ${s.kind}::ingredient_kind, ${s.flourName?.trim() ?? null},
               ${s.liquidName.trim()}, ${s.liquidKind}::ingredient_kind, ${s.hydrationPct},
@@ -451,10 +425,6 @@ export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Prom
       DO UPDATE SET flour_name = EXCLUDED.flour_name, liquid_name = EXCLUDED.liquid_name,
                     liquid_kind = EXCLUDED.liquid_kind, hydration_pct = EXCLUDED.hydration_pct,
                     waste_factor = EXCLUDED.waste_factor, updated_at = now()
-    )
-    DELETE FROM ingredient_prices
-    WHERE group_id = ${groupId} AND name = ${name} AND kind = 'other'::ingredient_kind
-      AND ${s.kind}::text = 'other'
   `);
   return { ok: true };
 }
@@ -462,30 +432,16 @@ export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Prom
 /**
  * One ingredient's price per kilo. A single upsert: unlike the price-book save
  * it prunes nothing, so a proposal for one ingredient cannot drop the others.
- * A home-made ingredient's price is derived from its settings, never stored here.
+ * A home-made kind's price is derived from its settings, never stored here.
  */
 export async function upsertIngredientPrice(
   groupId: number,
   p: { name: string; kind: IngredientKind; pricePerKg: string }
 ): Promise<WriteResult> {
-  if (p.kind === 'starter') {
-    return { ok: false, status: 400, error: 'The starter price is derived from the starter settings' };
+  if (isHomeMadeKind(p.kind)) {
+    return { ok: false, status: 400, error: `The ${p.kind} price is derived from its settings` };
   }
   const name = p.name.trim();
-  const [homeMade] = await db
-    .select({ id: homeMadeIngredients.id })
-    .from(homeMadeIngredients)
-    .where(
-      and(
-        eq(homeMadeIngredients.groupId, groupId),
-        eq(homeMadeIngredients.name, name),
-        eq(homeMadeIngredients.kind, p.kind)
-      )
-    )
-    .limit(1);
-  if (homeMade) {
-    return { ok: false, status: 400, error: `"${name}" is home-made; its price is derived from its settings` };
-  }
   await db
     .insert(ingredientPrices)
     .values({ groupId, name, kind: p.kind, pricePerKg: p.pricePerKg })

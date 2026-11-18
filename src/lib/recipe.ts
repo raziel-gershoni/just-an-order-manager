@@ -1,7 +1,7 @@
 import { t } from './i18n';
 import { escapeHtml } from './telegram-html';
 
-export type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'other';
+export type IngredientKind = 'flour' | 'water' | 'salt' | 'starter' | 'tangzhong' | 'other';
 
 /** The Hebrew name of a kind — קמח, מים, … — from the one translation table. */
 export function kindLabel(kind: IngredientKind): string {
@@ -17,7 +17,7 @@ export function kindLabelIsUseful(kind: IngredientKind, items: { name: string }[
 }
 
 /** Canonical display order for ingredient kinds (dry → main hydration → leavening → seasoning → extras). */
-export const KIND_DISPLAY_ORDER: IngredientKind[] = ['flour', 'water', 'starter', 'salt', 'other'];
+export const KIND_DISPLAY_ORDER: IngredientKind[] = ['flour', 'water', 'starter', 'tangzhong', 'salt', 'other'];
 
 /**
  * Bucket ingredients by `kind` in canonical order. Returns one entry per kind
