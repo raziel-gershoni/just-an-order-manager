@@ -5,6 +5,7 @@ import {
   breadPriceProposalSchema,
   dealProposalSchema,
   homeMadeProposalSchema,
+  homeMadeRemovalProposalSchema,
   ingredientPriceProposalSchema,
   recipeProposalSchema,
   sizePriceProposalSchema,
@@ -20,7 +21,7 @@ import {
 } from './reads';
 
 /**
- * The bakery MCP server: five read tools and six propose tools, bound to one
+ * The bakery MCP server: five read tools and seven propose tools, bound to one
  * bakery. A propose tool stores a pending proposal and changes nothing; only the
  * owner's approval on the chat's card applies it (see the decision route), and
  * there is deliberately no tool that approves or rejects.
@@ -122,7 +123,8 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
         'Get ingredient prices',
         'Price per kg of each priced ingredient (name and kind); homeMade, the ingredients the bakery makes itself (every starter and tangzhong) with their flour, liquid, hydration (liquid per 100 g flour), waste factor and derived ' +
           'price per kg (setUp false: no flour chosen yet, so unpriced); and the ingredients used in recipes that have no price yet. ' +
-          'Tangzhong is its own kind (recipe rows use kind "tangzhong"); only starter and tangzhong are home-made. Both are priced from their flour, liquid, hydration and waste, not typed. ' + MONEY,
+          'Tangzhong is its own kind (recipe rows use kind "tangzhong"); only starter and tangzhong are home-made. Both are priced from their flour, liquid, hydration and waste, not typed. ' +
+          'usedBy lists the breads (or, for a flour or liquid a home-made entry is made from, the entries) that use each price and each home-made entry; only entries with an empty usedBy can be removed. ' + MONEY,
         z.object({}),
         () => getIngredientPrices(groupId)
       );
@@ -180,7 +182,7 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
         'propose_ingredient_price',
         'Propose an ingredient price',
         'Set the price per kg of one ingredient, by its name and kind exactly as get_ingredient_prices shows them. ' +
-          'Only that ingredient changes. Starter and tangzhong prices cannot be set here (use propose_home_made_ingredient). ' + MONEY,
+          'Pass pricePerKg null to remove the price of an ingredient nothing uses (usedBy empty in get_ingredient_prices). Only that ingredient changes. Starter and tangzhong prices cannot be set here (use propose_home_made_ingredient). ' + MONEY,
         ingredientPriceProposalSchema,
         (args: z.infer<typeof ingredientPriceProposalSchema>) => ({ kind: 'ingredient_price', ...args })
       );
@@ -194,6 +196,14 @@ export function mcpHandlerForGroup(groupId: number): (req: Request) => Promise<R
           'Names are free text; keep the existing spelling of an ingredient so recipes and prices still match it.',
         homeMadeProposalSchema,
         (args: z.infer<typeof homeMadeProposalSchema>) => ({ kind: 'home_made', ...args })
+      );
+      propose(
+        'propose_remove_home_made_ingredient',
+        'Propose removing a home-made ingredient',
+        'Remove a home-made ingredient (starter or tangzhong, by its name and kind as get_ingredient_prices shows them) that no recipe uses ' +
+          '(usedBy empty). One a recipe uses cannot be removed here.',
+        homeMadeRemovalProposalSchema,
+        (args: z.infer<typeof homeMadeRemovalProposalSchema>) => ({ kind: 'home_made', remove: true, ...args })
       );
     },
     { serverInfo: { name: 'bakery', version: '1.0.0' } }

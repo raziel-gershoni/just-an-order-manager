@@ -14,6 +14,7 @@ import { israelToday } from '@/lib/date-utils';
 import {
   loadBreadsForCosting,
   loadHydrationSplits,
+  loadIngredientsForPricing,
   loadIngredientsInUse,
   loadPriceBook,
   loadPriceRows,
@@ -206,13 +207,22 @@ export async function getRecipes(groupId: number, breadTypeId?: number): Promise
 // ---- get_ingredient_prices ----
 
 export async function getIngredientPrices(groupId: number) {
-  const [rows, book, inUse] = await Promise.all([
+  const [rows, book, inUse, forPricing] = await Promise.all([
     loadPriceRows(groupId),
     loadPriceBook(groupId),
     loadIngredientsInUse(groupId),
+    loadIngredientsForPricing(groupId),
   ]);
+  // Who uses what: recipes (and home-made entries' flours and liquids) for prices, recipes only for home-made entries.
+  const priceUsers = new Map(forPricing.map((i) => [priceKey(i.name, i.kind), i.usedBy]));
+  const recipeUsers = new Map(inUse.map((i) => [priceKey(i.name, i.kind), i.usedBy]));
   const prices = rows
-    .map((r) => ({ name: r.name, kind: r.kind, pricePerKg: money(Number(r.pricePerKg)) }))
+    .map((r) => ({
+      name: r.name,
+      kind: r.kind,
+      pricePerKg: money(Number(r.pricePerKg)),
+      usedBy: priceUsers.get(priceKey(r.name, r.kind)) ?? [],
+    }))
     .sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
 
   // Saved rows, plus every starter or tangzhong in a recipe that has none yet (not set up).
@@ -228,6 +238,7 @@ export async function getIngredientPrices(groupId: number) {
       hydrationPct: h.hydrationPct as number | null,
       wasteFactor: h.wasteFactor as number | null,
       derivedPricePerKg: derived === null ? null : money(derived),
+      usedBy: recipeUsers.get(priceKey(h.name, h.kind as IngredientKind)) ?? [],
     };
   });
   const missing = inUse
@@ -242,6 +253,7 @@ export async function getIngredientPrices(groupId: number) {
       hydrationPct: null as number | null,
       wasteFactor: null as number | null,
       derivedPricePerKg: null as string | null,
+      usedBy: i.usedBy,
     }));
   const homeMade = [...saved, ...missing].sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || byName(a.name, b.name));
 

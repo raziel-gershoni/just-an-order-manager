@@ -176,3 +176,14 @@ It's the audit trail the owner asked for: what changed, when, and who approved i
 - A local MCP round trip against a fake-DB build: list tools, call one read tool and one propose tool.
 - Gate: `npx tsc --noEmit`, `pnpm exec eslint .`, `next build` with the fake Neon shim.
 - **Not verifiable before deploy:** the real Claude API connector calling `/api/mcp`, and the family bot's card flow. The owner tests these manually.
+
+## Addendum 2026-11-18: removing unused prices and home-made entries
+
+The owner asked for the bot to clean up the ingredient lists.
+
+- **`propose_ingredient_price` with `pricePerKg: null`** proposes removing that ingredient's price, the way `propose_deal` removes a deal.
+  - It is allowed only for a price nothing uses: no recipe, and no home-made entry's flour or liquid. That is the same rule as the prices screen's "מחירים ללא רכיב תואם" list, the only prices that screen lets you delete. Removing the price of something in use would only make costs read "חסר מחיר".
+  - Starter and tangzhong have no typed price, so this is refused for them, as before.
+- **New tool `propose_remove_home_made_ingredient`** (`name`, `ingredientKind`): removes a home-made entry that no recipe uses (proposal kind `home_made`, after = null). An entry a recipe uses is removed on the catalogue screen, not by the bot.
+- **Staleness:** a removal stores the values and the usage it was proposed against. If a recipe or home-made entry starts using the ingredient before approval, the approval is refused as stale.
+- **Reads:** `get_ingredient_prices` gives each price and each home-made entry a `usedBy` list, so Claude can tell what may be removed.

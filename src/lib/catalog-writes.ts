@@ -434,6 +434,24 @@ export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Prom
  * it prunes nothing, so a proposal for one ingredient cannot drop the others.
  * A home-made kind's price is derived from its settings, never stored here.
  */
+export async function deleteIngredientPrice(
+  groupId: number,
+  name: string,
+  kind: IngredientKind
+): Promise<WriteResult> {
+  if (isHomeMadeKind(kind)) {
+    return { ok: false, status: 400, error: `The ${kind} price is derived from its settings` };
+  }
+  const deleted = await db
+    .delete(ingredientPrices)
+    .where(
+      and(eq(ingredientPrices.groupId, groupId), eq(ingredientPrices.name, name.trim()), eq(ingredientPrices.kind, kind))
+    )
+    .returning({ id: ingredientPrices.id });
+  if (deleted.length === 0) return { ok: false, status: 404, error: 'Ingredient price not found' };
+  return { ok: true };
+}
+
 export async function upsertIngredientPrice(
   groupId: number,
   p: { name: string; kind: IngredientKind; pricePerKg: string }

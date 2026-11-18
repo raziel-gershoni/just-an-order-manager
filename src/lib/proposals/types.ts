@@ -54,7 +54,8 @@ export const dealProposalSchema = z.object({
 export const ingredientPriceProposalSchema = z.object({
   name: z.string().trim().min(1).max(100),
   ingredientKind: z.enum(['flour', 'water', 'salt', 'starter', 'tangzhong', 'other']),
-  pricePerKg: price,
+  /** null removes the price (only one nothing uses). */
+  pricePerKg: price.nullable(),
 });
 
 export const homeMadeProposalSchema = z.object({
@@ -69,13 +70,19 @@ export const homeMadeProposalSchema = z.object({
   wasteFactor: z.number().min(1).max(10),
 });
 
+export const homeMadeRemovalProposalSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  ingredientKind: z.enum(['starter', 'tangzhong']),
+});
+
 export type ProposalInput =
   | ({ kind: 'recipe' } & z.infer<typeof recipeProposalSchema>)
   | ({ kind: 'size_price' } & z.infer<typeof sizePriceProposalSchema>)
   | ({ kind: 'bread_price' } & z.infer<typeof breadPriceProposalSchema>)
   | ({ kind: 'deal' } & z.infer<typeof dealProposalSchema>)
   | ({ kind: 'ingredient_price' } & z.infer<typeof ingredientPriceProposalSchema>)
-  | ({ kind: 'home_made' } & z.infer<typeof homeMadeProposalSchema>);
+  | ({ kind: 'home_made' } & z.infer<typeof homeMadeProposalSchema>)
+  | ({ kind: 'home_made'; remove: true } & z.infer<typeof homeMadeRemovalProposalSchema>);
 
 export type Prepared = {
   /** Ids that say what the proposal is about: kept so approval re-reads the same thing. */

@@ -12,7 +12,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { t } from '@/lib/i18n';
 import { PRICE_INPUT, canonicalOverridePrice } from '@/lib/pricing';
 import { KIND_DISPLAY_ORDER, type IngredientKind, type Recipe } from '@/lib/recipe';
-import { isHomeMadeKind, type HomeMadeKind } from '@/lib/cost';
+import { isHomeMadeKind, priceKey, type HomeMadeKind } from '@/lib/cost';
 import {
   validateRecipe,
   saveRecipe,
@@ -21,14 +21,16 @@ import {
   upsertTier,
   deleteTier,
   upsertIngredientPrice,
+  deleteIngredientPrice,
   upsertHomeMade,
+  deleteHomeMade,
   checkHomeMade,
   hasControlChars,
   type RecipeInput,
   type WriteResult,
 } from '@/lib/catalog-writes';
 import { totalHydration, type HydrationSplits } from '@/lib/hydration';
-import { loadHydrationSplits } from '@/lib/ingredient-costs';
+import { loadHydrationSplits, loadIngredientsForPricing, loadIngredientsInUse } from '@/lib/ingredient-costs';
 import type { KindHandler, Prepared, ProposalInput, ProposalKind } from './types';
 
 /**
@@ -407,6 +409,13 @@ async function applyDeal(groupId: number, target: Record<string, unknown>, after
 
 // ---- ingredient_price ----
 
+/** The breads (or home-made entries) that use an ingredient now: the same rule as the prices screen. */
+async function priceUsers(groupId: number, name: string, kind: IngredientKind): Promise<string[]> {
+  const list = await loadIngredientsForPricing(groupId);
+  const key = priceKey(name, kind);
+  return list.find((i) => priceKey(i.name, i.kind) === key)?.usedBy ?? [];
+}
+
 async function readIngredientPrice(groupId: number, target: Record<string, unknown>) {
   const [row] = await db
     .select({ pricePerKg: ingredientPrices.pricePerKg })
@@ -419,7 +428,30 @@ async function readIngredientPrice(groupId: number, target: Record<string, unkno
       )
     )
     .limit(1);
-  return { pricePerKg: row ? priceStr(row.pricePerKg) : null };
+  const pricePerKg = row ? priceStr(row.pricePerKg) : null;
+  // A removal also stores who uses it, so a recipe adopting it before approval makes it stale.
+  if (target.remove === true) {
+    return { pricePerKg, usedBy: await priceUsers(groupId, String(target.name), target.ingredientKind as IngredientKind) };
+  }
+  return { pricePerKg };
+}
+
+async function prepareIngredientPriceRemoval(groupId: number, name: string, kind: IngredientKind): Promise<Prep> {
+  const target = { name, ingredientKind: kind, remove: true };
+  const before = (await readIngredientPrice(groupId, target)) as { pricePerKg: string | null; usedBy: string[] };
+  if (before.pricePerKg === null) return fail(`No price saved for ${name} (${kind})`);
+  if (before.usedBy.length > 0) {
+    return fail(`${name} is used by ${before.usedBy.join(', ')}: only a price nothing uses can be removed`);
+  }
+  return {
+    ok: true,
+    prepared: {
+      target,
+      before,
+      after: null,
+      summaryHe: fill('proposal.ingredient_price_removed', { name, from: money(before.pricePerKg) }),
+    },
+  };
 }
 
 async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_price'>): Promise<Prep> {
@@ -431,6 +463,7 @@ async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_pri
       `The ${input.ingredientKind} price is derived from its settings and cannot be proposed: propose_home_made_ingredient sets it`
     );
   }
+  if (input.pricePerKg === null) return prepareIngredientPriceRemoval(groupId, name, input.ingredientKind);
   if (!PRICE_INPUT.test(input.pricePerKg)) return fail('Price must look like 35 or 35.50');
   if (tooBig(input.pricePerKg)) return fail(OVER_MAX);
 
@@ -454,7 +487,7 @@ async function prepareIngredientPrice(groupId: number, input: Of<'ingredient_pri
 
 // ---- home_made ----
 
-type HomeMadeBefore = {
+type HomeMadeSettingsBefore = {
   settings: {
     flourName: string | null;
     liquidName: string;
@@ -463,6 +496,7 @@ type HomeMadeBefore = {
     wasteFactor: string;
   } | null;
 };
+type HomeMadeBefore = HomeMadeSettingsBefore;
 
 async function findHomeMade(groupId: number, name: string, kind: IngredientKind) {
   const [row] = await db
@@ -487,11 +521,10 @@ async function findHomeMade(groupId: number, name: string, kind: IngredientKind)
 
 async function readHomeMade(
   groupId: number,
-  target: { name: string; ingredientKind: IngredientKind }
-): Promise<HomeMadeBefore> {
+  target: { name: string; ingredientKind: IngredientKind; remove?: boolean }
+): Promise<HomeMadeBefore & { usedBy?: string[] }> {
   const row = await findHomeMade(groupId, target.name, target.ingredientKind);
-  return {
-    settings: row
+  const settings: HomeMadeBefore['settings'] = row
       ? {
           flourName: row.flourName,
           liquidName: row.liquidName,
@@ -499,11 +532,35 @@ async function readHomeMade(
           hydrationPct: row.hydrationPct,
           wasteFactor: Number(row.wasteFactor).toFixed(2),
         }
-      : null,
+      : null;
+  if (target.remove === true) {
+    const inUse = await loadIngredientsInUse(groupId);
+    const key = priceKey(target.name, target.ingredientKind);
+    return { settings, usedBy: inUse.find((i) => priceKey(i.name, i.kind) === key)?.usedBy ?? [] };
+  }
+  return { settings };
+}
+
+async function prepareHomeMadeRemoval(groupId: number, input: Of<'home_made'> & { remove: true }): Promise<Prep> {
+  const name = input.name.trim();
+  if (name === '') return fail('Ingredient name cannot be blank');
+  const target = { name, ingredientKind: input.ingredientKind, remove: true };
+  const before = await readHomeMade(groupId, target);
+  if (!before.settings) return fail(`No home-made ${input.ingredientKind} named ${name}`);
+  if (before.usedBy && before.usedBy.length > 0) {
+    return fail(
+      `${name} is used by ${before.usedBy.join(', ')}: only an entry no recipe uses can be removed here (the catalogue screen can remove a used one)`
+    );
+  }
+  return {
+    ok: true,
+    prepared: { target, before, after: null, summaryHe: fill('proposal.home_made_removed', { name }) },
   };
 }
 
 async function prepareHomeMade(groupId: number, input: Of<'home_made'>): Promise<Prep> {
+  if ('remove' in input && input.remove === true) return prepareHomeMadeRemoval(groupId, input);
+  if ('remove' in input) return fail('Unsupported home-made proposal');
   const name = input.name.trim();
   const flourName = input.flourName.trim();
   const liquidName = input.liquidName.trim();
@@ -594,17 +651,24 @@ export const KINDS: Record<ProposalKind, KindHandler> = {
     prepare: (g, i) => prepareIngredientPrice(g, i as Of<'ingredient_price'>),
     readBefore: readIngredientPrice,
     apply: (g, target, after) =>
-      upsertIngredientPrice(g, {
-        name: String(target.name),
-        kind: target.ingredientKind as IngredientKind,
-        pricePerKg: (after as { pricePerKg: string }).pricePerKg,
-      }),
+      target.remove === true
+        ? deleteIngredientPrice(g, String(target.name), target.ingredientKind as IngredientKind)
+        : upsertIngredientPrice(g, {
+            name: String(target.name),
+            kind: target.ingredientKind as IngredientKind,
+            pricePerKg: (after as { pricePerKg: string }).pricePerKg,
+          }),
   },
   home_made: {
     prepare: (g, i) => prepareHomeMade(g, i as Of<'home_made'>),
     readBefore: (g, target) =>
-      readHomeMade(g, { name: String(target.name), ingredientKind: target.ingredientKind as IngredientKind }),
+      readHomeMade(g, {
+        name: String(target.name),
+        ingredientKind: target.ingredientKind as IngredientKind,
+        remove: target.remove === true,
+      }),
     apply: (g, target, after) => {
+      if (target.remove === true) return deleteHomeMade(g, String(target.name), target.ingredientKind as HomeMadeKind);
       const a = after as NonNullable<HomeMadeBefore['settings']>;
       return upsertHomeMade(g, {
         name: String(target.name),
