@@ -187,6 +187,16 @@ export type RecipeEntry = {
   | { pctOfFinished: number; grams?: undefined }
 );
 
+/**
+ * A row's share of the loaf after the editor's finished weight was corrected
+ * from `fromW` to `toW` while its grams stayed put: the same grams are now a
+ * different percentage. Exact (no rounding through the grams on screen), and
+ * the identity when the weight did not change.
+ */
+export function pctForNewWeight(pct: number, fromW: number, toW: number): number {
+  return fromW === toW || !(fromW > 0) || !(toW > 0) ? pct : (pct * fromW) / toW;
+}
+
 /** What this row weighs on a loaf of `referenceFinishedGrams`. */
 export function entryGrams(referenceFinishedGrams: number, row: RecipeEntry): number {
   return row.grams !== undefined

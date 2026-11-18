@@ -351,6 +351,7 @@ const translations: Record<string, string> = {
   'settings.hydration_leaves_out': 'לא כולל',
   'settings.ingredients_count': 'רכיבים',
   'settings.reference_weight': '(משקל ייחוס סופי (גרם',
+  'settings.reference_weight_hint': 'כמה שוקל הלחם האפוי שיוצא מהכמויות שלמטה. שינוי המשקל לא משנה את הכמויות; לגודל אחר יש את ״הצג בגרמים״',
   'settings.dough_total': 'סך בצק',
   'settings.finished_weight': 'משקל סופי',
   'settings.show_in_grams': '…הצג בגרמים עבור',

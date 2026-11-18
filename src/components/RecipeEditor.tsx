@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { LoadError } from '@/components/ui/LoadError';
 import { Plus, Trash2, Pencil, Calculator, Copy } from 'lucide-react';
-import { groupByKind, scaleRecipe, type IngredientKind } from '@/lib/recipe';
+import { groupByKind, pctForNewWeight, scaleRecipe, type IngredientKind } from '@/lib/recipe';
 import { costScaledRecipe, type PriceBook } from '@/lib/cost';
 import { totalHydration, type HydrationSplits } from '@/lib/hydration';
 import { IngredientNameInput } from '@/components/recipe/IngredientNameInput';
@@ -43,9 +43,9 @@ interface EditorRow {
   kind: IngredientKind;
   grams: string;
   sortOrder: number;
-  /** % of the finished loaf weight at seed time. Used to auto-rescale grams when ref weight changes (only if !dirty), and sent verbatim on save so an untouched row keeps the exact percentage already in storage. */
+  /** % of the finished loaf at the editor's starting weight (baseWeight). An untouched row is saved from it, not from its rounded grams, so its exact percentage survives; when the finished weight was corrected, it is moved to the new weight with pctForNewWeight. */
   originalPctOfFinished?: number;
-  /** True once the user has manually typed in this row's grams field — auto-rescale skips dirty rows, and so does the lossless save path. */
+  /** True once the user has typed in this row's grams field: the row is then saved from its grams. */
   dirty: boolean;
 }
 
@@ -137,6 +137,12 @@ export function RecipeEditor({
     defaultReferenceWeight != null ? String(defaultReferenceWeight) : ''
   );
   const [rows, setRows] = useState<EditorRow[]>([]);
+  // The finished weight the rows' percentages were seeded at. The weight field
+  // means "what these amounts bake to": changing it keeps every gram and only
+  // changes the recipe's percentages on save. Looking at the recipe for another
+  // loaf size is the "הצג בגרמים" calculator's job, so the field no longer
+  // rescales the grams as well (the owner's call, 2026-11-18).
+  const [baseWeight, setBaseWeight] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // The group's other recipes (copy sources) and every ingredient name in use.
@@ -245,6 +251,7 @@ export function RecipeEditor({
   function startCreate() {
     const weight = defaultReferenceWeight ?? 1000;
     setRefWeight(String(weight));
+    setBaseWeight(weight);
     setRows(defaultTemplate(weight));
     setEditing(true);
   }
@@ -256,6 +263,7 @@ export function RecipeEditor({
     // means a tool for reading quietly changes what gets written.
     const weight = defaultReferenceWeight || Number(displayWeight) || 1000;
     setRefWeight(String(weight));
+    setBaseWeight(weight);
     setRows(
       recipe.ingredients
         .slice()
@@ -277,6 +285,7 @@ export function RecipeEditor({
   function seedFromCopy(seed: SeedRow[]) {
     const weight = defaultReferenceWeight ?? 1000;
     setRefWeight(String(weight));
+    setBaseWeight(weight);
     setRows(
       seed.map((s) => ({
         id: newRowId(),
@@ -310,24 +319,10 @@ export function RecipeEditor({
     setRows((prev) =>
       prev.map((r, i) => {
         if (i !== idx) return r;
-        // Typing in the grams field locks the row from auto-rescale
+        // Typing in the grams field marks the row as typed: it is saved from its grams
         const dirty = r.dirty || patch.grams !== undefined;
         return { ...r, ...patch, dirty };
       })
-    );
-  }
-
-  /** Update reference weight; rescale all non-dirty rows that have an original percentage to a new gram value. */
-  function changeRefWeight(value: string) {
-    setRefWeight(value);
-    const newW = Number(value);
-    if (!newW || newW <= 0) return;
-    setRows((prev) =>
-      prev.map((r) =>
-        !r.dirty && r.originalPctOfFinished != null
-          ? { ...r, grams: String(Math.round((r.originalPctOfFinished * newW) / 100)) }
-          : r
-      )
     );
   }
 
@@ -397,8 +392,9 @@ export function RecipeEditor({
             // Untouched rows keep the percentage already in storage. Deriving
             // it again from the grams on screen would bake this loaf's rounding
             // into the recipe — the whole reason a copy degrades today.
+            // A corrected finished weight moves them exactly, keeping their grams.
             ...(!r.dirty && r.originalPctOfFinished != null
-              ? { pctOfFinished: r.originalPctOfFinished }
+              ? { pctOfFinished: pctForNewWeight(r.originalPctOfFinished, baseWeight, refW) }
               : { grams: Number(r.grams) }),
           })),
         }),
@@ -474,8 +470,9 @@ export function RecipeEditor({
           type="number"
           inputMode="numeric"
           value={refWeight}
-          onChange={(e) => changeRefWeight(e.target.value)}
+          onChange={(e) => setRefWeight(e.target.value)}
         />
+        <p className="-mt-2 text-xs text-muted-foreground">{t('settings.reference_weight_hint')}</p>
 
         <div className="space-y-2">
           {rows.map((r, idx) => (
