@@ -48,8 +48,8 @@ function Money({ value }: { value: number }) {
 }
 
 /**
- * The catalogue's "מכינים בעצמנו" section: define starters, tangzhong and
- * anything else made in-house, before any recipe uses them. Owner/manager only
+ * The catalogue's "מכינים בעצמנו" section: define starters and tangzhong,
+ * before any recipe uses them. Owner/manager only
  * (the page renders it for non-bakers; the route 403s bakers anyway).
  */
 export function HomeMadeSection() {
@@ -237,6 +237,19 @@ function EntryRow({
             )}
           </div>
         )}
+        {/* A name no recipe uses is usually a spelling that differs from the
+            recipe's; a recipe row under another kind is not linked at all. */}
+        {entry.usedBy.length === 0 && entry.otherKind.length === 0 && (
+          <div className="text-xs text-muted-foreground mt-0.5">{t('catalog.home_made_unused')}</div>
+        )}
+        {entry.otherKind.map((m) => (
+          <div key={m.kind} className="text-xs text-destructive mt-0.5">
+            {t('catalog.home_made_kind_mismatch')
+              .replace('{breads}', m.usedBy.join(', '))
+              .replace('{kind}', t(`settings.kind_${m.kind}`))
+              .replace('{target}', t(`settings.kind_${entry.kind}`))}
+          </div>
+        ))}
       </div>
       <Button size="icon" variant="ghost" onClick={onEdit} aria-label={entry.name}>
         <Pencil className="h-3.5 w-3.5" />

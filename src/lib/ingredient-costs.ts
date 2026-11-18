@@ -184,6 +184,12 @@ export interface HomeMadeEntry {
   /** Null for a starter or tangzhong a recipe uses that has no settings yet. */
   saved: HomeMadeSettings | null;
   usedBy: string[];
+  /**
+   * Recipes that use this name under another kind (a tangzhong row left as
+   * "אחר"). Nothing links them to this entry until the row's kind is changed,
+   * so the section says so instead of pricing an entry no loaf uses.
+   */
+  otherKind: { kind: IngredientKind; usedBy: string[] }[];
 }
 
 export interface HomeMadeCatalog {
@@ -203,16 +209,19 @@ export async function loadHomeMadeCatalog(groupId: number): Promise<HomeMadeCata
   ]);
   const usedByKey = new Map(inUse.map((i) => [priceKey(i.name, i.kind), i.usedBy]));
 
+  const otherKind = (name: string, kind: IngredientKind) =>
+    inUse.filter((i) => i.name === name && i.kind !== kind).map((i) => ({ kind: i.kind, usedBy: i.usedBy }));
   const entries: HomeMadeEntry[] = homeMade.map((h) => ({
     name: h.name,
     kind: h.kind,
     saved: h,
     usedBy: usedByKey.get(priceKey(h.name, h.kind)) ?? [],
+    otherKind: otherKind(h.name, h.kind),
   }));
   const savedKeys = new Set(homeMade.map((h) => priceKey(h.name, h.kind)));
   for (const i of inUse) {
     if (isHomeMadeKind(i.kind) && !savedKeys.has(priceKey(i.name, i.kind))) {
-      entries.push({ name: i.name, kind: i.kind, saved: null, usedBy: i.usedBy });
+      entries.push({ name: i.name, kind: i.kind, saved: null, usedBy: i.usedBy, otherKind: otherKind(i.name, i.kind) });
     }
   }
   entries.sort(

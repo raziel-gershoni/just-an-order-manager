@@ -8,7 +8,8 @@ import {
 } from './cost';
 
 /**
- * The prices screen's draft of one home-made ingredient (starter, tangzhong).
+ * The catalogue editor's draft of one home-made ingredient (a starter or a
+ * tangzhong).
  *
  * Pure and shared with the offline tests. Numbers are held as the strings the
  * owner typed, so a half-typed "1." is not fought on every keystroke; they are
@@ -94,7 +95,7 @@ export function missingForHomeMade(s: HomeMadeSettings, book: PriceBook): string
   if (book.pricePerKg[priceKey(s.flourName, 'flour')] === undefined) return s.flourName;
   if (s.liquidKind === 'other') {
     const key = priceKey(s.liquidName, 'other');
-    if (key in book.homeMade || book.pricePerKg[key] === undefined) return s.liquidName;
+    if (book.pricePerKg[key] === undefined) return s.liquidName;
   }
   return null;
 }
