@@ -2,6 +2,8 @@ import { withGroup, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { breadTypes, breadRecipes, breadRecipeIngredients } from '@/db/schema';
 import { eq, and, inArray, asc } from 'drizzle-orm';
+import { loadHydrationSplits } from '@/lib/ingredient-costs';
+import { totalHydration } from '@/lib/hydration';
 import { withBakersPercents, KIND_DISPLAY_ORDER, type IngredientKind } from '@/lib/recipe';
 
 /**
@@ -42,6 +44,8 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     byType.set(row.breadTypeId, list);
   }
 
+  const splits = await loadHydrationSplits(groupId);
+
   const namesByKind = blankNames();
   for (const row of ingredientRows) {
     if (!namesByKind[row.kind].includes(row.name)) namesByKind[row.kind].push(row.name);
@@ -62,15 +66,18 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
           sortOrder: r.sortOrder,
         })),
       });
-      const water = bakers.ingredients
-        .filter((i) => i.kind === 'water')
-        .reduce((sum, i) => sum + i.pctOfFlour, 0);
+      const hydration = totalHydration(
+        rows.map((r) => ({ name: r.name, kind: r.kind, pct: Number(r.pctOfFinished) })),
+        splits
+      );
       return {
         breadTypeId: t.id,
         breadTypeName: t.name,
-        // Hydration is the number a baker recognises a dough by. Null rather
-        // than a bare 0 when the recipe carries no water at all.
-        hydrationPct: water > 0 ? Math.round(water) : null,
+        // Total hydration (counts the flour and liquid inside home-made
+        // ingredients): the number a baker recognises a dough by. Null when
+        // there is no liquid or no flour to compare.
+        hydrationPct: hydration.pct !== null ? Math.round(hydration.pct) : null,
+        hydrationLeavesOut: hydration.leavesOut,
         ingredients: bakers.ingredients.map((i) => ({
           name: i.name,
           kind: i.kind,

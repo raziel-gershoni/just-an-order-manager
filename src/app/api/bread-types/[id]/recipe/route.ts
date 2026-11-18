@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { breadTypes, breadRecipes, breadRecipeIngredients } from '@/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { withBakersPercents, type Recipe } from '@/lib/recipe';
+import { loadHydrationSplits } from '@/lib/ingredient-costs';
 import { recipeInputSchema, validateRecipe, saveRecipe } from '@/lib/catalog-writes';
 
 function getBreadTypeId(url: string): number {
@@ -58,11 +59,15 @@ export const GET = withAuth(async (request, auth) => {
   };
 
   const bakers = withBakersPercents(recipe);
+  // Hydration of each home-made row only (no money), so a baker's editor can
+  // show total hydration without the owner-only price book.
+  const hydrationSplits = await loadHydrationSplits(authResult.groupId);
 
   return jsonResponse({
     recipe: {
       ingredients: recipe.ingredients,
       bakersPercents: bakers.ingredients,
+      hydrationSplits,
       updatedAt: recipeRow.updatedAt,
     },
   });

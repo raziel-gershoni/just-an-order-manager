@@ -6,8 +6,10 @@ import {
   breadSizeTiers,
   breadRecipes,
   ingredientPrices,
+  homeMadeIngredients,
 } from '@/db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { priceKey, type HomeMadeSettings } from '@/lib/cost';
 import { z } from 'zod/v4';
 import { revalidatePublicSite } from '@/lib/public-site';
 import {
@@ -283,10 +285,142 @@ export async function deleteTier(
 
 // ---- Ingredient prices ----
 
+/** One home-made ingredient's settings (starter, tangzhong). */
+export const homeMadeSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  kind: z.enum(['starter', 'other']),
+  flourName: z.string().trim().min(1).max(100).nullable(),
+  liquidName: z.string().trim().min(1).max(100),
+  liquidKind: z.enum(['water', 'other']),
+  hydrationPct: z.number().int().min(1).max(1000),
+  wasteFactor: z.number().min(1).max(10),
+});
+
+type PriceInput = { name: string; kind: IngredientKind; pricePerKg: string };
+
+/**
+ * The cross-table rules the two tables cannot enforce themselves: no typed
+ * starter price (it is derived), an `other` ingredient is typed-price or
+ * home-made never both, and no key twice in either list. Readable messages,
+ * because the unique index would answer with a Postgres error.
+ */
+export function validateIngredientBook(
+  prices: PriceInput[],
+  homeMade: HomeMadeSettings[]
+): { ok: true } | { ok: false; error: string } {
+  const nameOf = (key: string) => key.slice(0, key.lastIndexOf('|'));
+  const priceKeys = prices.map((p) => priceKey(p.name, p.kind));
+  const homeKeys = homeMade.map((h) => priceKey(h.name, h.kind));
+
+  if (prices.some((p) => p.kind === 'starter')) {
+    return { ok: false, error: 'The starter price is derived from the starter settings' };
+  }
+  const dupPrice = priceKeys.find((k, i) => priceKeys.indexOf(k) !== i);
+  if (dupPrice) return { ok: false, error: `Ingredient "${nameOf(dupPrice)}" appears twice` };
+  const dupHome = homeKeys.find((k, i) => homeKeys.indexOf(k) !== i);
+  if (dupHome) return { ok: false, error: `Home-made ingredient "${nameOf(dupHome)}" appears twice` };
+  const both = homeKeys.find((k) => priceKeys.includes(k));
+  if (both) {
+    return { ok: false, error: `Ingredient "${nameOf(both)}" is home-made; it cannot also have a typed price` };
+  }
+  return { ok: true };
+}
+
+/**
+ * Replace the group's whole price book and home-made list in ONE statement
+ * (neon-http has no interactive transactions, so a two-statement swap can
+ * strand the group half-saved).
+ *
+ * Upsert-then-prune rather than delete-then-insert. Every statement inside a
+ * WITH sees the same snapshot, so a DELETE in one CTE does not clear the way
+ * for an INSERT in another: the unique index still sees the old rows and
+ * rejects the new ones. The prune and the upsert touch disjoint keys, so
+ * sharing a snapshot is safe. The lists arrive as JSON through
+ * jsonb_to_recordset so an empty list stays a valid statement.
+ */
+export async function saveIngredientBook(
+  groupId: number,
+  prices: PriceInput[],
+  homeMade: HomeMadeSettings[]
+): Promise<WriteResult> {
+  const pricesJson = JSON.stringify(prices.map((p) => ({ name: p.name.trim(), kind: p.kind, price: p.pricePerKg })));
+  const homeJson = JSON.stringify(
+    homeMade.map((h) => ({
+      name: h.name.trim(),
+      kind: h.kind,
+      flour: h.flourName?.trim() ?? null,
+      liquid: h.liquidName.trim(),
+      liquid_kind: h.liquidKind,
+      hydration: h.hydrationPct,
+      waste: h.wasteFactor.toFixed(2),
+    }))
+  );
+  await db.execute(sql`
+    WITH p_in AS (
+           SELECT name, kind, price::numeric AS price_per_kg
+           FROM jsonb_to_recordset(${pricesJson}::jsonb) AS x(name varchar, kind ingredient_kind, price text)
+         ),
+         h_in AS (
+           SELECT name, kind, flour, liquid, liquid_kind, hydration, waste::numeric AS waste
+           FROM jsonb_to_recordset(${homeJson}::jsonb)
+             AS x(name varchar, kind ingredient_kind, flour varchar, liquid varchar,
+                  liquid_kind ingredient_kind, hydration integer, waste text)
+         ),
+         p_up AS (
+           INSERT INTO ingredient_prices (group_id, name, kind, price_per_kg, created_at, updated_at)
+           SELECT ${groupId}, name, kind, price_per_kg, now(), now() FROM p_in
+           ON CONFLICT (group_id, name, kind)
+           DO UPDATE SET price_per_kg = EXCLUDED.price_per_kg, updated_at = now()
+         ),
+         h_up AS (
+           INSERT INTO home_made_ingredients
+             (group_id, name, kind, flour_name, liquid_name, liquid_kind, hydration_pct, waste_factor, created_at, updated_at)
+           SELECT ${groupId}, name, kind, flour, liquid, liquid_kind, hydration, waste, now(), now() FROM h_in
+           ON CONFLICT (group_id, name, kind)
+           DO UPDATE SET flour_name = EXCLUDED.flour_name, liquid_name = EXCLUDED.liquid_name,
+                         liquid_kind = EXCLUDED.liquid_kind, hydration_pct = EXCLUDED.hydration_pct,
+                         waste_factor = EXCLUDED.waste_factor, updated_at = now()
+         ),
+         p_del AS (
+           DELETE FROM ingredient_prices
+           WHERE group_id = ${groupId} AND (name, kind) NOT IN (SELECT name, kind FROM p_in)
+         )
+    DELETE FROM home_made_ingredients
+    WHERE group_id = ${groupId} AND (name, kind) NOT IN (SELECT name, kind FROM h_in)
+  `);
+  return { ok: true };
+}
+
+/**
+ * One home-made ingredient's settings: a single upsert, pruning nothing. For an
+ * `other` ingredient it also drops that key's typed price in the same
+ * statement (typed-price or home-made, never both).
+ */
+export async function upsertHomeMade(groupId: number, s: HomeMadeSettings): Promise<WriteResult> {
+  const name = s.name.trim();
+  await db.execute(sql`
+    WITH up AS (
+      INSERT INTO home_made_ingredients
+        (group_id, name, kind, flour_name, liquid_name, liquid_kind, hydration_pct, waste_factor, created_at, updated_at)
+      VALUES (${groupId}, ${name}, ${s.kind}::ingredient_kind, ${s.flourName?.trim() ?? null},
+              ${s.liquidName.trim()}, ${s.liquidKind}::ingredient_kind, ${s.hydrationPct},
+              ${s.wasteFactor.toFixed(2)}::numeric, now(), now())
+      ON CONFLICT (group_id, name, kind)
+      DO UPDATE SET flour_name = EXCLUDED.flour_name, liquid_name = EXCLUDED.liquid_name,
+                    liquid_kind = EXCLUDED.liquid_kind, hydration_pct = EXCLUDED.hydration_pct,
+                    waste_factor = EXCLUDED.waste_factor, updated_at = now()
+    )
+    DELETE FROM ingredient_prices
+    WHERE group_id = ${groupId} AND name = ${name} AND kind = 'other'::ingredient_kind
+      AND ${s.kind} = 'other'
+  `);
+  return { ok: true };
+}
+
 /**
  * One ingredient's price per kilo. A single upsert: unlike the price-book save
  * it prunes nothing, so a proposal for one ingredient cannot drop the others.
- * The starter's price is derived from the starter settings, never stored here.
+ * A home-made ingredient's price is derived from its settings, never stored here.
  */
 export async function upsertIngredientPrice(
   groupId: number,
@@ -295,9 +429,24 @@ export async function upsertIngredientPrice(
   if (p.kind === 'starter') {
     return { ok: false, status: 400, error: 'The starter price is derived from the starter settings' };
   }
+  const name = p.name.trim();
+  const [homeMade] = await db
+    .select({ id: homeMadeIngredients.id })
+    .from(homeMadeIngredients)
+    .where(
+      and(
+        eq(homeMadeIngredients.groupId, groupId),
+        eq(homeMadeIngredients.name, name),
+        eq(homeMadeIngredients.kind, p.kind)
+      )
+    )
+    .limit(1);
+  if (homeMade) {
+    return { ok: false, status: 400, error: `"${name}" is home-made; its price is derived from its settings` };
+  }
   await db
     .insert(ingredientPrices)
-    .values({ groupId, name: p.name.trim(), kind: p.kind, pricePerKg: p.pricePerKg })
+    .values({ groupId, name, kind: p.kind, pricePerKg: p.pricePerKg })
     .onConflictDoUpdate({
       target: [ingredientPrices.groupId, ingredientPrices.name, ingredientPrices.kind],
       set: { pricePerKg: p.pricePerKg, updatedAt: sql`now()` },

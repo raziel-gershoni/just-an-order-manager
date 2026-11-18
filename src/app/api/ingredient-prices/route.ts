@@ -1,12 +1,12 @@
 import { withGroup, jsonResponse, errorResponse } from '@/lib/api-utils';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
 import { z } from 'zod/v4';
 import { KIND_DISPLAY_ORDER, type IngredientKind } from '@/lib/recipe';
 import { priceKey } from '@/lib/cost';
+import { homeMadeSchema, validateIngredientBook, saveIngredientBook } from '@/lib/catalog-writes';
 import {
   loadPriceBook,
   loadPriceRows,
+  loadHomeMade,
   loadIngredientsInUse,
   loadBreadsForCosting,
 } from '@/lib/ingredient-costs';
@@ -41,13 +41,22 @@ export const GET = withGroup(async (request, auth, groupId) => {
     return jsonResponse({ book });
   }
 
-  const [prices, inUse, breads] = await Promise.all([
+  const [prices, homeMade, inUse, breads] = await Promise.all([
     loadPriceRows(groupId),
+    loadHomeMade(groupId),
     loadIngredientsInUse(groupId),
     loadBreadsForCosting(groupId),
   ]);
 
   const inUseKeys = new Set(inUse.map((i) => priceKey(i.name, i.kind)));
+  // A priced ingredient used only as a home-made flour or liquid is not an
+  // orphan: a rye starter is fed rye flour no bread lists on its own.
+  const feedingKeys = new Set(
+    homeMade.flatMap((h) => [
+      ...(h.flourName ? [priceKey(h.flourName, 'flour')] : []),
+      priceKey(h.liquidName, h.liquidKind),
+    ])
+  );
   // Sorted by kind so the screen can render straight down without regrouping.
   const byKindThenName = (a: { name: string; kind: IngredientKind }, b: { name: string; kind: IngredientKind }) =>
     KIND_DISPLAY_ORDER.indexOf(a.kind) - KIND_DISPLAY_ORDER.indexOf(b.kind) || a.name.localeCompare(b.name, 'he');
@@ -60,7 +69,15 @@ export const GET = withGroup(async (request, auth, groupId) => {
     // names mean a typo mints a new identity and orphans the old price; showing
     // orphans is how that becomes visible the day it happens rather than six
     // months later.
-    orphans: prices.filter((p) => !inUseKeys.has(priceKey(p.name, p.kind))).sort(byKindThenName),
+    orphans: prices
+      .filter((p) => {
+        const key = priceKey(p.name, p.kind);
+        return !inUseKeys.has(key) && !feedingKeys.has(key);
+      })
+      .sort(byKindThenName),
+    homeMade,
+    // Saved home-made rows whose name is in no recipe (a rename shows here).
+    homeMadeOrphans: homeMade.filter((h) => !inUseKeys.has(priceKey(h.name, h.kind))),
     breads,
   });
 });
@@ -75,11 +92,7 @@ const putSchema = z.object({
       })
     )
     .max(200),
-  starter: z.object({
-    flourName: z.string().trim().min(1).max(100).nullable(),
-    hydrationPct: z.number().int().min(1).max(500),
-    wasteFactor: z.number().min(1).max(10),
-  }),
+  homeMade: z.array(homeMadeSchema).max(200),
 });
 
 export const PUT = withGroup(async (request, auth, groupId) => {
@@ -90,58 +103,14 @@ export const PUT = withGroup(async (request, auth, groupId) => {
   const parsed = putSchema.safeParse(body);
   if (!parsed.success) return errorResponse(parsed.error.message);
 
-  const { prices, starter } = parsed.data;
+  const { prices, homeMade } = parsed.data;
 
-  // The unique index would reject this anyway, with a Postgres error the owner
-  // can't read.
-  const keys = prices.map((p) => priceKey(p.name, p.kind));
-  const duplicate = keys.find((k, i) => keys.indexOf(k) !== i);
-  if (duplicate) {
-    return errorResponse(`Ingredient "${duplicate.slice(0, duplicate.lastIndexOf('|'))}" appears twice`, 400);
-  }
+  const checked = validateIngredientBook(prices, homeMade);
+  if (!checked.ok) return errorResponse(checked.error, 400);
 
-  const starterUpdate = sql`
-    UPDATE groups SET
-      starter_flour_name = ${starter.flourName},
-      starter_hydration_pct = ${starter.hydrationPct},
-      starter_waste_factor = ${starter.wasteFactor.toFixed(2)}
-    WHERE id = ${groupId}
-  `;
-
-  // One statement, because neon-http has no interactive transactions: a
-  // two-statement swap can strand the group with its settings updated and its
-  // prices gone, which reads as "nothing is priced" on every cost surface.
-  //
-  // Upsert-then-prune rather than delete-then-insert. Every statement inside a
-  // WITH sees the same snapshot, so a DELETE in one CTE does not clear the way
-  // for an INSERT in another: the unique index still sees the old rows and
-  // rejects the new ones. That is fine for the recipe write, whose table has no
-  // unique index — here it made the second save of any price book a 500. The
-  // prune and the upsert touch disjoint keys, so sharing a snapshot is safe.
   try {
-    if (prices.length === 0) {
-      await db.execute(sql`
-        WITH g AS (${starterUpdate})
-        DELETE FROM ingredient_prices WHERE group_id = ${groupId}
-      `);
-    } else {
-      const rows = prices.map(
-        (p) => sql`(${p.name}::varchar, ${p.kind}::ingredient_kind, ${p.pricePerKg}::numeric)`
-      );
-      await db.execute(sql`
-        WITH g AS (${starterUpdate}),
-             input(name, kind, price_per_kg) AS (VALUES ${sql.join(rows, sql`, `)}),
-             upserted AS (
-               INSERT INTO ingredient_prices (group_id, name, kind, price_per_kg, created_at, updated_at)
-               SELECT ${groupId}, name, kind, price_per_kg, now(), now() FROM input
-               ON CONFLICT (group_id, name, kind)
-               DO UPDATE SET price_per_kg = EXCLUDED.price_per_kg, updated_at = now()
-             )
-        DELETE FROM ingredient_prices
-        WHERE group_id = ${groupId}
-          AND (name, kind) NOT IN (SELECT name, kind FROM input)
-      `);
-    }
+    const saved = await saveIngredientBook(groupId, prices, homeMade);
+    if (!saved.ok) return errorResponse(saved.error, saved.status);
   } catch (e) {
     console.error('[ingredient-prices] write failed', e);
     return errorResponse('Could not save the ingredient prices', 500);
