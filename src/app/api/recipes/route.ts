@@ -15,6 +15,9 @@ import { withBakersPercents, KIND_DISPLAY_ORDER, type IngredientKind } from '@/l
  * Bakers may read this — they own recipes here, same as the per-type GET.
  */
 export const GET = withGroup(async (_request, _auth, groupId) => {
+  // No money in it, so bakers get it too: the editor's live hydration line
+  // needs it even for a bread with no recipe yet.
+  const splits = await loadHydrationSplits(groupId);
   const types = await db
     .select({ id: breadTypes.id, name: breadTypes.name, sortOrder: breadTypes.sortOrder })
     .from(breadTypes)
@@ -22,13 +25,13 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     .orderBy(asc(breadTypes.sortOrder));
 
   const typeIds = types.map((t) => t.id);
-  if (typeIds.length === 0) return jsonResponse({ recipes: [], namesByKind: blankNames() });
+  if (typeIds.length === 0) return jsonResponse({ recipes: [], namesByKind: blankNames(), hydrationSplits: splits });
 
   const recipeRows = await db
     .select({ breadTypeId: breadRecipes.breadTypeId })
     .from(breadRecipes)
     .where(inArray(breadRecipes.breadTypeId, typeIds));
-  if (recipeRows.length === 0) return jsonResponse({ recipes: [], namesByKind: blankNames() });
+  if (recipeRows.length === 0) return jsonResponse({ recipes: [], namesByKind: blankNames(), hydrationSplits: splits });
 
   const configured = recipeRows.map((r) => r.breadTypeId);
   const ingredientRows = await db
@@ -43,8 +46,6 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
     list.push(row);
     byType.set(row.breadTypeId, list);
   }
-
-  const splits = await loadHydrationSplits(groupId);
 
   const namesByKind = blankNames();
   for (const row of ingredientRows) {
@@ -88,7 +89,7 @@ export const GET = withGroup(async (_request, _auth, groupId) => {
       };
     });
 
-  return jsonResponse({ recipes, namesByKind });
+  return jsonResponse({ recipes, namesByKind, hydrationSplits: splits });
 });
 
 function blankNames(): Record<IngredientKind, string[]> {

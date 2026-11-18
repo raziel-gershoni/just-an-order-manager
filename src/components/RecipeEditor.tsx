@@ -13,6 +13,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { Plus, Trash2, Pencil, Calculator, Copy } from 'lucide-react';
 import { groupByKind, scaleRecipe, type IngredientKind } from '@/lib/recipe';
 import { costScaledRecipe, type PriceBook } from '@/lib/cost';
+import { totalHydration, type HydrationSplits } from '@/lib/hydration';
 import { IngredientNameInput } from '@/components/recipe/IngredientNameInput';
 import { CopyRecipeFlow } from '@/components/recipe/CopyRecipeFlow';
 import { EMPTY_NAMES, type GroupRecipe, type NamesByKind, type SeedRow } from '@/components/recipe/types';
@@ -29,6 +30,8 @@ interface BakersPercentIngredient extends StoredIngredient {
 interface FetchedRecipe {
   ingredients: StoredIngredient[];
   bakersPercents: BakersPercentIngredient[];
+  /** Hydration of each home-made row (no money), keyed by name|kind. */
+  hydrationSplits: HydrationSplits;
   updatedAt: string;
 }
 interface EditorRow {
@@ -86,6 +89,21 @@ function pctOfFlourFromRows(rows: EditorRow[]): { pcts: { name: string; pctOfFlo
   };
 }
 
+/** "Total hydration N%", plus the home-made names that could not be counted. */
+function HydrationLine({ pct, leavesOut }: { pct: number | null; leavesOut: string[] }) {
+  const t = useT();
+  if (pct === null) return null;
+  return (
+    <div className="text-xs text-muted-foreground">
+      {t('settings.total_hydration')}{' '}
+      <span dir="ltr" className="tabular-nums">
+        {Math.round(pct)}%
+      </span>
+      {leavesOut.length > 0 && ` · ${t('settings.hydration_leaves_out')}: ${leavesOut.join(', ')}`}
+    </div>
+  );
+}
+
 export interface RecipeEditorProps {
   breadTypeId: number;
   /** Default reference weight to use when opening the editor for the first time (e.g. first enabled size's weightGrams). */
@@ -125,6 +143,9 @@ export function RecipeEditor({
   const [sources, setSources] = useState<GroupRecipe[]>([]);
   const [namesByKind, setNamesByKind] = useState<NamesByKind>(EMPTY_NAMES);
   const [copying, setCopying] = useState(false);
+  // Home-made splits from the group read: the only source while this bread has
+  // no recipe yet (creating one), when the per-recipe read has none.
+  const [groupSplits, setGroupSplits] = useState<HydrationSplits>({});
 
   // Ingredient prices, for the one-line cost readout. Owner/manager only — the
   // endpoint 403s for bakers, so asking would just log a failure.
@@ -185,9 +206,14 @@ export function RecipeEditor({
     // stayed empty for the rest of the sheet's life.
     loadedGroupRecipes.current = true;
     let landed = false;
-    apiFetch<{ recipes: GroupRecipe[]; namesByKind: NamesByKind }>('/recipes')
+    apiFetch<{
+      recipes: GroupRecipe[];
+      namesByKind: NamesByKind;
+      hydrationSplits?: HydrationSplits;
+    }>('/recipes')
       .then((res) => {
         landed = true;
+        setGroupSplits(res.hydrationSplits ?? {});
         setNamesByKind(res.namesByKind);
         // A bread is never its own copy source.
         setSources(res.recipes.filter((r) => r.breadTypeId !== breadTypeId));
@@ -306,6 +332,17 @@ export function RecipeEditor({
   }
 
   const previewPcts = useMemo(() => pctOfFlourFromRows(rows), [rows]);
+  // Grams stand in for the percentage: the hydration ratio does not depend on scale.
+  const previewHydration = useMemo(
+    () =>
+      totalHydration(
+        rows
+          .filter((r) => r.name.trim())
+          .map((r) => ({ name: r.name.trim(), kind: r.kind, pct: Number(r.grams) || 0 })),
+        recipe?.hydrationSplits ?? groupSplits
+      ),
+    [rows, recipe, groupSplits]
+  );
 
   /** Ids of rows whose trimmed name collides with an earlier row's. */
   const duplicateRowIds = useMemo(() => {
@@ -495,6 +532,9 @@ export function RecipeEditor({
                 </span>
               ))}
             </div>
+            {previewHydration && (
+              <HydrationLine pct={previewHydration.pct} leavesOut={previewHydration.leavesOut} />
+            )}
             <div className="text-muted-foreground tabular-nums pt-1 border-t border-border/40">
               {t('settings.dough_total')}: {previewPcts.totalDoughGrams}ג ·{' '}
               {t('settings.finished_weight')}: {refWeight || '0'}ג
@@ -560,6 +600,12 @@ export function RecipeEditor({
     (sum, i) => sum + (i.pctOfFinished * dispW) / 100,
     0
   );
+  // Total hydration reads the stored percentages (scale-free), so it does not
+  // move with the grams calculator.
+  const viewHydration = totalHydration(
+    recipe.ingredients.map((i) => ({ name: i.name, kind: i.kind, pct: i.pctOfFinished })),
+    recipe.hydrationSplits ?? {}
+  );
   // Costed at the weight on screen, so the grams calculator moves it too.
   const cost =
     book && dispW > 0
@@ -603,6 +649,10 @@ export function RecipeEditor({
           </div>
         ))}
       </div>
+
+      {viewHydration && (
+        <HydrationLine pct={viewHydration.pct} leavesOut={viewHydration.leavesOut} />
+      )}
 
       {/* One line, not a section: the sheet is already long, and the number the
           owner wants here is "what does this loaf cost me", not a breakdown. */}

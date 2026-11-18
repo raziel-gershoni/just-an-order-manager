@@ -97,7 +97,7 @@ export function CopyRecipeFlow({
               <span className="font-medium text-sm">{s.breadTypeName}</span>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {s.ingredients.length} {t('settings.ingredients_count')}
-                {s.hydrationPct != null && ` · ${t('settings.hydration')} ${s.hydrationPct}%`}
+                {s.hydrationPct != null && ` · ${t('settings.total_hydration')} ${s.hydrationPct}%`}
               </span>
             </button>
           ))}

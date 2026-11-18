@@ -10,7 +10,10 @@ import type { IngredientKind } from '@/lib/recipe';
 export interface GroupRecipe {
   breadTypeId: number;
   breadTypeName: string;
+  /** Total hydration: counts the flour and liquid inside home-made ingredients. */
   hydrationPct: number | null;
+  /** Home-made names that could not be split (not set up), left out of the figure. */
+  hydrationLeavesOut?: string[];
   ingredients: {
     name: string;
     kind: IngredientKind;
