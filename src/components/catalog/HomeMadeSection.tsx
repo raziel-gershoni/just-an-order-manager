@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
@@ -17,9 +17,11 @@ import {
   applyPreset,
   draftForEntry,
   draftToSettings,
+  homeMadeConflict,
   missingForHomeMade,
   newEntryDraft,
   presetsFor,
+  switchKind,
   type HomeMadeDraft,
   type HomeMadePreset,
 } from '@/lib/home-made-drafts';
@@ -74,10 +76,16 @@ export function HomeMadeSection() {
     []
   );
 
+  // Load on mount so the header count shows while closed.
+  useEffect(() => {
+    load();
+  }, [load]);
+
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && !data) load();
+    // Every open re-reads: the prices screen or a recipe may have changed things.
+    if (next) load();
   }
 
   const defaultWater = data?.liquidOptions.find((o) => o.kind === 'water')?.name ?? WATER_NAME;
@@ -148,7 +156,7 @@ export function HomeMadeSection() {
                 <HomeMadeEditor
                   className="mt-3 animate-expand"
                   card
-                  initial={newEntryDraft()}
+                  initial={newEntryDraft(defaultWater)}
                   adding
                   options={data}
                   onCancel={() => setEditing(null)}
@@ -198,7 +206,7 @@ function EntryRow({
         <div className="flex items-baseline gap-2">
           <span className="font-medium truncate">{entry.name}</span>
           <span className="text-[11px] text-muted-foreground shrink-0">
-            {entry.kind === 'starter' ? t('settings.kind_starter') : t('settings.kind_other')}
+            {t(`settings.kind_${entry.kind}`)}
           </span>
         </div>
         <div className="text-xs text-muted-foreground truncate">
@@ -279,19 +287,39 @@ function HomeMadeEditor({
 
   async function save() {
     const name = d.name.trim();
-    if (adding && !name) return;
-    if (adding && options.entries.some((e) => priceKey(e.name, e.kind) === priceKey(name, d.kind))) {
-      toast.error(t('catalog.home_made_exists'));
-      return;
+    if (adding) {
+      // The same rules the server applies, so the owner hears it before a round trip.
+      const conflict = homeMadeConflict({ name, kind: d.kind }, options.entries, { create: true });
+      if (conflict) {
+        toast.error(
+          t(
+            conflict.code === 'blank'
+              ? 'catalog.home_made_err_blank'
+              : conflict.code === 'control_chars'
+                ? 'catalog.home_made_err_chars'
+                : 'catalog.home_made_exists'
+          )
+        );
+        return;
+      }
     }
     setBusy(true);
     try {
       const settings = draftToSettings({ ...d, name }, saved);
-      await apiFetch('/home-made', { method: 'PUT', body: JSON.stringify(settings) });
+      await apiFetch('/home-made', {
+        method: 'PUT',
+        body: JSON.stringify(adding ? { ...settings, create: true } : settings),
+      });
       toast.success(t('catalog.home_made_saved'));
       await onDone();
     } catch (e) {
-      toast.error(friendlyError(e, t('catalog.save_failed')));
+      // A 409 is the server's "this name and kind already exist" (a race with another device).
+      if ((e as { status?: number }).status === 409) {
+        console.warn('[home-made] add refused: exists', e);
+        toast.error(t('catalog.home_made_exists'));
+      } else {
+        toast.error(friendlyError(e, t('catalog.save_failed')));
+      }
     } finally {
       setBusy(false);
     }
@@ -334,16 +362,16 @@ function HomeMadeEditor({
 
       {adding && (
         <div className="flex gap-2">
-          {(['starter', 'other'] as const).map((k) => (
+          {(['starter', 'tangzhong'] as const).map((k) => (
             <Button
               key={k}
               type="button"
               size="sm"
               variant={d.kind === k ? 'primary' : 'outline'}
               className="flex-1"
-              onClick={() => patch({ kind: k })}
+              onClick={() => setD((prev) => switchKind(prev, k))}
             >
-              {k === 'starter' ? t('settings.kind_starter') : t('settings.kind_other')}
+              {t(`settings.kind_${k}`)}
             </Button>
           ))}
         </div>

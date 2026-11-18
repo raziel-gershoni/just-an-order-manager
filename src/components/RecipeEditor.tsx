@@ -54,7 +54,7 @@ interface EditorRow {
 let nextRowId = 1;
 const newRowId = () => nextRowId++;
 
-const KIND_OPTIONS: IngredientKind[] = ['flour', 'water', 'salt', 'starter', 'other'];
+const KIND_OPTIONS: IngredientKind[] = ['flour', 'water', 'salt', 'starter', 'tangzhong', 'other'];
 
 function defaultTemplate(referenceWeight: number): EditorRow[] {
   // 100% flour, 70% water, 2% salt, 20% starter — standard sourdough starting point

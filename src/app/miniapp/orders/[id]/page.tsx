@@ -28,7 +28,7 @@ import Link from 'next/link';
 
 interface ScaledIngredient {
   name: string;
-  kind: 'flour' | 'water' | 'salt' | 'starter' | 'other';
+  kind: 'flour' | 'water' | 'salt' | 'starter' | 'tangzhong' | 'other';
   grams: number;
   pctOfFlour: number;
   sortOrder: number;

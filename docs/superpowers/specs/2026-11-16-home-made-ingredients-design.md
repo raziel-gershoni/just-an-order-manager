@@ -106,3 +106,27 @@ For bakers, `GET /api/bread-types/[id]/recipe` (and `GET /api/recipes`) return e
 - Exact layout of the "מכינים בעצמנו" card and how an `other` row is marked home-made, following the screen's existing patterns.
 - Default waste factor for a newly listed home-made ingredient (today's default is 1.5 for starter; 1 is sensible for `other`).
 - Exact Hebrew copy beyond the names given here.
+
+## Addendum 2026-11-18: home-made entries live in the catalogue
+
+The owner asked to define home-made ingredients before any recipe uses them, with quick-fill values, in the catalogue screen next to sizes and additions, outside the prices screen.
+
+- **Catalogue section "מכינים בעצמנו"** (`/miniapp/settings/catalog`, between additions and bread types, owner/manager only like sizes and additions). It lists every saved entry plus every starter name in a recipe that has no settings yet ("לא הוגדר"). Each row shows name, kind (מחמצת / אחר), flour, hydration and the derived ₪/kg or what is missing. A row expands to edit flour, liquid, hydration and waste, with save, cancel and delete, like an addition.
+- **Add**: name, kind (מחמצת or אחר), then the same fields. Quick-fill buttons set hydration and waste (and kind when adding): מחמצת רגילה 100 / 1.5, מחמצת קשה 50 / 1.5, טנזונג 500 / 1 (kind אחר). The names are always the owner's own; nothing is pre-created.
+- **The name is fixed once created.** It is the link to recipe rows (same name and kind), so renaming means deleting and adding again, and renaming the recipe row.
+- **Delete**: removes the settings. A starter still in a recipe shows again as "לא הוגדר"; an `other` row in a recipe goes back to needing a typed price.
+- **Recipe name suggestions** include saved entries by kind, so the baker picks "מחמצת שיפון" from the list.
+- **Prices screen**: the home-made card and the mark/unmark buttons go away; prices are still typed only there. Home-made rows show their derived price read-only, with a link to the catalogue. Flours and liquids that home-made entries use are listed for pricing even when no recipe lists them, with "בשימוש ב־" naming the entries. Its save sends prices only and never touches home-made settings; a typed price for a home-made key is refused.
+- **One write path**: the catalogue section saves through `upsertHomeMade`, deletes through `deleteHomeMade`, and both it and the MCP proposal check settings with one shared `checkHomeMade` (`src/lib/catalog-writes.ts`).
+
+## Addendum 2026-11-18 (2): tangzhong is its own kind
+
+Tangzhong was filed under `other`, which made "home-made" mean two things for one kind. It is now its own ingredient kind, and home-made means exactly `starter` or `tangzhong`.
+
+- **Kind**: `ingredient_kind` gains `tangzhong` (shown טנזונג, listed after the starter in a recipe). Migration 0037 moves a bakery's existing home-made `other` entries, and the recipe rows with the same name in that bakery, to `tangzhong`; an unrelated `other` row stays. The home-made check becomes `kind IN ('starter','tangzhong')`.
+- **No overlap any more**: a home-made kind never takes a typed price (the prices PUT, `upsertIngredientPrice` and the MCP price proposal refuse it), so the old "delete the typed price on write" and "refuse a home-made key" rules are gone. An `other` ingredient is always a bought, typed-price one.
+- **Catalogue section**: the add form's kind toggle is מחמצת / טנזונג (no more אחר). Quick-fill: regular and stiff set kind starter; טנזונג sets kind tangzhong; when editing, only the chips that fit the entry's kind show. Switching kind while hydration and waste still equal the old kind's defaults resets them to the new kind's defaults (100 / 1.5 starter, 500 / 1 tangzhong); a value the owner changed is kept. A new entry's liquid is the bakery's own first water name.
+- **Add-form checks**: a blank name, a name with line breaks or control characters, and a duplicate name and kind are each refused with a Hebrew message before sending (`homeMadeConflict`, shared with the server). The add sends `create: true`; the server answers 409 for a duplicate (for example one added from another device meanwhile), shown as the same "already exists" text.
+- **Section loading**: it loads on mount so the header count shows while closed, and re-reads every time it is opened.
+- **Prices screen**: a tangzhong row shows its derived price read-only, like a starter row, with the link to the catalogue.
+- **Recipe editor and every surface** that groups ingredients (editor, baker page, kitchen and print sheet, morning message) offer and group טנזונג under its own heading through `groupByKind` / `kindLabel`.

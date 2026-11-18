@@ -1,7 +1,5 @@
 import { hasControlChars } from './text-checks';
-import type { IngredientKind } from './recipe';
 import {
-  isHomeMadeKind,
   priceKey,
   type HomeMadeKind,
   type HomeMadeSettings,
@@ -90,27 +88,6 @@ export function draftToSettings(d: HomeMadeDraft, saved?: HomeMadeSettings): Hom
   };
 }
 
-/**
- * Initial drafts: every saved row, plus every in-use starter or tangzhong with none (defaults,
- * liquid = the first in-use water name, else "מים").
- */
-export function buildDrafts(
-  saved: HomeMadeSettings[],
-  inUse: { name: string; kind: string }[],
-  defaultWater: string
-): Record<string, HomeMadeDraft> {
-  const out: Record<string, HomeMadeDraft> = {};
-  for (const s of saved) out[priceKey(s.name, s.kind)] = draftFromSettings(s);
-  const water = inUse.find((i) => i.kind === 'water')?.name ?? defaultWater;
-  for (const i of inUse) {
-    if (!isHomeMadeKind(i.kind as IngredientKind)) continue;
-    const kind = i.kind as HomeMadeKind;
-    const key = priceKey(i.name, kind);
-    if (!(key in out)) out[key] = defaultDraft(i.name, kind, water);
-  }
-  return out;
-}
-
 /** The name that keeps a set-up home-made ingredient unpriced, or null when it prices. */
 export function missingForHomeMade(s: HomeMadeSettings, book: PriceBook): string | null {
   if (!s.flourName) return null;
@@ -151,9 +128,22 @@ export function applyPreset(d: HomeMadeDraft, preset: HomeMadePreset, adding: bo
   };
 }
 
-/** A blank draft for the add form. */
-export function newEntryDraft(): HomeMadeDraft {
-  return defaultDraft('', 'starter', WATER_NAME);
+/** A blank draft for the add form; the liquid is the bakery's own water name. */
+export function newEntryDraft(defaultWater: string = WATER_NAME): HomeMadeDraft {
+  return defaultDraft('', 'starter', defaultWater);
+}
+
+/**
+ * Changes an add-form draft's kind. Hydration and waste still equal the OLD
+ * kind's defaults are untouched, so they follow the new kind; a value the owner
+ * edited stays (and so does its partner, to avoid a half-reset pair).
+ */
+export function switchKind(d: HomeMadeDraft, kind: HomeMadeKind): HomeMadeDraft {
+  if (kind === d.kind) return d;
+  const old = HOME_MADE_DEFAULTS[d.kind];
+  const next = HOME_MADE_DEFAULTS[kind];
+  const untouched = d.hydration === String(old.hydration) && d.waste === String(old.waste);
+  return untouched ? { ...d, kind, hydration: String(next.hydration), waste: String(next.waste) } : { ...d, kind };
 }
 
 /** The editor's starting draft for a listed entry: its settings, or defaults when not set up. */

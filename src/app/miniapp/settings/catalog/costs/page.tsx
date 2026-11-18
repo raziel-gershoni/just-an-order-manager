@@ -22,6 +22,7 @@ import {
 import {
   costScaledRecipe,
   homeMadePricePerKg,
+  isHomeMadeKind,
   priceKey,
   type PriceBook,
 } from '@/lib/cost';
@@ -275,8 +276,8 @@ export default function CostsPage() {
               )}
               {group.items.map((item) => {
                 const key = priceKey(item.name, item.kind);
-                // A starter is always made here, even before it has settings.
-                const isHomeMade = key in book.homeMade || item.kind === 'starter';
+                // A starter or tangzhong is always made here, even before it has settings.
+                const isHomeMade = key in book.homeMade || isHomeMadeKind(item.kind);
                 const derived = derivedFor(key);
                 return (
                   <div key={key} className="flex items-center gap-3">
