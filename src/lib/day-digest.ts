@@ -312,8 +312,8 @@ export function prepLinesFrom(
   homeMade: HomeMadeSettings[]
 ): PrepLine[] {
   const totals = new Map<string, { name: string; kind: 'starter' | 'tangzhong'; grams: number }>();
-  for (const t of byType) {
-    for (const ing of t.recipe?.ingredients ?? []) {
+  for (const entry of byType) {
+    for (const ing of entry.recipe?.ingredients ?? []) {
       if (ing.kind !== 'starter' && ing.kind !== 'tangzhong') continue;
       const key = priceKey(ing.name, ing.kind);
       const prev = totals.get(key);

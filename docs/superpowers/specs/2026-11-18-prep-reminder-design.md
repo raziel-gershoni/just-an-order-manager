@@ -16,9 +16,9 @@ Bakers get today's bake at 06:00 on the baking day. Sourdough work starts the da
 - **The text** (Hebrew, Telegram HTML):
   ```
   📋 מחר אופים, זמן להתחיל הכנות
-  יום ו׳ 20.11
+  יום ו׳ 20/11
 
-  כפרי 750 ג׳: 8 כיכרות
+  כפרי גדול (1000g): 8 כיכרות
   שיפון: 4 כיכרות
   סה״כ מחר: 12 כיכרות
 
@@ -27,6 +27,7 @@ Bakers get today's bake at 06:00 on the baking day. Sourdough work starts the da
   טנזונג 300ג (קמח לבן 50ג · מים 250ג)
   מחמצת כוסמין 400ג
   ```
+  - **Order of the "להכין" lines** follows recipe kind order (as in the morning recipe block), not the example's order; the example is illustrative.
   - **Bread lines** use the same staff labels as the morning summary (type, size, additions), with total loaves per label. The message has no customer names: for preparation, the totals are what count.
   - **"להכין"** lists every starter-kind and tangzhong-kind ingredient in tomorrow's scaled recipes, summed across breads by name and kind. Each line shows its total grams. When that home-made ingredient has settings with a flour, its split is shown in parentheses: flour = total × 100/(100+h), liquid = total × h/(100+h), using the settings' flour and liquid names. With no settings, the line shows the total only.
   - Grams are rounded to whole grams, the same as the morning recipe block.
