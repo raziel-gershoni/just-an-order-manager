@@ -15,7 +15,7 @@ import { formatStaffItemLabel } from '@/lib/order-display';
 import { aggregateRecipesForOrders, buildRecipeBlockForOrders } from '@/lib/order-recipe';
 import { loadHomeMade } from '@/lib/ingredient-costs';
 import { priceKey, type HomeMadeSettings } from '@/lib/cost';
-import type { ScaledRecipe } from '@/lib/recipe';
+import { KIND_DISPLAY_ORDER, type ScaledRecipe } from '@/lib/recipe';
 import { formatWeekdayShort } from '@/lib/date-utils';
 import { getOrderDisplay, openUndated, todayCondition, undatedFirst } from '@/lib/asap';
 
@@ -304,7 +304,8 @@ export type PrepLine = {
 
 /**
  * Every starter and tangzhong across the day's scaled recipes, summed by name
- * and kind (first-seen order), each with its flour/liquid split from its own
+ * and kind, in recipe kind order (starters, then tangzhong; first-seen order
+ * within a kind, which is menu order), each with its flour/liquid split from its own
  * hydration: flour = total x 100/(100+h), liquid = total x h/(100+h).
  */
 export function prepLinesFrom(
@@ -322,7 +323,11 @@ export function prepLinesFrom(
     }
   }
   const settings = new Map(homeMade.map((h) => [priceKey(h.name, h.kind), h]));
-  return Array.from(totals.entries()).map(([key, tot]) => {
+  // Array.prototype.sort is stable, so first-seen order holds within a kind.
+  const ordered = Array.from(totals.entries()).sort(
+    ([, a], [, b]) => KIND_DISPLAY_ORDER.indexOf(a.kind) - KIND_DISPLAY_ORDER.indexOf(b.kind)
+  );
+  return ordered.map(([key, tot]) => {
     const h = settings.get(key);
     const split =
       h && h.flourName
@@ -356,9 +361,17 @@ export async function prepBake(
   const lines = await bakeLines(rows);
   if (lines.length === 0) return null;
 
-  const [{ byType }, homeMade] = await Promise.all([
-    aggregateRecipesForOrders(rows.map((o) => o.id)),
-    loadHomeMade(groupId),
-  ]);
-  return { lines, prep: prepLinesFrom(byType, homeMade) };
+  // The bread list still goes out when the recipes can't be read, the same as
+  // the morning summary's recipe block; only the להכין part is lost.
+  let prep: PrepLine[] = [];
+  try {
+    const [{ byType }, homeMade] = await Promise.all([
+      aggregateRecipesForOrders(rows.map((o) => o.id)),
+      loadHomeMade(groupId),
+    ]);
+    prep = prepLinesFrom(byType, homeMade);
+  } catch (err) {
+    console.error(`[day-digest] prep block failed for group ${groupId}:`, err);
+  }
+  return { lines, prep };
 }

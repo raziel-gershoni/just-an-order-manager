@@ -8,7 +8,7 @@ Bakers get today's bake at 06:00 on the baking day. Sourdough work starts the da
 
 ## What
 
-- **One message per bakery the day before a baking day,** to the bakers only, the same recipients as the morning summary (`getRecipientsByRole(groupId, ['baker'])`). Nothing is sent when nothing is ordered for tomorrow.
+- **One message per bakery the day before a baking day,** to the bakers (and the owner, whom `getRecipientsByRole` always adds), the same recipients as the morning summary (`getRecipientsByRole(groupId, ['baker'])`). Nothing is sent when nothing is ordered for tomorrow.
 - **When** (Israel time):
   - Sunday to Friday: 06:00, for the next day.
   - Saturday: 20:00, for Sunday. This is after Shabbat ends for most of the year. In midsummer Shabbat ends around 20:30; the owner accepted this.
@@ -44,7 +44,7 @@ Bakers get today's bake at 06:00 on the baking day. Sourdough work starts the da
   - Tomorrow's orders and bread lines come from `src/lib/day-digest.ts` (`bakeLines`).
   - The scaled recipes come from `aggregateRecipesForOrders` (`src/lib/order-recipe.ts`).
   - The home-made settings come from `loadHomeMade` (`src/lib/ingredient-costs.ts`).
-  - The day label uses `formatWeekdayShort` and `formatDayMonth` from `src/lib/date-utils.ts`.
+  - The day label uses `formatWeekdayShort` from `src/lib/date-utils.ts` (it already gives "יום ו׳ 20/11").
   - The Israel hour comes from a new `israelHour(now)` in date-utils (Intl, Asia/Jerusalem).
   - Building the message is a pure function, so it can be tested offline.
 - **Strings** are in `src/lib/i18n.ts`.
