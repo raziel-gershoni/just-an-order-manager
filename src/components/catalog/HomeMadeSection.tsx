@@ -280,6 +280,10 @@ function HomeMadeEditor({
   async function save() {
     const name = d.name.trim();
     if (adding && !name) return;
+    if (adding && options.entries.some((e) => priceKey(e.name, e.kind) === priceKey(name, d.kind))) {
+      toast.error(t('catalog.home_made_exists'));
+      return;
+    }
     setBusy(true);
     try {
       const settings = draftToSettings({ ...d, name }, saved);
