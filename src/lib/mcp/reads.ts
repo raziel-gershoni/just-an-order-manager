@@ -157,7 +157,8 @@ export interface RecipeView {
   name: string;
   updatedAt: string;
   /** Total hydration: counts the flour and liquid inside home-made ingredients. */
-  hydrationPct: number;
+  /** Null when the recipe has no flour, so there is nothing to divide by. */
+  hydrationPct: number | null;
   /** Starters with no settings yet, which the hydration leaves out. */
   hydrationLeavesOut: string[];
   ingredients: { name: string; kind: IngredientKind; pctOfFinished: number; bakersPct: number }[];
@@ -189,7 +190,7 @@ export async function getRecipes(groupId: number, breadTypeId?: number): Promise
       breadTypeId: bread.breadTypeId,
       name: bread.breadTypeName,
       updatedAt: (updated.get(bread.breadTypeId) ?? new Date(0)).toISOString(),
-      hydrationPct: round1(hydration.pct ?? 0),
+      hydrationPct: hydration.pct === null ? null : round1(hydration.pct),
       hydrationLeavesOut: hydration.leavesOut,
       ingredients: withBakers.ingredients.map((i) => ({
         name: i.name,
