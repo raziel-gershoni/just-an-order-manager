@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { DocketStub, docketWidth } from '@/components/ui/DocketStub';
 import { BreadSheet } from '@/components/catalog/BreadSheet';
+import { HomeMadeSection } from '@/components/catalog/HomeMadeSection';
 import type { MediaAsset } from '@/components/site-editor/MediaLibrary';
 import { effectivePrice } from '@/lib/pricing';
 import { friendlyError } from '@/lib/utils';
@@ -1053,6 +1054,11 @@ export default function CatalogPage() {
           )}
           </>)}
         </section>
+        )}
+
+        {/* HOME-MADE INGREDIENTS (managers only) */}
+        {!isBaker && (
+          <HomeMadeSection />
         )}
 
         {/* BREAD TYPES */}

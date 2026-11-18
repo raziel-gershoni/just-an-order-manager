@@ -116,3 +116,45 @@ export function missingForHomeMade(s: HomeMadeSettings, book: PriceBook): string
   }
   return null;
 }
+
+/** Quick-fill values for the catalogue editor. Each changes only what it sets. */
+export type HomeMadePreset = 'regular' | 'stiff' | 'tangzhong';
+
+export const HOME_MADE_PRESETS: Record<
+  HomeMadePreset,
+  { hydration: string; waste: string; kind: HomeMadeKind }
+> = {
+  regular: { hydration: '100', waste: '1.5', kind: 'starter' },
+  stiff: { hydration: '50', waste: '1.5', kind: 'starter' },
+  tangzhong: { hydration: '500', waste: '1', kind: 'other' },
+};
+
+/** Which chips the editor offers: all when adding, the ones that fit the kind when editing. */
+export function presetsFor(mode: 'add' | HomeMadeKind): HomeMadePreset[] {
+  if (mode === 'add') return ['regular', 'stiff', 'tangzhong'];
+  return mode === 'starter' ? ['regular', 'stiff'] : ['tangzhong'];
+}
+
+/** The kind is part of an entry's identity, so only an add may change it. */
+export function applyPreset(d: HomeMadeDraft, preset: HomeMadePreset, adding: boolean): HomeMadeDraft {
+  const p = HOME_MADE_PRESETS[preset];
+  return {
+    ...d,
+    hydration: p.hydration,
+    waste: p.waste,
+    kind: adding ? p.kind : d.kind,
+  };
+}
+
+/** A blank draft for the add form. */
+export function newEntryDraft(): HomeMadeDraft {
+  return defaultDraft('', 'starter', WATER_NAME);
+}
+
+/** The editor's starting draft for a listed entry: its settings, or defaults when not set up. */
+export function draftForEntry(
+  entry: { name: string; kind: HomeMadeKind; saved: HomeMadeSettings | null },
+  defaultWater: string
+): HomeMadeDraft {
+  return entry.saved ? draftFromSettings(entry.saved) : defaultDraft(entry.name, entry.kind, defaultWater);
+}
