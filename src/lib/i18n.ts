@@ -41,6 +41,7 @@ const translations: Record<string, string> = {
   'dash.create': 'הקמה',
   'dash.bakery_created': '!המאפייה מוכנה',
   'dash.bakery_create_failed': 'ההקמה נכשלה, נסו שוב',
+  'dash.invite_only': 'האפליקציה מיועדת לצוות המאפייה. כדי להצטרף צריך קישור הזמנה.',
   'dash.new_order': 'הזמנה חדשה',
   'dash.record_payment': 'רשום תשלום',
   'dash.today': 'היום',

@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 function AppProviders({ children }: { children: ReactNode }) {
   const [activeGroupId, setActiveGroupId] = useState<number | null>(null);
   const [activeGroupRole, setActiveGroupRole] = useState<GroupRole | null>(null);
+  const [canCreateGroup, setCanCreateGroup] = useState(false);
   const [lang, setLang] = useState<Lang>('he');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [authResolved, setAuthResolved] = useState(false);
@@ -67,6 +68,7 @@ function AppProviders({ children }: { children: ReactNode }) {
           setActiveGroupId(data.groups[0].id);
           setActiveGroupRole(data.groups[0].role ?? null);
         }
+        setCanCreateGroup(data.canCreateGroup === true);
       })
       .catch((err) => {
         console.error('[auth] /api/auth/me failed on app start:', err);
@@ -84,7 +86,9 @@ function AppProviders({ children }: { children: ReactNode }) {
   return (
     <LangCtx.Provider value={lang}>
       <ToastCtx.Provider value={{ toasts, showToast, dismissToast }}>
-        <GroupCtx.Provider value={{ activeGroupId, activeGroupRole, setActiveGroupId, setActiveGroupRole }}>
+        <GroupCtx.Provider
+          value={{ activeGroupId, activeGroupRole, canCreateGroup, setActiveGroupId, setActiveGroupRole }}
+        >
           <div
             dir={dir}
             className={cn('min-h-screen bg-background text-foreground', dark && 'theme-dark')}

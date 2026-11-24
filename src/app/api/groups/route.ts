@@ -2,6 +2,7 @@ import { withAuth, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { groups, groupMembers, breadTypes } from '@/db/schema';
 import { z } from 'zod/v4';
+import { canCreateGroup } from '@/lib/group-signup';
 
 const createGroupSchema = z.object({
   name: z.string().min(1).max(255),
@@ -9,6 +10,13 @@ const createGroupSchema = z.object({
 });
 
 export const POST = withAuth(async (request, auth) => {
+  if (!(await canCreateGroup())) {
+    console.warn('[groups] create refused: a business already exists, joining is by invite only', {
+      userId: auth.dbUser.id,
+    });
+    return errorResponse('Joining is by invite only', 403);
+  }
+
   const body = await request.json();
   const parsed = createGroupSchema.safeParse(body);
   if (!parsed.success) {

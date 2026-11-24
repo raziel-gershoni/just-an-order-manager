@@ -49,7 +49,7 @@ export const POST = withAuth(async (request, auth) => {
 
   return jsonResponse(
     result.action === 'accepted'
-      ? { success: true, action: 'accepted', groupId: result.groupId }
+      ? { success: true, action: 'accepted', groupId: result.groupId, role: result.role }
       : { success: true, action: 'declined' }
   );
 });

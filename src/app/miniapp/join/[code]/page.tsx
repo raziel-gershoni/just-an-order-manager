@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useApi } from '@/hooks/useApi';
+import { useGroup, type GroupRole } from '@/hooks/useGroup';
 import { useT } from '@/hooks/useLang';
 import { useToast } from '@/hooks/useToast';
 import { Card } from '@/components/ui/Card';
@@ -16,6 +17,7 @@ interface InviteInfo { groupName: string; role: string; status: string }
 export default function JoinPage() {
   const { code } = useParams<{ code: string }>();
   const { apiFetch } = useApi();
+  const { activeGroupId, setActiveGroupId, setActiveGroupRole } = useGroup();
   const router = useRouter();
   const t = useT();
   const toast = useToast();
@@ -46,10 +48,17 @@ export default function JoinPage() {
   async function respond(action: 'accept' | 'decline') {
     setActing(true);
     try {
-      await apiFetch(`/invites/${code}`, {
+      const res = await apiFetch<{ action: string; groupId?: number; role?: GroupRole }>(`/invites/${code}`, {
         method: 'POST',
         body: JSON.stringify({ action }),
       });
+      // The app loaded its businesses once, on start, so someone who had none
+      // would land on the invite-only screen. Open the business they just
+      // joined, as a reload would (their only one).
+      if (res.action === 'accepted' && res.groupId && !activeGroupId) {
+        setActiveGroupId(res.groupId);
+        setActiveGroupRole(res.role ?? null);
+      }
       router.push('/miniapp');
     } catch (e) {
       toast.error(friendlyError(e, t('join.failed')));

@@ -2,6 +2,7 @@ import { withAuth, jsonResponse } from '@/lib/api-utils';
 import { db } from '@/db';
 import { groups, groupMembers } from '@/db/schema';
 import { asc, eq } from 'drizzle-orm';
+import { canCreateGroup } from '@/lib/group-signup';
 
 export const GET = withAuth(async (_request, auth) => {
   const userGroups = await db
@@ -19,5 +20,8 @@ export const GET = withAuth(async (_request, auth) => {
   return jsonResponse({
     user: auth.dbUser,
     groups: userGroups,
+    // Only someone with no business yet ever sees the setup card, and only on
+    // an empty installation (src/lib/group-signup.ts).
+    canCreateGroup: userGroups.length === 0 && (await canCreateGroup()),
   });
 });

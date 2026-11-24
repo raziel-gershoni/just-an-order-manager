@@ -59,7 +59,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { apiFetch } = useApi();
-  const { activeGroupId, activeGroupRole, setActiveGroupId, setActiveGroupRole } = useGroup();
+  const { activeGroupId, activeGroupRole, canCreateGroup, setActiveGroupId, setActiveGroupRole } = useGroup();
   const { user } = useTelegram();
   const router = useRouter();
   const canManage = activeGroupRole === 'owner' || activeGroupRole === 'manager';
@@ -129,6 +129,22 @@ export default function Dashboard() {
     } finally {
       setCreating(false);
     }
+  }
+
+  // No business and setting one up is closed (any business already exists):
+  // the app is for staff, who come in through an invite link.
+  if (!activeGroupId && !canCreateGroup) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-8 animate-fade-in">
+        <div className="w-full max-w-[320px] text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Wheat className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('dash.welcome')}</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">{t('dash.invite_only')}</p>
+        </div>
+      </div>
+    );
   }
 
   if (!activeGroupId) {
