@@ -18,6 +18,7 @@ import {
   primaryKey,
 } from 'drizzle-orm/pg-core';
 import type { StoredShabbatTimes } from '../lib/shabbat-view';
+import type { OrderButtonAction } from '../lib/order-buttons';
 
 // Ordered list controlling section order + visibility on the public site.
 export type SectionConfig = { key: string; visible: boolean };
@@ -561,6 +562,30 @@ export const whatsappInbound = pgTable('whatsapp_inbound', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   forwardedAt: timestamp('forwarded_at', { withTimezone: true }),
 });
+
+// The order buttons the bot has sent, one row per button on each message
+// (src/lib/order-buttons.ts). `position` is the button's row in the keyboard.
+// A row goes when its button is taken off the message, or after 30 days.
+export const tgOrderButtons = pgTable(
+  'tg_order_buttons',
+  {
+    id: serial('id').primaryKey(),
+    chatId: varchar('chat_id', { length: 50 }).notNull(),
+    messageId: integer('message_id').notNull(),
+    position: integer('position').notNull(),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    action: varchar('action', { length: 16 }).$type<OrderButtonAction>().notNull(),
+    label: text('label').notNull(),
+    callbackData: varchar('callback_data', { length: 64 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('tg_order_buttons_order_idx').on(table.orderId),
+    index('tg_order_buttons_message_idx').on(table.chatId, table.messageId),
+  ]
+);
 
 // The Shabbat and Yom Tov times fetched from famcal for the kitchen screen, one
 // row per bakery (src/lib/shabbat-times.ts). Its own table because GET

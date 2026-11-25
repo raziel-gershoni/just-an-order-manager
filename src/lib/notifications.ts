@@ -11,6 +11,7 @@ import { sendWhatsAppTemplate } from './whatsapp';
 import { daysAgoLabel, formatWeekdayShort } from './date-utils';
 import { siteBaseUrl } from './site-url';
 import type { InboundContent, InboundItem, MediaKind } from './whatsapp-inbound';
+import { orderButtonData, recordOrderButtons } from './order-buttons';
 
 type Role = 'owner' | 'manager' | 'baker' | 'driver';
 
@@ -76,9 +77,11 @@ async function sendToRecipients(
   );
   let sent = 0;
   let failed = 0;
+  const delivered: { chatId: string; messageId: number }[] = [];
   results.forEach((res, i) => {
     if (res.status === 'fulfilled') {
       sent += 1;
+      delivered.push({ chatId: recipients[i].chatId, messageId: res.value.message_id });
     } else {
       failed += 1;
       // These were silently dropped before: a blocked bot, a stale chatId, a
@@ -90,6 +93,8 @@ async function sendToRecipients(
       );
     }
   });
+  // Order buttons are kept in step with their orders from here on (src/lib/order-buttons.ts).
+  await recordOrderButtons(delivered, replyMarkup?.inline_keyboard);
   return { sent, failed };
 }
 
@@ -120,7 +125,7 @@ export async function notifyNewOrder(
 ) {
   const recipients = await getRecipientsByRole(groupId, ['baker']);
   const keyboard = new InlineKeyboard()
-    .text('אשר ✅', `order_status:${orderId}:confirmed`);
+    .text('אשר ✅', orderButtonData('confirm', orderId));
 
   await sendToRecipients(recipients, (lang) => {
     const lines = order.isRenewal
@@ -168,7 +173,7 @@ export async function notifyPendingApproval(
   const keyboard = new InlineKeyboard();
   pending.forEach((o, i) => {
     if (i > 0) keyboard.row();
-    keyboard.text(`${t('notify.approve')} · #${o.id} ${shortName(o.customerName)}`, `order_status:${o.id}:confirmed`);
+    keyboard.text(`${t('notify.approve')} · #${o.id} ${shortName(o.customerName)}`, orderButtonData('confirm', o.id));
   });
 
   // The title counts every one, not just those that fit: the kitchen screen shows the same total.
@@ -235,7 +240,7 @@ export async function notifyUnpaidOrders(
     if (i > 0) keyboard.row();
     keyboard.text(
       `${t('notify.mark_paid')} · #${o.id} ${shortName(o.customerName)} ₪${o.owed.toFixed(0)}`,
-      `order_pay:${o.id}:paid`
+      orderButtonData('pay', o.id)
     );
   });
 
@@ -311,7 +316,7 @@ export async function notifyOrderReady(
 ) {
   const recipients = await getRecipientsByRole(groupId, ['manager']);
   const keyboard = new InlineKeyboard()
-    .text('נמסר ✅', `order_status:${orderId}:delivered`);
+    .text('נמסר ✅', orderButtonData('deliver', orderId));
 
   await sendToRecipients(recipients, (lang) =>
     [

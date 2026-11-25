@@ -630,6 +630,7 @@ const translations: Record<string, string> = {
   'bot.amount': 'סכום',
   'bot.payment_recorded': 'תשלום נרשם',
   'bot.payment_already': 'להזמנה כבר רשום תשלום',
+  'bot.already_paid': 'ההזמנה כבר סומנה כשולמה',
   'bot.payment_undone': 'התשלום שנרשם להזמנה בוטל',
   'bot.payment_kept': 'סומן לתשלום. התשלום החלקי שנרשם נשאר בכרטיס הלקוח',
   'bot.payment_covered': 'ההזמנה מכוסה מהקרדיט של הלקוח — לא שונתה',

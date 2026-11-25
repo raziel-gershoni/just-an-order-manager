@@ -4,6 +4,7 @@ import { orders, orderItems, payments } from '@/db/schema';
 import { eq, and, desc, inArray, notInArray, sql } from 'drizzle-orm';
 import { orderTotalFromGoods } from './order-pricing';
 import { notifyPrepayment } from './notifications';
+import { refreshOrderButtonsAfterResponse } from './order-buttons';
 
 /** Shekels as whole agorot, so ₪0.1 + ₪0.2 compares equal to ₪0.3. */
 const cents = (v: string | number): number => Math.round(Number(v) * 100);
@@ -271,6 +272,7 @@ export async function recordOrderPayment(
 ): Promise<{ balance: string; paid: boolean; outcome: PaymentOutcome; recorded?: string }> {
   if (action === 'mark_paid') {
     await db.update(orders).set({ paid: true, updatedAt: new Date() }).where(eq(orders.id, order.id));
+    await refreshOrderButtonsAfterResponse([order.id]);
     const balance = await getCustomerBalance(order.customerId, order.groupId);
     return { balance, paid: true, outcome: 'none' };
   }
@@ -344,6 +346,9 @@ export async function recordOrderPayment(
 
   const paid = action !== 'unpaid';
   await db.update(orders).set({ paid, updatedAt: new Date() }).where(eq(orders.id, order.id));
+  // Its שולם buttons in every chat, the tapped one included, once the response
+  // is out (never throws).
+  await refreshOrderButtonsAfterResponse([order.id]);
 
   const balance = await getCustomerBalance(order.customerId, order.groupId);
   // No row written, no announcement: a stale ✅ on an old Telegram message used
@@ -649,6 +654,7 @@ export async function settleCoveredOrders(
       .update(orders)
       .set({ paid: true, updatedAt: new Date() })
       .where(inArray(orders.id, settled));
+    await refreshOrderButtonsAfterResponse(settled);
   }
   return settled;
 }

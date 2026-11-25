@@ -22,6 +22,7 @@ import {
 } from './order-payments';
 import { createNextRecurringOrder } from './order-recurring';
 import { isOpenRecurring } from './order-next-change';
+import { refreshOrderButtonsAfterResponse } from './order-buttons';
 
 type OrderRow = typeof orders.$inferSelect;
 
@@ -175,6 +176,10 @@ export async function transitionOrderStatus(
       console.error(`Failed to notify customer of cancellation for order ${order.id}:`, err);
     }
   }
+
+  // Its אשר / נמסר buttons in every chat, the tapped one included, once the
+  // response is out (never throws).
+  await refreshOrderButtonsAfterResponse([order.id]);
 
   return { ok: true, order: updated, nextRecurringOrderId };
 }

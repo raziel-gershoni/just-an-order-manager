@@ -1,5 +1,5 @@
 import { after } from 'next/server';
-import { webhookCallback, InlineKeyboard, type Context } from 'grammy';
+import { webhookCallback, GrammyError, InlineKeyboard, type Context } from 'grammy';
 import { escapeHtml } from '@/lib/telegram-html';
 import { ensureBotSetup } from '@/lib/bot';
 import { db } from '@/db';
@@ -16,6 +16,7 @@ import { t } from '@/lib/i18n';
 import { todayStr, upcomingHorizonStr } from '@/lib/date-utils';
 import { orderPaymentState, recordOrderPayment } from '@/lib/order-payments';
 import { transitionOrderStatus } from '@/lib/order-status';
+import { isTrackedButton, orderButtonApplies, orderButtonData, parseOrderButton, refreshOrderButtonsAfterResponse } from '@/lib/order-buttons';
 import { resolveBotOrderAccess } from '@/lib/telegram-auth';
 import { respondToInvite } from '@/lib/invites';
 import { todayDigestText, weekDigestText } from '@/lib/day-digest';
@@ -44,6 +45,39 @@ function keyboardWithoutPressed(ctx: Context) {
   return rows
     .map((row) => row.filter((b) => !('callback_data' in b) || b.callback_data !== pressed))
     .filter((row) => row.length > 0);
+}
+
+/**
+ * Whether the pressed button is kept in step with its order
+ * (src/lib/order-buttons.ts). Such a button is taken off every copy at once by
+ * refreshOrderButtons, so the handlers leave it alone; one on a message sent
+ * before buttons were tracked is taken off the tapped message only, as always.
+ * Checked before the change, which forgets the button.
+ */
+async function pressedIsTracked(ctx: Context): Promise<boolean> {
+  const message = ctx.callbackQuery?.message;
+  const data = ctx.callbackQuery?.data;
+  return message && data ? isTrackedButton(message.chat.id, message.message_id, data) : false;
+}
+
+/**
+ * Take the pressed button off a message whose buttons are not tracked.
+ * Best-effort: a throw here would make Telegram resend the whole update, and a
+ * double tap finds the button already gone ("message is not modified").
+ */
+async function removePressed(ctx: Context) {
+  const remaining = keyboardWithoutPressed(ctx);
+  try {
+    await ctx.editMessageReplyMarkup(
+      remaining.length ? { reply_markup: { inline_keyboard: remaining } } : undefined
+    );
+  } catch (err) {
+    if (err instanceof GrammyError && /message is not modified/i.test(err.description)) return;
+    console.error('[bot] taking the pressed button off failed', {
+      data: ctx.callbackQuery?.data,
+      error: err instanceof GrammyError ? err.description : String(err),
+    });
+  }
 }
 
 async function getOrCreateUser(telegramId: string, name: string) {
@@ -385,9 +419,22 @@ function setupHandlers(bot: import('grammy').Bot) {
       return;
     }
 
+    const tracked = await pressedIsTracked(ctx);
+    // A tap is held to its button's own rule, not only to the state machine,
+    // which also allows stepping back: an אשר left on an old message would walk
+    // a ready order back to confirmed.
+    const button = parseOrderButton(ctx.callbackQuery.data);
+    if (button && !orderButtonApplies(button.action, order)) {
+      console.info('[bot] order button no longer applies', { orderId, action: button.action, status: order.status });
+      await ctx.answerCallbackQuery(t('bot.order_already_updated', lang));
+      await refreshOrderButtonsAfterResponse([orderId]);
+      if (!tracked) await removePressed(ctx);
+      return;
+    }
+
     // Same state machine the web app runs (validation + CAS + charge + recurring
-    // clone + notifications). Only the auth (above) and the Telegram reply
-    // (below) are bot-specific.
+    // clone + notifications + this order's buttons in every chat). Only the auth
+    // (above) and the Telegram reply (below) are bot-specific.
     const result = await transitionOrderStatus(order, newStatus, { notifyCustomer: true });
     if (!result.ok) {
       await ctx.answerCallbackQuery(
@@ -399,10 +446,7 @@ function setupHandlers(bot: import('grammy').Bot) {
     }
 
     await ctx.answerCallbackQuery(`${t(`status.${newStatus}`, lang)} ✅`);
-    const remaining = keyboardWithoutPressed(ctx);
-    await ctx.editMessageReplyMarkup(
-      remaining.length ? { reply_markup: { inline_keyboard: remaining } } : undefined
-    );
+    if (!tracked) await removePressed(ctx);
 
     // Follow up with payment dialog after delivery — unless it is already paid
     // (in advance, or settled from the tab on delivery): asking again invites a
@@ -421,7 +465,7 @@ function setupHandlers(bot: import('grammy').Bot) {
           .where(eq(customers.id, order.customerId))
           .limit(1);
         const keyboard = new InlineKeyboard()
-          .text(`✅ ${t('bot.paid_in_full', lang)}`, `order_pay:${orderId}:paid`)
+          .text(`✅ ${t('bot.paid_in_full', lang)}`, orderButtonData('pay', orderId))
           .text(`📝 ${t('bot.to_be_paid', lang)}`, `order_pay:${orderId}:unpaid`);
         const lines = [
           `<b>${escapeHtml(customer?.name ?? '')}</b>`,
@@ -453,6 +497,17 @@ function setupHandlers(bot: import('grammy').Bot) {
     }
 
     if (action === 'paid') {
+      const tracked = await pressedIsTracked(ctx);
+      // A ✅ on an order already paid (settled from the tab, or marked paid in
+      // the app) would file the money a second time: the ledger has no payment
+      // of its own for it, so the whole total reads as due. 📝 is the way back.
+      if (!orderButtonApplies('pay', order)) {
+        console.info('[bot] payment button no longer applies', { orderId, status: order.status, paid: order.paid });
+        await ctx.answerCallbackQuery(`⚠️ ${t('bot.already_paid', lang)}`);
+        await refreshOrderButtonsAfterResponse([orderId]);
+        if (!tracked) await removePressed(ctx);
+        return;
+      }
       const [customer] = await db
         .select({ name: customers.name })
         .from(customers)
@@ -466,10 +521,10 @@ function setupHandlers(bot: import('grammy').Bot) {
         'paid'
       );
 
-      // These buttons outlive their orders — the unpaid nudge mints a fresh one
-      // every week and Telegram will not let a bot edit a message older than
-      // 48h, so an old ✅ is always tappable. It must never claim to have
-      // recorded a payment it did not write.
+      // These buttons outlive their orders: the unpaid nudge mints a fresh one
+      // every morning, and a message sent before buttons were tracked, or more
+      // than 30 days ago (src/lib/order-buttons.ts), keeps its ✅. It must never
+      // claim to have recorded a payment it did not write.
       // show_alert on the warning: a callback toast fades in a few seconds, and
       // on a multi-order nudge the pressed button just disappears like any other
       // — pixel-identical to a payment that was recorded. This is the one path
@@ -486,10 +541,11 @@ function setupHandlers(bot: import('grammy').Bot) {
       }
       // Rewriting the text is right for the one-order payment dialog, but it
       // would erase a whole unpaid-nudge list; when other orders are still
-      // listed, retire just this button and leave the message standing.
+      // listed, retire just this button and leave the message standing. A
+      // tracked list loses it on every copy once the payment is saved.
       const remaining = keyboardWithoutPressed(ctx);
       if (remaining.length) {
-        await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: remaining } });
+        if (!tracked) await removePressed(ctx);
       } else {
         await ctx.editMessageText(
           notRecorded
