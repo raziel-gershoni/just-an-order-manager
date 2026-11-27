@@ -1,18 +1,10 @@
 import { db } from '@/db';
-import {
-  orders,
-  orderItems,
-  customers,
-  breadTypes,
-  breadSizes,
-  breadAdditions,
-  orderItemAdditions,
-} from '@/db/schema';
-import { eq, and, inArray, asc } from 'drizzle-orm';
+import { orders } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { ORDER_STATUS_TRANSITIONS } from './constants';
 import { todayStr } from './date-utils';
-import { formatItemLineForStaff } from './order-display';
-import { notifyOrderReady, notifyCustomerWhatsApp } from './notifications';
+import { orderStaffSummary } from './order-staff-summary';
+import { notifyOrderReady, notifyOrderDelivered, notifyCustomerWhatsApp } from './notifications';
 import { getNotifiablePhones } from './customer-phones';
 import {
   ensureOrderCharge,
@@ -102,53 +94,22 @@ export async function transitionOrderStatus(
     if (order.isRecurring) {
       nextRecurringOrderId = await createNextRecurringOrder(order);
     }
+    // The owner and managers hear of every delivery, paid or not; its payment
+    // line follows the order from here on (src/lib/order-buttons.ts). Sent
+    // after the charge and the settling, so it starts from what is really due,
+    // and before the response, so the payment the app records next finds it.
+    try {
+      await notifyOrderDelivered(order.groupId, order.id);
+    } catch (err) {
+      console.error(`Failed to send the delivered message for order ${order.id}:`, err);
+    }
   }
 
   if (newStatus === 'ready') {
     try {
-      const [customer] = await db
-        .select({ name: customers.name })
-        .from(customers)
-        .where(eq(customers.id, order.customerId))
-        .limit(1);
-
-      const itemRows = await db
-        .select({
-          id: orderItems.id,
-          breadTypeName: breadTypes.name,
-          sizeName: breadSizes.name,
-          weightGrams: breadSizes.weightGrams,
-          quantity: orderItems.quantity,
-        })
-        .from(orderItems)
-        .innerJoin(breadTypes, eq(orderItems.breadTypeId, breadTypes.id))
-        .leftJoin(breadSizes, eq(orderItems.breadSizeId, breadSizes.id))
-        .where(eq(orderItems.orderId, order.id))
-        .orderBy(asc(orderItems.id));
-
-      const itemIds = itemRows.map((i) => i.id);
-      const additionLinks = itemIds.length
-        ? await db
-            .select({ orderItemId: orderItemAdditions.orderItemId, name: breadAdditions.name })
-            .from(orderItemAdditions)
-            .innerJoin(breadAdditions, eq(orderItemAdditions.breadAdditionId, breadAdditions.id))
-            .where(inArray(orderItemAdditions.orderItemId, itemIds))
-            .orderBy(asc(breadAdditions.sortOrder))
-        : [];
-      const additionsByItem: Record<number, string[]> = {};
-      for (const a of additionLinks) {
-        if (!additionsByItem[a.orderItemId]) additionsByItem[a.orderItemId] = [];
-        additionsByItem[a.orderItemId].push(a.name);
-      }
-
-      if (customer) {
-        const summary = itemRows
-          .map((i) => formatItemLineForStaff(i.quantity, i.breadTypeName, i.sizeName, i.weightGrams, additionsByItem[i.id]))
-          .join(', ');
-        await notifyOrderReady(order.groupId, order.id, {
-          customerName: customer.name,
-          itemsSummary: summary,
-        });
+      const summary = await orderStaffSummary(order.id);
+      if (summary) {
+        await notifyOrderReady(order.groupId, order.id, summary);
         if (shouldNotify) {
           const phones = await getNotifiablePhones(order.customerId);
           await notifyCustomerWhatsApp(phones);
@@ -177,8 +138,8 @@ export async function transitionOrderStatus(
     }
   }
 
-  // Its אשר / נמסר buttons in every chat, the tapped one included, once the
-  // response is out (never throws).
+  // Its אשר / נמסר buttons and delivered message in every chat, the tapped one
+  // included, once the response is out (never throws).
   await refreshOrderButtonsAfterResponse([order.id]);
 
   return { ok: true, order: updated, nextRecurringOrderId };

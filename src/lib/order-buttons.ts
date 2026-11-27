@@ -3,9 +3,13 @@ import { GrammyError } from 'grammy';
 import type { InlineKeyboardButton } from 'grammy/types';
 import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { orders, tgOrderButtons } from '@/db/schema';
+import { orders, tgDeliveredMessages, tgOrderButtons } from '@/db/schema';
 import { getBot } from './bot';
 import { outboundAllowed, logSuppressed } from './outbound';
+import { t, type Lang } from './i18n';
+import { escapeHtml } from './telegram-html';
+import { orderStaffSummary } from './order-staff-summary';
+import { orderPaymentState } from './order-totals';
 
 /**
  * The bot's order buttons, kept in step with the order: אשר on a new order and
@@ -15,8 +19,17 @@ import { outboundAllowed, logSuppressed } from './outbound';
  * from the app or from any chat, the buttons that no longer apply are taken off
  * every copy. The text stays as sent.
  *
- * A button never comes back: an order stepped back and made ready again gets a
- * fresh ready message. Messages sent before this existed, and messages older
+ * The 📦 delivered message (`deliveredMessage`, sent to the owner and managers
+ * for every delivery) is kept in step as a whole instead: its payment line and
+ * שולם button are redrawn from the order whenever its payment changes, so the
+ * line says what is true now (in the app the delivery is saved a moment before
+ * the payment, so the first copy usually goes out unpaid). It can go back to
+ * unpaid, button included, when a payment is undone. Its copies are recorded in
+ * `tg_delivered_messages`, with what each shows, so an unchanged order costs no
+ * edit.
+ *
+ * Any other button never comes back: an order stepped back and made ready
+ * again gets a fresh ready message. Messages sent before this existed, and messages older
  * than TRACK_DAYS, keep what they show; the bot checks every tap against the
  * same rule (`orderButtonApplies`), so a button left behind can't act on an
  * order that moved on, and a tap on it takes it off.
@@ -26,7 +39,9 @@ import { outboundAllowed, logSuppressed } from './outbound';
  * chat, waiting when Telegram asks to slow down. Limit: two changes to orders
  * on the same list in the same instant can each edit it from their own read,
  * and the older edit can land last and leave a button that no longer applies;
- * nothing tracks it then, and a tap on it is refused and takes it off.
+ * nothing tracks it then, and a tap on it is refused and takes it off. Two
+ * payment changes to one order in the same instant can likewise leave its
+ * delivered message showing the older one, until its payment next changes.
  */
 
 export type OrderButtonAction = 'confirm' | 'deliver' | 'pay';
@@ -80,6 +95,86 @@ export function orderButtonApplies(
   }
 }
 
+export type DeliveredMessage = { text: string; keyboard: InlineKeyboardButton[][] };
+
+/**
+ * The 📦 delivered message for an order, as it should read now: who and what,
+ * then its payment, either paid or what is still due (and what was paid toward
+ * it so far) with a שולם button. Null when the order is gone.
+ */
+export async function deliveredMessage(orderId: number, lang: Lang): Promise<DeliveredMessage | null> {
+  const [order] = await db
+    .select({ groupId: orders.groupId, paid: orders.paid })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!order) return null;
+  const [summary, { paidAmount, due }] = await Promise.all([
+    orderStaffSummary(orderId),
+    orderPaymentState(orderId, order.groupId),
+  ]);
+  if (!summary) return null;
+
+  const name = escapeHtml(summary.customerName);
+  const lines = [
+    `<b>📦 ${t('notify.order_delivered', lang)}</b>`,
+    ``,
+    summary.itemsSummary ? `${name} — ${escapeHtml(summary.itemsSummary)}` : name,
+  ];
+  // שולם only while there is money to collect; a tap is still held to
+  // orderButtonApplies.
+  const owes = !order.paid && due > 0;
+  if (order.paid) {
+    // No amount: the flag also stands for "settled" on money that never came
+    // in full (a partial amount typed at the door, "mark as paid").
+    lines.push(`✅ ${t('notify.delivered_paid', lang)}`);
+  } else if (owes) {
+    // "Paid", not "paid in advance": money taken at the door stays on the
+    // order when it is set back to unpaid.
+    const paidSoFar = paidAmount > 0 ? [`${t('notify.delivered_paid', lang)}: ₪${paidAmount.toFixed(0)}`] : [];
+    lines.push([...paidSoFar, `${t('bot.to_be_paid', lang)}: ₪${due.toFixed(0)}`].join(' · '));
+  }
+  return {
+    text: lines.join('\n'),
+    keyboard: owes ? [[{ text: `✅ ${t('bot.paid_in_full', lang)}`, callback_data: orderButtonData('pay', orderId) }]] : [],
+  };
+}
+
+/** What a copy of the delivered message shows, as stored to tell whether it needs an edit. */
+function deliveredContent(message: DeliveredMessage): string {
+  return JSON.stringify([message.text, message.keyboard]);
+}
+
+/**
+ * Record the delivered message just sent to these chats. Never throws: the
+ * messages went out either way, and keep showing what they were sent with.
+ */
+export async function recordDeliveredMessages(
+  orderId: number,
+  sent: { chatId: string; messageId: number; language: Lang; message: DeliveredMessage }[]
+): Promise<void> {
+  if (sent.length === 0) return;
+  try {
+    await db.insert(tgDeliveredMessages).values(
+      sent.map((m) => ({
+        chatId: m.chatId,
+        messageId: m.messageId,
+        orderId,
+        language: m.language,
+        content: deliveredContent(m.message),
+      }))
+    );
+    await db
+      .delete(tgDeliveredMessages)
+      .where(lt(tgDeliveredMessages.createdAt, sql`now() - make_interval(days => ${TRACK_DAYS})`));
+  } catch (err) {
+    console.error('[order-buttons] recording the delivered message failed; its copies keep what they were sent with', {
+      orderId,
+      messages: sent.length,
+    }, err);
+  }
+}
+
 /**
  * Record a keyboard just sent to these chats. Only a keyboard made entirely of
  * order buttons is recorded: the message is rebuilt from these rows when a
@@ -128,31 +223,40 @@ export async function recordOrderButtons(
 }
 
 /**
- * Whether this button on this message is kept in step here, so a tap on it
- * leaves the editing to refreshOrderButtons. False on a failed read: the bot
+ * How the message carrying this button is kept in step here, so a tap on it
+ * leaves the editing to refreshOrderButtons: 'delivered' for a 📦 delivered
+ * message (redrawn whole), 'buttons' for a recorded keyboard. Null for neither
+ * (sent before tracking, older than TRACK_DAYS) and on a failed read: the bot
  * then takes the button off the tapped message itself, as before tracking.
  */
-export async function isTrackedButton(
+export async function buttonTracking(
   chatId: number | string,
   messageId: number,
   callbackData: string
-): Promise<boolean> {
+): Promise<'delivered' | 'buttons' | null> {
   try {
-    const [row] = await db
-      .select({ id: tgOrderButtons.id })
-      .from(tgOrderButtons)
-      .where(
-        and(
-          eq(tgOrderButtons.chatId, String(chatId)),
-          eq(tgOrderButtons.messageId, messageId),
-          eq(tgOrderButtons.callbackData, callbackData)
+    const [[delivered], [button]] = await Promise.all([
+      db
+        .select({ id: tgDeliveredMessages.id })
+        .from(tgDeliveredMessages)
+        .where(and(eq(tgDeliveredMessages.chatId, String(chatId)), eq(tgDeliveredMessages.messageId, messageId)))
+        .limit(1),
+      db
+        .select({ id: tgOrderButtons.id })
+        .from(tgOrderButtons)
+        .where(
+          and(
+            eq(tgOrderButtons.chatId, String(chatId)),
+            eq(tgOrderButtons.messageId, messageId),
+            eq(tgOrderButtons.callbackData, callbackData)
+          )
         )
-      )
-      .limit(1);
-    return !!row;
+        .limit(1),
+    ]);
+    return delivered ? 'delivered' : button ? 'buttons' : null;
   } catch (err) {
     console.error('[order-buttons] tracked-button read failed', { chatId, messageId, callbackData }, err);
-    return false;
+    return null;
   }
 }
 
@@ -172,56 +276,87 @@ export async function refreshOrderButtonsAfterResponse(orderIds: number[]): Prom
 
 /**
  * Take the buttons that no longer apply off every recorded message carrying a
- * button for one of these orders. Call it after anything that changes an
- * order's status or paid flag. Never throws: the change it follows is already
- * saved, and a button left behind is still checked when tapped.
+ * button for one of these orders, and redraw their delivered messages. Call it
+ * after anything that changes an order's status or paid flag. Never throws: the
+ * change it follows is already saved, and a button left behind is still
+ * checked when tapped.
  */
 export async function refreshOrderButtons(orderIds: number[]): Promise<void> {
   const ids = [...new Set(orderIds)];
   if (ids.length === 0) return;
   try {
-    const messages = await db
-      .selectDistinct({ chatId: tgOrderButtons.chatId, messageId: tgOrderButtons.messageId })
-      .from(tgOrderButtons)
-      .where(inArray(tgOrderButtons.orderId, ids));
-    if (messages.length === 0) return;
+    const [messages, deliveredRows] = await Promise.all([
+      db
+        .selectDistinct({ chatId: tgOrderButtons.chatId, messageId: tgOrderButtons.messageId })
+        .from(tgOrderButtons)
+        .where(inArray(tgOrderButtons.orderId, ids)),
+      db
+        .select({
+          id: tgDeliveredMessages.id,
+          chatId: tgDeliveredMessages.chatId,
+          messageId: tgDeliveredMessages.messageId,
+          orderId: tgDeliveredMessages.orderId,
+          language: tgDeliveredMessages.language,
+          content: tgDeliveredMessages.content,
+        })
+        .from(tgDeliveredMessages)
+        .where(inArray(tgDeliveredMessages.orderId, ids))
+        .orderBy(asc(tgDeliveredMessages.id)),
+    ]);
+    if (messages.length === 0 && deliveredRows.length === 0) return;
     if (!outboundAllowed()) {
-      logSuppressed(`Telegram button update on ${messages.length} message(s) for order(s) ${ids.join(', ')}`);
+      logSuppressed(
+        `Telegram update of ${messages.length + deliveredRows.length} message(s) for order(s) ${ids.join(', ')}`
+      );
       return;
     }
 
     // Every button on those messages, not only these orders': a morning list
     // carries several orders, and a keyboard is replaced whole.
-    const rows = await db
-      .select({
-        id: tgOrderButtons.id,
-        chatId: tgOrderButtons.chatId,
-        messageId: tgOrderButtons.messageId,
-        position: tgOrderButtons.position,
-        action: tgOrderButtons.action,
-        label: tgOrderButtons.label,
-        callbackData: tgOrderButtons.callbackData,
-        status: orders.status,
-        paid: orders.paid,
-      })
-      .from(tgOrderButtons)
-      .innerJoin(orders, eq(orders.id, tgOrderButtons.orderId))
-      .where(
-        or(...messages.map((m) => and(eq(tgOrderButtons.chatId, m.chatId), eq(tgOrderButtons.messageId, m.messageId))))
-      )
-      .orderBy(asc(tgOrderButtons.position), asc(tgOrderButtons.id));
+    const rows = messages.length
+      ? await db
+          .select({
+            id: tgOrderButtons.id,
+            chatId: tgOrderButtons.chatId,
+            messageId: tgOrderButtons.messageId,
+            position: tgOrderButtons.position,
+            action: tgOrderButtons.action,
+            label: tgOrderButtons.label,
+            callbackData: tgOrderButtons.callbackData,
+            status: orders.status,
+            paid: orders.paid,
+          })
+          .from(tgOrderButtons)
+          .innerJoin(orders, eq(orders.id, tgOrderButtons.orderId))
+          .where(
+            or(...messages.map((m) => and(eq(tgOrderButtons.chatId, m.chatId), eq(tgOrderButtons.messageId, m.messageId))))
+          )
+          .orderBy(asc(tgOrderButtons.position), asc(tgOrderButtons.id))
+      : [];
 
     // Chats in parallel, each chat's messages one at a time: Telegram limits
     // how fast one chat can be written to.
-    const byChat = new Map<string, Map<number, ButtonRow[]>>();
+    const byChat = new Map<string, (() => Promise<void>)[]>();
+    const queue = (chatId: string, task: () => Promise<void>) =>
+      byChat.set(chatId, [...(byChat.get(chatId) ?? []), task]);
+    const keyboards = new Map<string, ButtonRow[]>();
     for (const r of rows) {
-      const chat = byChat.get(r.chatId) ?? new Map<number, ButtonRow[]>();
-      chat.set(r.messageId, [...(chat.get(r.messageId) ?? []), r]);
-      byChat.set(r.chatId, chat);
+      const key = `${r.chatId}:${r.messageId}`;
+      keyboards.set(key, [...(keyboards.get(key) ?? []), r]);
     }
+    for (const buttons of keyboards.values()) queue(buttons[0].chatId, () => updateMessage(buttons));
+    // One drawing per order and language, shared by its copies.
+    const drawn = new Map<string, Promise<DeliveredMessage | null>>();
+    const draw = (orderId: number, lang: Lang) => {
+      const key = `${orderId}:${lang}`;
+      if (!drawn.has(key)) drawn.set(key, deliveredMessage(orderId, lang));
+      return drawn.get(key) as Promise<DeliveredMessage | null>;
+    };
+    for (const d of deliveredRows) queue(d.chatId, () => updateDeliveredMessage(d, draw));
+
     await Promise.all(
-      [...byChat.values()].map(async (chat) => {
-        for (const buttons of chat.values()) await updateMessage(buttons);
+      [...byChat.values()].map(async (tasks) => {
+        for (const task of tasks) await task();
       })
     );
   } catch (err) {
@@ -257,7 +392,13 @@ async function updateMessage(buttons: ButtonRow[]): Promise<void> {
 
   let forget = stale;
   try {
-    await editKeyboard(chatId, messageId, keyboard);
+    await withRetry({ chatId, messageId }, () =>
+      getBot().api.editMessageReplyMarkup(
+        chatId,
+        messageId,
+        keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : undefined
+      )
+    );
     console.info('[order-buttons] removed', { chatId, messageId, removed, left: keyboard.length });
   } catch (err) {
     if (err instanceof GrammyError && /message is not modified/i.test(err.description)) {
@@ -285,20 +426,74 @@ async function updateMessage(buttons: ButtonRow[]): Promise<void> {
   }
 }
 
-/** Replace a message's keyboard (none when empty), waiting as long as a 429 asks. */
-async function editKeyboard(chatId: string, messageId: number, keyboard: InlineKeyboardButton[][]): Promise<void> {
+type DeliveredRow = {
+  id: number;
+  chatId: string;
+  messageId: number;
+  orderId: number;
+  language: Lang;
+  content: string;
+};
+
+/**
+ * One copy of a delivered message: redraw it if the order now reads otherwise.
+ * Never throws.
+ */
+async function updateDeliveredMessage(
+  row: DeliveredRow,
+  draw: (orderId: number, lang: Lang) => Promise<DeliveredMessage | null>
+): Promise<void> {
+  const { chatId, messageId, orderId } = row;
+  try {
+    const message = await draw(orderId, row.language);
+    if (!message) return;
+    const content = deliveredContent(message);
+    if (content === row.content) return;
+    try {
+      // No reply_markup takes the keyboard off.
+      await withRetry({ chatId, messageId }, () =>
+        getBot().api.editMessageText(chatId, messageId, message.text, {
+          parse_mode: 'HTML',
+          ...(message.keyboard.length ? { reply_markup: { inline_keyboard: message.keyboard } } : {}),
+        })
+      );
+      console.info('[order-buttons] delivered message redrawn', { chatId, messageId, orderId, owes: message.keyboard.length > 0 });
+    } catch (err) {
+      if (err instanceof GrammyError && /message is not modified/i.test(err.description)) {
+        // Already showing exactly this: another change got there first.
+      } else if (err instanceof GrammyError && (err.error_code === 400 || err.error_code === 403)) {
+        // The message or the chat is gone (deleted, bot blocked): nothing left to keep in step.
+        console.warn('[order-buttons] delivered message can no longer be edited, forgetting it', {
+          chatId,
+          messageId,
+          orderId,
+          code: err.error_code,
+          description: err.description,
+        });
+        await db.delete(tgDeliveredMessages).where(eq(tgDeliveredMessages.id, row.id));
+        return;
+      } else {
+        // Kept as it was: the next change to the order, or a tap, tries again.
+        console.error('[order-buttons] delivered message edit failed', { chatId, messageId, orderId }, err);
+        return;
+      }
+    }
+    await db.update(tgDeliveredMessages).set({ content }).where(eq(tgDeliveredMessages.id, row.id));
+  } catch (err) {
+    console.error('[order-buttons] delivered message update failed', { chatId, messageId, orderId }, err);
+  }
+}
+
+/** One Telegram edit, waiting as long as a 429 asks. */
+async function withRetry(where: { chatId: string; messageId: number }, edit: () => Promise<unknown>): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
-      await getBot().api.editMessageReplyMarkup(
-        chatId,
-        messageId,
-        keyboard.length ? { reply_markup: { inline_keyboard: keyboard } } : undefined
-      );
+      await edit();
       return;
     } catch (err) {
       const retryAfter = err instanceof GrammyError && err.error_code === 429 ? err.parameters.retry_after : undefined;
       if (retryAfter === undefined || attempt >= EDIT_ATTEMPTS) throw err;
-      console.warn('[order-buttons] Telegram asked to slow down', { chatId, messageId, retryAfter, attempt });
+      console.warn('[order-buttons] Telegram asked to slow down', { ...where, retryAfter, attempt });
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
     }
   }

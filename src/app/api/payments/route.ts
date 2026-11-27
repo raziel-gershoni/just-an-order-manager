@@ -10,6 +10,7 @@ import {
   getCustomerBalance,
   settleCoveredOrders,
 } from '@/lib/order-payments';
+import { refreshOrderButtonsAfterResponse } from '@/lib/order-buttons';
 
 export const GET = withGroup(async (request, _auth, groupId) => {
   const url = new URL(request.url);
@@ -105,6 +106,9 @@ export const POST = withGroup(async (request, _auth, groupId) => {
   if (Number(finalAmount) > 0) {
     await settleCoveredOrders(customerId, groupId);
   }
+  // Money filed against a delivered order changes what its 📦 message says is
+  // paid and still due, even when it doesn't settle it (never throws).
+  if (orderId) await refreshOrderButtonsAfterResponse([orderId]);
 
   // Check balance and notify
   const balanceStr = await getCustomerBalance(customerId, groupId);

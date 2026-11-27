@@ -587,6 +587,29 @@ export const tgOrderButtons = pgTable(
   ]
 );
 
+// The 📦 delivered message, one row per staff chat it went to
+// (src/lib/order-buttons.ts). Its payment line and שולם button are rewritten
+// whenever the order's payment changes; `content` is what the copy shows now,
+// so an unchanged order costs no edit. Rows older than 30 days are dropped.
+export const tgDeliveredMessages = pgTable(
+  'tg_delivered_messages',
+  {
+    id: serial('id').primaryKey(),
+    chatId: varchar('chat_id', { length: 50 }).notNull(),
+    messageId: integer('message_id').notNull(),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    language: languageEnum('language').notNull(),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('tg_delivered_messages_order_idx').on(table.orderId),
+    index('tg_delivered_messages_message_idx').on(table.chatId, table.messageId),
+  ]
+);
+
 // The Shabbat and Yom Tov times fetched from famcal for the kitchen screen, one
 // row per bakery (src/lib/shabbat-times.ts). Its own table because GET
 // /api/groups/:id sends the whole groups row to the mini app. The reader uses

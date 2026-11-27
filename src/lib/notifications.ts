@@ -5,13 +5,20 @@ import { GrammyError, InlineKeyboard, InputFile } from 'grammy';
 import { db } from '@/db';
 import { groupMembers, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { t } from './i18n';
+import { t, type Lang } from './i18n';
 import type { BakeLine, PrepLine } from './day-digest';
 import { sendWhatsAppTemplate } from './whatsapp';
 import { daysAgoLabel, formatWeekdayShort } from './date-utils';
 import { siteBaseUrl } from './site-url';
 import type { InboundContent, InboundItem, MediaKind } from './whatsapp-inbound';
-import { orderButtonData, recordOrderButtons } from './order-buttons';
+import type { InlineKeyboardMarkup } from 'grammy/types';
+import {
+  deliveredMessage,
+  orderButtonData,
+  recordDeliveredMessages,
+  recordOrderButtons,
+  type DeliveredMessage,
+} from './order-buttons';
 
 type Role = 'owner' | 'manager' | 'baker' | 'driver';
 
@@ -54,34 +61,37 @@ async function getRecipientsByRole(
     .map((m) => ({ chatId: m.telegramId, language: m.language }));
 }
 
-async function sendToRecipients(
+type SentMessage = { chatId: string; messageId: number; language: Lang };
+
+/** Send each recipient its message, logging every one that fails. */
+async function sendEach(
   recipients: Recipient[],
-  messageFn: (lang: 'en' | 'he') => string,
-  replyMarkup?: InlineKeyboard
-): Promise<{ sent: number; failed: number }> {
+  build: (lang: Lang) => { text: string; replyMarkup?: InlineKeyboardMarkup }
+): Promise<{ sent: number; failed: number; delivered: SentMessage[] }> {
   // A branch isolates the database, not Telegram. Without this, testing a
   // delivery against a scratch branch messages the real owner and the real
   // baker about an order that does not exist outside it.
   if (!outboundAllowed()) {
     logSuppressed(`Telegram message to ${recipients.length} recipient(s)`);
-    return { sent: 0, failed: 0 };
+    return { sent: 0, failed: 0, delivered: [] };
   }
 
   const results = await Promise.allSettled(
-    recipients.map((r) =>
-      getBot().api.sendMessage(r.chatId, messageFn(r.language), {
+    recipients.map((r) => {
+      const message = build(r.language);
+      return getBot().api.sendMessage(r.chatId, message.text, {
         parse_mode: 'HTML',
-        reply_markup: replyMarkup,
-      })
-    )
+        reply_markup: message.replyMarkup,
+      });
+    })
   );
   let sent = 0;
   let failed = 0;
-  const delivered: { chatId: string; messageId: number }[] = [];
+  const delivered: SentMessage[] = [];
   results.forEach((res, i) => {
     if (res.status === 'fulfilled') {
       sent += 1;
-      delivered.push({ chatId: recipients[i].chatId, messageId: res.value.message_id });
+      delivered.push({ chatId: recipients[i].chatId, messageId: res.value.message_id, language: recipients[i].language });
     } else {
       failed += 1;
       // These were silently dropped before: a blocked bot, a stale chatId, a
@@ -93,6 +103,15 @@ async function sendToRecipients(
       );
     }
   });
+  return { sent, failed, delivered };
+}
+
+async function sendToRecipients(
+  recipients: Recipient[],
+  messageFn: (lang: 'en' | 'he') => string,
+  replyMarkup?: InlineKeyboard
+): Promise<{ sent: number; failed: number }> {
+  const { sent, failed, delivered } = await sendEach(recipients, (lang) => ({ text: messageFn(lang), replyMarkup }));
   // Order buttons are kept in step with their orders from here on (src/lib/order-buttons.ts).
   await recordOrderButtons(delivered, replyMarkup?.inline_keyboard);
   return { sent, failed };
@@ -326,6 +345,33 @@ export async function notifyOrderReady(
     ].join('\n'),
     keyboard
   );
+}
+
+/**
+ * 📦 to the owner and the managers for every delivery, paid or not. The copies
+ * are recorded, and their payment line and שולם button follow the order from
+ * then on (src/lib/order-buttons.ts).
+ */
+export async function notifyOrderDelivered(groupId: number, orderId: number): Promise<{ sent: number; failed: number }> {
+  const recipients = await getRecipientsByRole(groupId, ['manager']);
+  const drawn = new Map<Lang, DeliveredMessage>();
+  for (const lang of new Set(recipients.map((r) => r.language))) {
+    const message = await deliveredMessage(orderId, lang);
+    if (!message) {
+      console.warn('[notify] delivered order not found, no message sent', { orderId });
+      return { sent: 0, failed: 0 };
+    }
+    drawn.set(lang, message);
+  }
+  const { sent, failed, delivered } = await sendEach(recipients, (lang) => {
+    const { text, keyboard } = drawn.get(lang) as DeliveredMessage;
+    return { text, replyMarkup: keyboard.length ? { inline_keyboard: keyboard } : undefined };
+  });
+  await recordDeliveredMessages(
+    orderId,
+    delivered.map((d) => ({ ...d, message: drawn.get(d.language) as DeliveredMessage }))
+  );
+  return { sent, failed };
 }
 
 /**
